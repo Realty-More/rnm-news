@@ -45,6 +45,13 @@ Other commands:
 
 Only GET requests to these hosts are cached. When a new version is deployed, the app shows a "New version is ready · Reload" bar.
 
+## Breaking-news notifications (free)
+
+- Readers turn them on in **Settings ▸ Notifications**, or with the "Get breaking news alerts" card on Home.
+- The push server is [`push-worker/`](push-worker/README.md), a Cloudflare Worker on the free plan (account desk@realtynmore.com), live at `https://rnm-news-push.realtynmore.workers.dev`. Every 10 minutes it checks realtynmore.com and notifies subscribed devices about new stories.
+- The app finds the server through the repository variable **PUSH_API** (Settings ▸ Secrets and variables ▸ Actions ▸ Variables). If that variable is empty, the app hides the feature.
+- Notifications work on Android, desktop, and iPhone (iOS 16.4+, after Add to Home Screen). The APK doesn't support them yet.
+
 ## Hosting (GitHub Pages, free)
 
 Live at **<https://realty-more.github.io/rnm-news/>**, from the company repo <https://github.com/Realty-More/rnm-news> (organization **Realty & More**; public, with Pages set to build from GitHub Actions).

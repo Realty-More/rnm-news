@@ -5,6 +5,7 @@ import { decode } from './site.ts'
 import type { Env } from './index.ts'
 
 export const STOCKS: { symbol: string; name: string; match: RegExp }[] = [
+  { symbol: 'ABREL', name: 'Aditya Birla Real Estate', match: /(Aditya Birla Real Estate|Birla Estates|Century Textiles)/i },
   { symbol: 'DLF', name: 'DLF', match: /\bDLF\b/ },
   { symbol: 'GODREJPROP', name: 'Godrej Properties', match: /\bGodrej Propert/i },
   { symbol: 'LODHA', name: 'Lodha', match: /\b(Lodha|Macrotech)\b/i },
@@ -102,4 +103,44 @@ export function matchNews(pool: Headline[], now = Date.now()) {
 export async function marketNews(env: Env) {
   const lists = await Promise.all([ours(env), ...FEEDS.map(feed)])
   return { generatedAt: new Date().toISOString(), sources: [...new Set(FEEDS.map((f) => f.source))], ...matchNews(lists.flat()) }
+}
+
+/** Nifty Realty constituents from NSE's published list (company names and symbols only, no prices). */
+export const NIFTY_REALTY_FALLBACK = [
+  { symbol: 'ABREL', name: 'Aditya Birla Real Estate' },
+  { symbol: 'ANANTRAJ', name: 'Anant Raj' },
+  { symbol: 'BRIGADE', name: 'Brigade' },
+  { symbol: 'DLF', name: 'DLF' },
+  { symbol: 'GODREJPROP', name: 'Godrej Properties' },
+  { symbol: 'LODHA', name: 'Lodha' },
+  { symbol: 'OBEROIRLTY', name: 'Oberoi Realty' },
+  { symbol: 'PHOENIXLTD', name: 'Phoenix Mills' },
+  { symbol: 'PRESTIGE', name: 'Prestige' },
+  { symbol: 'SOBHA', name: 'Sobha' },
+]
+
+/** "Godrej Properties Ltd." -> "Godrej Properties"; "Prestige Estates Projects Ltd." -> "Prestige Estates Projects". */
+export const shortName = (company: string) => company.replace(/\s+(Ltd\.?|Limited)$/i, '').trim()
+
+export function parseConstituents(csv: string): { symbol: string; name: string }[] {
+  const lines = csv.trim().split(/\r?\n/)
+  const header = lines.shift()?.split(',').map((h) => h.trim().toLowerCase()) ?? []
+  const iName = header.indexOf('company name')
+  const iSym = header.indexOf('symbol')
+  if (iName < 0 || iSym < 0) return []
+  return lines
+    .map((l) => l.split(','))
+    .filter((c) => c[iSym] && /^[A-Z0-9&-]+$/.test(c[iSym].trim()))
+    .map((c) => ({ symbol: c[iSym].trim(), name: shortName(c[iName]) }))
+}
+
+export async function niftyRealty() {
+  try {
+    const res = await fetch('https://nsearchives.nseindia.com/content/indices/ind_niftyrealtylist.csv', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RM-News-App/1.0)' } })
+    const list = res.ok ? parseConstituents(await res.text()) : []
+    if (list.length >= 5) return { source: 'NSE', updated: new Date().toISOString(), stocks: list }
+  } catch {
+    /* fall back below */
+  }
+  return { source: 'fallback', updated: null, stocks: NIFTY_REALTY_FALLBACK }
 }

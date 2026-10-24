@@ -3,7 +3,7 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
-import { INDICES, NSE_LINKS, REALTY_INDEX, REALTY_STOCKS, TvWidget, useTvTheme } from '../components/TvWidget.tsx'
+import { INDICES, MORE_REALTY, NSE_LINKS, REALTY_INDEX, TvWidget, useNiftyRealty, useTvTheme } from '../components/TvWidget.tsx'
 import { ago, useT } from '../lib/i18n.ts'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
@@ -38,6 +38,8 @@ export function Markets() {
   const t = useT()
   const theme = useTvTheme()
   const status = marketStatus()
+  const nifty = useNiftyRealty()
+  const stockRows = nifty.length + MORE_REALTY.length
   const news = useAsync(PUSH_API ? 'market:news' : null, async (signal) => {
     const res = await fetch(`${PUSH_API}/market/news`, { signal })
     if (!res.ok) throw new Error('Market news is not available right now.')
@@ -126,11 +128,14 @@ export function Markets() {
         <div className="tv-card">
           <TvWidget
             kind="market-quotes"
-            height={REALTY_STOCKS.length * 40 + 90}
+            height={stockRows * 40 + 170}
             config={{
               width: '100%',
-              height: REALTY_STOCKS.length * 40 + 90,
-              symbolsGroups: [{ name: 'Realty', symbols: REALTY_STOCKS.map((s) => ({ name: s.symbol, displayName: s.name })) }],
+              height: stockRows * 40 + 170,
+              symbolsGroups: [
+                { name: `Nifty Realty (${nifty.length})`, symbols: nifty.map((s) => ({ name: s.symbol, displayName: s.name })) },
+                { name: 'More realty', symbols: MORE_REALTY.map((s) => ({ name: s.symbol, displayName: s.name })) },
+              ],
               showSymbolLogo: true,
               colorTheme: theme,
               isTransparent: true,

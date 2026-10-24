@@ -10,7 +10,7 @@ import { VideoCard, VideoPlayer } from '../components/Video.tsx'
 import { Icon } from '../components/Icon.tsx'
 import { WhatsAppCard } from '../components/WhatsAppCard.tsx'
 import { SocialLinks } from '../components/SiteFooter.tsx'
-import { REALTY_INDEX, REALTY_STOCKS, SENSEX, TvWidget, useTvTheme } from '../components/TvWidget.tsx'
+import { MORE_REALTY, REALTY_INDEX, SENSEX, TvWidget, useNiftyRealty, useTvTheme } from '../components/TvWidget.tsx'
 import { continueReading, onHistoryChange, readHistory, type HistoryItem } from '../lib/history.ts'
 import { invalidate, useAsync } from '../lib/hooks.ts'
 import { usePrefs } from '../lib/prefs.ts'
@@ -192,6 +192,7 @@ function ContinueReading() {
 function RealtyStrip() {
   const t = useT()
   const theme = useTvTheme()
+  const nifty = useNiftyRealty()
   return (
     <section className="band realty-strip" aria-labelledby="stocks-strip-h">
       <div className="section-head">
@@ -206,7 +207,7 @@ function RealtyStrip() {
         kind="ticker-tape"
         height={46}
         config={{
-          symbols: [SENSEX, REALTY_INDEX, ...REALTY_STOCKS].map((s) => ({ proName: s.symbol, title: s.name })),
+          symbols: [SENSEX, REALTY_INDEX, ...nifty, ...MORE_REALTY].map((s) => ({ proName: s.symbol, title: s.name })),
           showSymbolLogo: true,
           isTransparent: true,
           displayMode: 'adaptive',

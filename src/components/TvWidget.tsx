@@ -1,24 +1,43 @@
 // TradingView's free embeddable widgets (licensed display of market data; free with the TradingView credit).
 import { useEffect, useRef } from 'react'
 import { effectiveTheme, useTheme } from '../lib/prefs.ts'
-import { useOnline } from '../lib/hooks.ts'
+import { useAsync, useOnline } from '../lib/hooks.ts'
+import { PUSH_API } from '../lib/push.ts'
 
-/** NSE data isn't licensed for free widgets, so the app uses BSE symbols. */
-export const REALTY_STOCKS = [
+/**
+ * Nifty Realty's 10 companies (NSE's list; the app updates it from NSE via the server).
+ * NSE prices aren't licensed for free widgets, so prices come from the same companies' BSE listings.
+ */
+export const NIFTY_REALTY_FALLBACK = [
+  { symbol: 'BSE:ABREL', name: 'Aditya Birla Real Estate' },
+  { symbol: 'BSE:ANANTRAJ', name: 'Anant Raj' },
+  { symbol: 'BSE:BRIGADE', name: 'Brigade Enterprises' },
   { symbol: 'BSE:DLF', name: 'DLF' },
   { symbol: 'BSE:GODREJPROP', name: 'Godrej Properties' },
-  { symbol: 'BSE:LODHA', name: 'Lodha' },
+  { symbol: 'BSE:LODHA', name: 'Lodha Developers' },
   { symbol: 'BSE:OBEROIRLTY', name: 'Oberoi Realty' },
-  { symbol: 'BSE:PRESTIGE', name: 'Prestige' },
   { symbol: 'BSE:PHOENIXLTD', name: 'Phoenix Mills' },
-  { symbol: 'BSE:BRIGADE', name: 'Brigade' },
+  { symbol: 'BSE:PRESTIGE', name: 'Prestige Estates Projects' },
   { symbol: 'BSE:SOBHA', name: 'Sobha' },
-  { symbol: 'BSE:ANANTRAJ', name: 'Anant Raj' },
+]
+/** Other listed developers RealtyNMore covers often. */
+export const MORE_REALTY = [
   { symbol: 'BSE:SIGNATURE', name: 'Signature Global' },
   { symbol: 'BSE:MAHLIFE', name: 'Mahindra Lifespace' },
   { symbol: 'BSE:SUNTECK', name: 'Sunteck' },
   { symbol: 'BSE:KOLTEPATIL', name: 'Kolte-Patil' },
 ]
+
+/** Current Nifty Realty members from NSE's published list (falls back to the list above). */
+export function useNiftyRealty(): { symbol: string; name: string }[] {
+  const res = useAsync(PUSH_API ? 'market:nifty-realty' : null, async (signal) => {
+    const r = await fetch(`${PUSH_API}/market/nifty-realty`, { signal })
+    if (!r.ok) throw new Error('list unavailable')
+    const data = (await r.json()) as { stocks: { symbol: string; name: string }[] }
+    return data.stocks.map((st) => ({ symbol: `BSE:${st.symbol}`, name: st.name }))
+  })
+  return res.data?.length ? res.data : NIFTY_REALTY_FALLBACK
+}
 export const REALTY_INDEX = { symbol: 'BSE:REALTY', name: 'BSE Realty' }
 export const SENSEX = { symbol: 'BSE:SENSEX', name: 'Sensex' }
 export const INDICES = [SENSEX, REALTY_INDEX, { symbol: 'BSE:BSE500', name: 'BSE 500' }]

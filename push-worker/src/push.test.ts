@@ -221,3 +221,15 @@ describe('market news', async () => {
     expect(STOCKS.map((s) => s.symbol)).toEqual(expect.arrayContaining(['DLF', 'GODREJPROP', 'LODHA', 'OBEROIRLTY', 'PRESTIGE', 'PHOENIXLTD']))
   })
 })
+
+describe('nifty realty list', async () => {
+  const { parseConstituents } = await import('./market.ts')
+  it('reads NSE constituent CSV', () => {
+    const csv = 'Company Name,Industry,Symbol,Series,ISIN Code\r\nAditya Birla Real Estate Ltd.,Realty,ABREL,EQ,INE055A01016\r\nGodrej Properties Ltd.,Realty,GODREJPROP,EQ,INE484J01027\r\n'
+    expect(parseConstituents(csv)).toEqual([
+      { symbol: 'ABREL', name: 'Aditya Birla Real Estate' },
+      { symbol: 'GODREJPROP', name: 'Godrej Properties' },
+    ])
+    expect(parseConstituents('<html>blocked</html>')).toEqual([])
+  })
+})

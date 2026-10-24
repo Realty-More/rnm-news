@@ -9,7 +9,7 @@ import { sharePage } from './share.ts'
 import { parseHit, recordHit, statsPage, trending } from './stats.ts'
 import { ideas, keywords, overview, SEEDS, seoAudit } from './editor.ts'
 import { competitors } from './competitors.ts'
-import { marketNews } from './market.ts'
+import { marketNews, niftyRealty } from './market.ts'
 
 export interface Env {
   SUBS: KVNamespace
@@ -105,6 +105,16 @@ export default {
       if (pathname === '/vapid') return json({ publicKey: env.VAPID_PUBLIC_KEY }, 200, headers)
       const share = /^\/a\/(\d{1,9})$/.exec(pathname)
       if (share) return sharePage(env, Number(share[1]))
+      if (pathname === '/market/nifty-realty') {
+        // NSE's published constituent list (names/symbols, no prices), cached for a day.
+        const key = new Request(`${url.origin}/market/nifty-realty?v=${STUDIO_CACHE}`)
+        const hit = await caches.default.match(key)
+        if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
+        const data = await niftyRealty()
+        const res = json(data, 200, { 'Cache-Control': `public, max-age=${data.source === 'NSE' ? 86400 : 600}` })
+        ctx.waitUntil(caches.default.put(key, res.clone()))
+        return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
+      }
       if (pathname === '/market/news') {
         // Public: headlines only, cached 30 minutes for everyone.
         const key = new Request(`${url.origin}/market/news?v=${STUDIO_CACHE}`)

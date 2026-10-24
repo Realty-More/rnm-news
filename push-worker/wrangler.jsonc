@@ -5,8 +5,8 @@
   "compatibility_date": "2026-10-01",
   "triggers": { "crons": ["*/10 * * * *"] },
   "kv_namespaces": [
-    // Replaced with the real id after: npx wrangler kv namespace create SUBS
-    { "binding": "SUBS", "id": "local-dev-subs" }
+    // Subscribed devices (created with: npx wrangler kv namespace create SUBS)
+    { "binding": "SUBS", "id": "b085d47b2dc444aba1c68fa0713e2a0a" }
   ],
   "vars": {
     "VAPID_PUBLIC_KEY": "BA4nnOG7Awwqw50N7abJcS4V9vi8uq7Srw-hS5HEyNljhLSWByPvnM7JHvenvzBg2mAbUVLDngWXZxLIa-1vLwU",

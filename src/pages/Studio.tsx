@@ -8,6 +8,7 @@ import { toast } from '../components/Toast.tsx'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, ownerKey, ownerRole, refreshRole, studio, unlock } from '../lib/owner.ts'
+import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
 import { AddToCalendar, CalendarTab, CaptionsTab, NotifyTab, PerformanceTab, ReportTab, SiteTab, TeamTab } from './StudioTools.tsx'
 import { usePageTitle } from './usePageTitle.ts'
 import { WHATSAPP_CHANNEL, whatsappShareUrl } from '../lib/config.ts'
@@ -62,6 +63,9 @@ interface Seo {
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
+  { key: 'myday', label: 'My day' },
+  { key: 'teamday', label: 'Team today' },
+  { key: 'attendance', label: 'Attendance' },
   { key: 'ideas', label: 'What to write' },
   { key: 'rivals', label: 'Competitors' },
   { key: 'perf', label: 'Performance' },
@@ -107,9 +111,9 @@ function Unlock({ onDone }: { onDone: () => void }) {
       <div className="lock-card">
         <Icon name="settings" size={28} />
         <h1>Content Studio</h1>
-        <p>For the RealtyNMore owner only. Enter the owner key once on this device.</p>
+        <p>For the RealtyNMore owner and team. Enter your key once on this device.</p>
         <form onSubmit={submit}>
-          <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Owner key" aria-label="Owner key" />
+          <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Owner or team key" aria-label="Owner or team key" />
           <button className="btn" disabled={busy || value.trim().length < 8}>
             {busy ? 'Checking…' : 'Unlock'}
           </button>
@@ -121,12 +125,14 @@ function Unlock({ onDone }: { onDone: () => void }) {
 
 function StudioHome({ onLock }: { onLock: () => void }) {
   const [params, setParams] = useSearchParams()
-  const tab = (TABS.find((t) => t.key === params.get('tab'))?.key ?? 'overview') as Tab
   const [me, setMe] = useState(ownerRole)
   useEffect(() => {
     void refreshRole().then(() => setMe(ownerRole()))
   }, [])
-  const visible = TABS.filter((t) => t.key !== 'team' || me?.role === 'owner')
+  const OWNER_TABS = ['team', 'teamday', 'attendance']
+  const visible = TABS.filter((t) => !OWNER_TABS.includes(t.key) || me?.role === 'owner')
+  // Employees land on their own day; the owner on the overview.
+  const tab = (visible.find((t) => t.key === params.get('tab'))?.key ?? (me?.role === 'editor' ? 'myday' : 'overview')) as Tab
   return (
     <div className="page studio">
       <div className="page-head studio-head">
@@ -159,6 +165,9 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'captions' && <CaptionsTab />}
       {tab === 'report' && <ReportTab />}
       {tab === 'team' && <TeamTab />}
+      {tab === 'myday' && <MyDayTab />}
+      {tab === 'teamday' && <TeamTodayTab />}
+      {tab === 'attendance' && <AttendanceTab />}
     </div>
   )
 }

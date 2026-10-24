@@ -218,11 +218,12 @@ export async function uptimeSummary(env: Env) {
 }
 
 /* ---------- #5 morning brief (9 AM IST) ---------- */
-export function briefText(d: { views: number; opens: number; top: string | null; uptime: number | null; gap: string | null }): string {
+export function briefText(d: { views: number; opens: number; top: string | null; uptime: number | null; gap: string | null; team?: string | null }): string {
   const parts = [`Yesterday: ${d.views} screen views, ${d.opens} stories read.`]
   if (d.top) parts.push(`Top: ${d.top}.`)
   if (d.uptime !== null) parts.push(`Website uptime ${d.uptime}%.`)
   if (d.gap) parts.push(`Readers searched “${d.gap}” and found nothing.`)
+  if (d.team) parts.push(d.team)
   return parts.join(' ').slice(0, 300)
 }
 
@@ -241,7 +242,9 @@ export async function morningBrief(env: Env, force = false): Promise<string> {
   const gapRow = await one<{ q: string }>('SELECT q FROM searches WHERE day = ?1 AND zero > 0 ORDER BY zero DESC LIMIT 1')
   const up = await one<{ c: number; u: number }>('SELECT COUNT(*) AS c, SUM(ok) AS u FROM uptime WHERE substr(ts,1,10) = ?1')
   const top = topRow ? (await fetchByIds(env.SITE_API, [topRow.id]).catch(() => []))[0]?.title ?? null : null
-  const body = briefText({ views, opens, top, uptime: up?.c ? Math.round((up.u / up.c) * 1000) / 10 : null, gap: gapRow?.q ?? null })
+  const { teamBriefLine } = await import('./team.ts')
+  const team = await teamBriefLine(env).catch(() => null)
+  const body = briefText({ views, opens, top, uptime: up?.c ? Math.round((up.u / up.c) * 1000) / 10 : null, gap: gapRow?.q ?? null, team })
   const r = await toOwners(env, { title: '☀️ R&M morning brief', body, url: '#/studio', tag: 'brief' })
   return `brief sent to ${r.sent}`
 }

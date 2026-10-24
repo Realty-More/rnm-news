@@ -33,6 +33,7 @@ import {
   uptimeSummary,
   type Who,
 } from './owner.ts'
+import { checkIn, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
 
 export interface Env {
   SUBS: KVNamespace
@@ -118,6 +119,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await siteConfig(env), 200, headers)
         case '/editor/team':
           return who.role === 'owner' ? json({ editors: await listEditors(env) }, 200, headers) : ownerOnly()
+        case '/editor/me/today':
+          return json(await myToday(env, who), 200, headers)
+        case '/editor/me/history':
+          return json(await myHistory(env, who), 200, headers)
+        case '/editor/team/day':
+          return who.role === 'owner' ? json(await teamDay(env, url.searchParams.get('date') ?? ''), 200, headers) : ownerOnly()
+        case '/editor/team/month':
+          return who.role === 'owner' ? json(await teamMonth(env, url.searchParams.get('month') ?? ''), 200, headers) : ownerOnly()
       }
       return json({ error: 'not found' }, 404, headers)
     }
@@ -141,6 +150,18 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         const name = String((body as { name?: unknown }).name ?? '')
         return json(await createEditor(env, name), 200, headers)
       }
+      case '/editor/me/checkin':
+        return json(await checkIn(env, who, body), 200, headers)
+      case '/editor/me/checkout':
+        return json(await checkOut(env, who), 200, headers)
+      case '/editor/me/report':
+        return json(await submitReport(env, who, body), 200, headers)
+      case '/editor/me/device':
+        return json({ ok: await registerStaffDevice(env, who, body) }, 200, headers)
+      case '/editor/team/settings':
+        return who.role === 'owner' ? json(await saveTeamSettings(env, body), 200, headers) : ownerOnly()
+      case '/editor/team/remind-now':
+        return who.role === 'owner' ? json({ result: await reportReminders(env, true) }, 200, headers) : ownerOnly()
       case '/editor/team/revoke':
         return who.role === 'owner' ? json({ ok: await revokeEditor(env, String((body as { id?: unknown }).id ?? '')) }, 200, headers) : ownerOnly()
     }
@@ -209,6 +230,6 @@ export default {
 
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
     const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
-    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env))]))
+    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env))]))
   },
 } satisfies ExportedHandler<Env>

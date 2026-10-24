@@ -88,3 +88,19 @@ describe('social captions', async () => {
     expect(c.linkedin).toMatch(/realtynmore\.workers\.dev\/a\/119112/)
   })
 })
+
+describe('attendance export', async () => {
+  const { monthCsv } = await import('../pages/TeamTools.tsx')
+  it('builds a CSV with one column per day of the month', () => {
+    const csv = monthCsv({
+      month: '2026-02',
+      settings: { startTime: '10:00', graceMin: 15 },
+      rows: [{ id: 'a', name: 'Neha "Desk"', present: 1, late: 1, reports: 1, minutes: 510, avgCheckIn: '10:20', days: { '2026-02-03': { in: '10:20', out: '18:50', late: true, report: true } } }],
+    })
+    const [head, row] = csv.split('\r\n')
+    expect(head.split(',').length).toBe(6 + 28)
+    expect(row).toContain('"Neha ""Desk"""')
+    expect(row).toContain('"10:20-18:50 L"')
+    expect(row).toContain('"8.5"')
+  })
+})

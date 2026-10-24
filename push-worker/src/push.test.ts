@@ -282,3 +282,37 @@ describe('owner tools', async () => {
     expect(sameKey('', '')).toBe(false)
   })
 })
+
+describe('team attendance', async () => {
+  const { isLate, workedMinutes, summarizeMonth, cleanReport, istClock } = await import('./team.ts')
+  const s = { startTime: '10:00', graceMin: 15, reminderTime: '18:30' }
+  // 10:10 IST = 04:40 UTC, 10:20 IST = 04:50 UTC, 18:40 IST = 13:10 UTC
+  it('converts to IST and marks late after start + grace', () => {
+    expect(istClock('2026-10-26T04:40:00Z')).toBe('10:10')
+    expect(isLate('2026-10-26T04:40:00Z', s)).toBe(false)
+    expect(isLate('2026-10-26T04:50:00Z', s)).toBe(true)
+    expect(isLate(null, s)).toBe(false)
+  })
+  it('counts worked minutes', () => {
+    expect(workedMinutes('2026-10-26T04:40:00Z', '2026-10-26T13:10:00Z')).toBe(510)
+    expect(workedMinutes(null, null)).toBe(0)
+    // still checked in: counts up to now on the same day
+    expect(workedMinutes('2026-10-26T04:40:00Z', null, Date.parse('2026-10-26T06:40:00Z'))).toBe(120)
+  })
+  it('summarizes a month per person', () => {
+    const att = [
+      { person_id: 'a', name: 'Neha', day: '2026-10-26', check_in: '2026-10-26T04:40:00Z', check_out: '2026-10-26T13:10:00Z', mode: 'office', note: '' },
+      { person_id: 'a', name: 'Neha', day: '2026-10-27', check_in: '2026-10-27T04:50:00Z', check_out: '2026-10-27T12:50:00Z', mode: 'office', note: '' },
+      { person_id: 'b', name: 'Ravi', day: '2026-10-26', check_in: '2026-10-26T04:30:00Z', check_out: null, mode: 'remote', note: '' },
+    ]
+    const rows = summarizeMonth([{ id: 'a', name: 'Neha' }, { id: 'b', name: 'Ravi' }, { id: 'c', name: 'Asha' }], att, [{ person_id: 'a', day: '2026-10-26' }], s)
+    expect(rows[0]).toMatchObject({ name: 'Neha', present: 2, late: 1, reports: 1, minutes: 990, avgCheckIn: '10:15' })
+    expect(rows[0].days['2026-10-27']).toEqual({ in: '10:20', out: '18:20', late: true, report: false })
+    expect(rows[1]).toMatchObject({ present: 1, late: 0, minutes: 0 })
+    expect(rows[2]).toMatchObject({ present: 0, avgCheckIn: null })
+  })
+  it('requires real report text', () => {
+    expect(cleanReport({ done: 'ok' })).toBe('Write what you worked on today.')
+    expect(cleanReport({ done: 'Wrote 3 RERA stories', plan: 'Interview edit' })).toMatchObject({ done: 'Wrote 3 RERA stories', plan: 'Interview edit', blockers: '' })
+  })
+})

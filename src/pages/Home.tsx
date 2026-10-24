@@ -9,6 +9,7 @@ import { NotifyPrompt } from '../components/NotifyToggle.tsx'
 import { VideoCard, VideoPlayer } from '../components/Video.tsx'
 import { Icon } from '../components/Icon.tsx'
 import { WhatsAppCard } from '../components/WhatsAppCard.tsx'
+import { EditorsPick } from '../components/SiteExtras.tsx'
 import { SocialLinks } from '../components/SiteFooter.tsx'
 import { MORE_REALTY, REALTY_INDEX, SENSEX, TvWidget, useNiftyRealty, useTvTheme } from '../components/TvWidget.tsx'
 import { continueReading, onHistoryChange, readHistory, type HistoryItem } from '../lib/history.ts'
@@ -59,6 +60,8 @@ export function Home() {
           <span className="dateline">{todayFmt(prefs.lang).format(new Date())}</span>
           <h1 className="masthead-title">{t('home.title')}</h1>
         </div>
+
+        <EditorsPick />
 
         <ContinueReading />
         {prefs.onboarded && <NotifyPrompt />}

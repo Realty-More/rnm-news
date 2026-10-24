@@ -9,7 +9,7 @@ import { toast } from '../components/Toast.tsx'
 import { formatDateTime, readingMinutes } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { recordRead } from '../lib/history.ts'
-import { smartLink, trackOpen } from '../lib/stats.ts'
+import { smartLink, trackOpen, trackShare } from '../lib/stats.ts'
 import { whatsappShareUrl } from '../lib/config.ts'
 import { WhatsAppCard } from '../components/WhatsAppCard.tsx'
 import { getOfflinePost } from '../lib/offline.ts'
@@ -216,6 +216,7 @@ function ArticleActions({ post, fallback, getText, compact = false }: { post: Po
   }
   const share = async () => {
     const r = await shareLink(fallback.title, smartLink(fallback))
+    if (r === 'shared' || r === 'copied') trackShare(fallback.id, r === 'copied' ? 'copy' : 'share')
     if (r === 'copied') toast('Link copied')
     if (r === 'failed') toast('Could not share this link')
   }
@@ -228,7 +229,7 @@ function ArticleActions({ post, fallback, getText, compact = false }: { post: Po
       <button className="btn ghost" onClick={share}>
         <Icon name="share" size={18} /> {t('article.share')}
       </button>
-      <a className="btn ghost wa-share" href={whatsappShareUrl(`*${fallback.title}*\n\n${smartLink(fallback)}`)} target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp">
+      <a className="btn ghost wa-share" onClick={() => trackShare(fallback.id, 'whatsapp')} href={whatsappShareUrl(`*${fallback.title}*\n\n${smartLink(fallback)}`)} target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp">
         <Icon name="whatsapp" size={18} /> {compact ? '' : 'WhatsApp'}
       </a>
       {post?.content && <ListenButton title={post.title} getText={getText} />}

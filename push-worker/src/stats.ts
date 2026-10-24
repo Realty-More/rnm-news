@@ -8,12 +8,16 @@ export const PAGES = ['home', 'news', 'categories', 'category', 'search', 'artic
 
 const today = () => new Date().toISOString().slice(0, 10)
 
-export type Hit = { kind: 'open'; postId: number } | { kind: 'page'; page: (typeof PAGES)[number] } | { kind: 'search'; q: string; empty: boolean }
+export type Hit = { kind: 'open'; postId: number } | { kind: 'page'; page: (typeof PAGES)[number] } | { kind: 'search'; q: string; empty: boolean } | { kind: 'share'; postId: number; channel: 'share' | 'whatsapp' | 'copy' }
 
 export function parseHit(body: unknown): Hit | null {
-  const b = (body ?? {}) as { kind?: unknown; postId?: unknown; page?: unknown; q?: unknown }
+  const b = (body ?? {}) as { kind?: unknown; postId?: unknown; page?: unknown; q?: unknown; channel?: unknown }
   if (b.kind === 'open' && Number.isInteger(b.postId) && (b.postId as number) > 0 && (b.postId as number) < 1e9) return { kind: 'open', postId: b.postId as number }
   if (b.kind === 'page' && typeof b.page === 'string' && (PAGES as readonly string[]).includes(b.page)) return { kind: 'page', page: b.page as (typeof PAGES)[number] }
+  if (b.kind === 'share' && Number.isInteger(b.postId) && (b.postId as number) > 0 && (b.postId as number) < 1e9) {
+    const channel = b.channel === 'whatsapp' || b.channel === 'copy' ? b.channel : 'share'
+    return { kind: 'share', postId: b.postId as number, channel }
+  }
   if (b.kind === 'search' && typeof b.q === 'string') {
     // Normalised so "Flats in Noida " and "flats in noida" count together.
     const q = b.q.toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 60)
@@ -25,6 +29,8 @@ export function parseHit(body: unknown): Hit | null {
 export async function recordHit(env: Env, hit: Hit) {
   if (hit.kind === 'open') {
     await env.DB.prepare('INSERT INTO opens (day, post_id, n) VALUES (?1, ?2, 1) ON CONFLICT(day, post_id) DO UPDATE SET n = n + 1').bind(today(), hit.postId).run()
+  } else if (hit.kind === 'share') {
+    await env.DB.prepare('INSERT INTO shares (day, post_id, channel, n) VALUES (?1, ?2, ?3, 1) ON CONFLICT(day, post_id, channel) DO UPDATE SET n = n + 1').bind(today(), hit.postId, hit.channel).run()
   } else if (hit.kind === 'search') {
     await env.DB.prepare('INSERT INTO searches (day, q, n, zero) VALUES (?1, ?2, 1, ?3) ON CONFLICT(day, q) DO UPDATE SET n = n + 1, zero = zero + ?3')
       .bind(today(), hit.q, hit.empty ? 1 : 0)

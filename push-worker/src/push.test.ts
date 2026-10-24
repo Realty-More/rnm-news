@@ -233,3 +233,52 @@ describe('nifty realty list', async () => {
     expect(parseConstituents('<html>blocked</html>')).toEqual([])
   })
 })
+
+describe('owner tools', async () => {
+  const { cleanNotice, cleanSiteConfig, nextMonState, briefText, cleanIdea, sameKey } = await import('./owner.ts')
+
+  it('cleans custom notifications and maps site links into the app', () => {
+    const n = cleanNotice({ title: 'Exclusive', body: 'New interview with DLF CEO', url: 'https://realtynmore.com/dlf-ceo-interview/' })
+    expect(n).toMatchObject({ title: 'Exclusive', body: 'New interview with DLF CEO', url: '#/read/dlf-ceo-interview' })
+    expect(cleanNotice({ body: 'Hi', url: 'https://evil.example/x' })).toMatchObject({ url: '#/', title: 'R&M News' })
+    expect(cleanNotice({ title: 'x' })).toBe('Write the message text.')
+  })
+
+  it('validates Editor’s Pick and banner, and can clear them', () => {
+    const empty = { pin: null, banner: null }
+    expect(cleanSiteConfig({ pin: { postId: 119112 } }, empty)).toMatchObject({ pin: { postId: 119112, until: null } })
+    expect(cleanSiteConfig({ pin: { postId: 'x' } }, empty)).toBe('Pick a story to pin.')
+    const b = cleanSiteConfig({ banner: { text: 'R&M Podium on 5 Nov', link: 'javascript:alert(1)' } }, empty)
+    expect(b).toMatchObject({ banner: { text: 'R&M Podium on 5 Nov', link: '', tone: 'accent' } })
+    expect(cleanSiteConfig({ banner: null }, { pin: null, banner: { id: 'b', text: 't', link: '', until: null, tone: 'accent' } })).toMatchObject({ banner: null })
+  })
+
+  it('alerts after two failed checks and once on recovery', () => {
+    const up = { down: false, fails: 0, since: null }
+    const a = nextMonState(up, false, 't1')
+    expect(a.alert).toBeNull()
+    const b = nextMonState(a.state, false, 't2')
+    expect(b.alert).toBe('down')
+    expect(b.state.since).toBe('t1')
+    expect(nextMonState(b.state, false, 't3').alert).toBeNull()
+    expect(nextMonState(b.state, true, 't4').alert).toBe('up')
+  })
+
+  it('writes a short morning brief', () => {
+    expect(briefText({ views: 420, opens: 96, top: 'DLF Q2 results', uptime: 100, gap: 'jewar airport' })).toBe(
+      'Yesterday: 420 screen views, 96 stories read. Top: DLF Q2 results. Website uptime 100%. Readers searched “jewar airport” and found nothing.',
+    )
+  })
+
+  it('validates calendar items', () => {
+    expect(cleanIdea({ title: ' Jewar airport explainer ', status: 'writing', due: '2026-11-02' })).toMatchObject({ title: 'Jewar airport explainer', status: 'writing', due: '2026-11-02' })
+    expect(cleanIdea({ title: 'x', status: 'nonsense', due: 'tomorrow' })).toMatchObject({ status: 'idea', due: null })
+    expect(cleanIdea({})).toBe('Write a title.')
+  })
+
+  it('compares keys safely', () => {
+    expect(sameKey('abc', 'abc')).toBe(true)
+    expect(sameKey('abc', 'abd')).toBe(false)
+    expect(sameKey('', '')).toBe(false)
+  })
+})

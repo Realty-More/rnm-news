@@ -1,13 +1,14 @@
 // Owner-only Content Studio: what readers want, what to write next, keywords and SEO fixes.
 // Hidden from readers (no menu link); opened from Settings on the owner's device or #/studio.
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
-import { forgetOwner, ownerKey, studio, unlock } from '../lib/owner.ts'
+import { forgetOwner, ownerKey, ownerRole, refreshRole, studio, unlock } from '../lib/owner.ts'
+import { AddToCalendar, CalendarTab, CaptionsTab, NotifyTab, PerformanceTab, ReportTab, SiteTab, TeamTab } from './StudioTools.tsx'
 import { usePageTitle } from './usePageTitle.ts'
 import { WHATSAPP_CHANNEL, whatsappShareUrl } from '../lib/config.ts'
 import { smartLink } from '../lib/stats.ts'
@@ -63,9 +64,16 @@ const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'ideas', label: 'What to write' },
   { key: 'rivals', label: 'Competitors' },
+  { key: 'perf', label: 'Performance' },
+  { key: 'calendar', label: 'Calendar' },
+  { key: 'notify', label: 'Notify readers' },
+  { key: 'site', label: 'Site & alerts' },
   { key: 'whatsapp', label: 'WhatsApp post' },
+  { key: 'captions', label: 'Social captions' },
   { key: 'keywords', label: 'Keywords' },
   { key: 'seo', label: 'SEO check' },
+  { key: 'report', label: 'Weekly report' },
+  { key: 'team', label: 'Team' },
 ] as const
 type Tab = (typeof TABS)[number]['key']
 
@@ -114,11 +122,16 @@ function Unlock({ onDone }: { onDone: () => void }) {
 function StudioHome({ onLock }: { onLock: () => void }) {
   const [params, setParams] = useSearchParams()
   const tab = (TABS.find((t) => t.key === params.get('tab'))?.key ?? 'overview') as Tab
+  const [me, setMe] = useState(ownerRole)
+  useEffect(() => {
+    void refreshRole().then(() => setMe(ownerRole()))
+  }, [])
+  const visible = TABS.filter((t) => t.key !== 'team' || me?.role === 'owner')
   return (
     <div className="page studio">
       <div className="page-head studio-head">
         <div>
-          <span className="owner-badge">Owner only</span>
+          <span className="owner-badge">{me?.role === 'editor' ? `Editor · ${me.name}` : 'Owner'}</span>
           <h1>Content Studio</h1>
           <p className="page-sub">Real data from the app, realtynmore.com, Google and other news sites</p>
         </div>
@@ -127,7 +140,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
         </button>
       </div>
       <div className="chips" role="tablist" aria-label="Studio">
-        {TABS.map((t) => (
+        {visible.map((t) => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} className={`chip ${tab === t.key ? 'active' : ''}`} onClick={() => setParams({ tab: t.key }, { replace: true })}>
             {t.label}
           </button>
@@ -139,6 +152,13 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'whatsapp' && <WhatsAppTab />}
       {tab === 'keywords' && <KeywordsTab />}
       {tab === 'seo' && <SeoTab />}
+      {tab === 'perf' && <PerformanceTab />}
+      {tab === 'calendar' && <CalendarTab />}
+      {tab === 'notify' && <NotifyTab />}
+      {tab === 'site' && <SiteTab />}
+      {tab === 'captions' && <CaptionsTab />}
+      {tab === 'report' && <ReportTab />}
+      {tab === 'team' && <TeamTab />}
     </div>
   )
 }
@@ -230,7 +250,7 @@ function IdeasTab() {
                 </a>
                 <span className="meta">
                   {r.source}
-                  {r.date && !Number.isNaN(Date.parse(r.date)) && ` · ${formatDate(new Date(r.date).toISOString())}`}
+                  {r.date && !Number.isNaN(Date.parse(r.date)) && ` · ${formatDate(new Date(r.date).toISOString())}`} <AddToCalendar title={r.title} source={r.link} />
                 </span>
               </li>
             ))}

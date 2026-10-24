@@ -2550,6 +2550,349 @@ a.ticker-item:hover {
   gap: 8px;
 }
 
+/* ---------- Owner tools ---------- */
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink-2);
+  font: 600 12px var(--sans);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.mini-btn:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.mini-btn.done {
+  border-color: #2f9e5b;
+  color: #2f9e5b;
+}
+.mini-btn.danger,
+.btn.danger {
+  border-color: #d9502e;
+  color: #d9502e;
+}
+.btn.danger {
+  background: #d9502e;
+  color: #fff;
+}
+.cal-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cal-form input,
+.form-grid input,
+.form-grid textarea,
+.form-grid select,
+.wide-select {
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14.5px var(--sans);
+}
+.cal-form input:first-child {
+  flex: 1 1 220px;
+}
+.form-grid {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.form-grid label small {
+  font-weight: 400;
+  color: var(--mute);
+}
+.form-grid textarea {
+  height: auto;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.wide-select {
+  width: 100%;
+}
+.cal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cal-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cal-list li > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cal-list li strong {
+  font-size: 14.5px;
+}
+.cal-list li.overdue strong::before {
+  content: 'Overdue · ';
+  color: #d9502e;
+}
+.cal-list .meta a {
+  text-decoration: underline;
+}
+.cal-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.push-preview {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  max-width: 380px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.push-preview img {
+  border-radius: 8px;
+}
+.push-preview div {
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+  min-width: 0;
+}
+.push-preview span {
+  color: var(--ink-2);
+}
+.link-row {
+  display: block;
+  width: 100%;
+  padding: 9px 0;
+  text-align: left;
+  font-size: 14px;
+}
+.link-row:hover {
+  color: var(--accent-deep);
+}
+.current {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 14px;
+}
+.caption-box {
+  margin: 0;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  font: 14px/1.55 var(--sans);
+  color: var(--ink);
+}
+.new-key {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--accent);
+  background: var(--bg);
+}
+.new-key p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.new-key code {
+  display: block;
+  margin-bottom: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  font: 13px ui-monospace, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+.perf-title {
+  white-space: normal;
+  min-width: 220px;
+}
+.perf-title a {
+  font-weight: 600;
+}
+
+/* Announcement banner and Editor's Pick (readers) */
+.announce {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 0 var(--gutter);
+  min-height: 42px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.announce.accent {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  color: var(--ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.announce.dark {
+  background: var(--band);
+  color: var(--band-ink);
+}
+.announce.preview {
+  margin: 0 0 12px;
+  border-radius: var(--radius-sm);
+}
+.announce-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  min-width: 0;
+}
+.announce-body svg:first-child {
+  color: var(--accent-deep);
+  flex: none;
+}
+.announce .icon-btn {
+  color: inherit;
+  width: 34px;
+  height: 34px;
+}
+.pick-card {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 14px;
+  align-items: center;
+  margin: -4px 0 20px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--band);
+  color: var(--band-ink);
+  --ink-2: #d2d2ce;
+}
+.pick-img,
+.pick-card .img-fallback {
+  width: 112px;
+  height: 112px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+.pick-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.pick-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 700 12px var(--cond);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.pick-title {
+  font: 700 18px/1.25 var(--serif);
+}
+.pick-excerpt {
+  margin: 0;
+  font-size: 13.5px;
+  color: #b9b9bd;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (min-width: 720px) {
+  .pick-card {
+    grid-template-columns: 220px 1fr;
+  }
+  .pick-img,
+  .pick-card .img-fallback {
+    width: 220px;
+    height: 140px;
+  }
+  .pick-title {
+    font-size: 22px;
+  }
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Weekly report: print-friendly */
+.report-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.report-head h2 {
+  font: 700 22px/1.2 var(--serif);
+  margin-top: 6px;
+}
+@media print {
+  .topbar,
+  .ticker,
+  .announce,
+  .tabbar,
+  .site-footer,
+  .install-banner,
+  .studio .chips,
+  .studio-head,
+  .no-print,
+  .update-bar,
+  .toast-region {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .panel,
+  .kpi {
+    break-inside: avoid;
+    border: 1px solid #ccc;
+    background: #fff;
+    color: #000;
+  }
+  .kpi b {
+    color: #c45e00;
+  }
+}
+
 /* ---------- Larger screens ---------- */
 @media (min-width: 640px) {
   :root {

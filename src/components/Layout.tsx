@@ -10,6 +10,7 @@ import { trackScreen } from '../lib/stats.ts'
 import { Icon, type IconName } from './Icon.tsx'
 import { Toaster } from './Toast.tsx'
 import { Ticker } from './Ticker.tsx'
+import { AnnouncementBanner } from './SiteExtras.tsx'
 import { SiteFooter } from './SiteFooter.tsx'
 import { useT, type TKey } from '../lib/i18n.ts'
 
@@ -203,6 +204,7 @@ export function Layout() {
       </header>
 
       {!isArticle && !pathname.startsWith('/studio') && <Ticker />}
+      {!pathname.startsWith('/studio') && <AnnouncementBanner />}
 
       {!online && (
         <div className="offline-bar" role="status">

@@ -65,3 +65,8 @@ export function smartLink(post: { id: number; link: string }): string {
 export function trackSearch(q: string, empty: boolean) {
   send({ kind: 'search', q, empty })
 }
+
+/** Counts shares per story (share sheet, WhatsApp or copied link) for the owner's performance view. */
+export function trackShare(postId: number, channel: 'share' | 'whatsapp' | 'copy') {
+  send({ kind: 'share', postId, channel })
+}

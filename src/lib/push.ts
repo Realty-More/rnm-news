@@ -45,13 +45,18 @@ export function currentFilters() {
   return topics.length || p.cities.length ? { topics, cities: p.cities } : undefined
 }
 
-export async function enablePush(): Promise<PushState> {
+/** Asks permission and returns this device's push subscription (null if refused). */
+export async function ensureSubscription(): Promise<PushSubscription | null> {
   const permission = await Notification.requestPermission()
-  if (permission !== 'granted') return permission === 'denied' ? 'denied' : 'off'
+  if (permission !== 'granted') return null
   const reg = await navigator.serviceWorker.ready
   const { publicKey } = (await (await fetch(`${PUSH_API}/vapid`)).json()) as { publicKey: string }
-  let sub = await reg.pushManager.getSubscription()
-  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) })
+  return (await reg.pushManager.getSubscription()) ?? reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) })
+}
+
+export async function enablePush(): Promise<PushState> {
+  const sub = await ensureSubscription()
+  if (!sub) return Notification.permission === 'denied' ? 'denied' : 'off'
   await post('/subscribe', { subscription: sub.toJSON(), filters: currentFilters() })
   return 'on'
 }

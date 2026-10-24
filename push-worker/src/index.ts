@@ -1,15 +1,38 @@
 // R&M News app server (Cloudflare Workers free plan).
-//   POST /subscribe, /unsubscribe  breaking-news alerts (KV)
-//   POST /hit, GET /trending       anonymous usage counts and "Trending in app" (D1)
-//   GET  /a/<id>                   share preview page that opens the story in the app
-//   GET  /stats?key=…              private stats page for the company
-//   cron every 10 minutes          notify subscribed devices about new realtynmore.com posts
+//   POST /subscribe, /unsubscribe     breaking-news alerts (KV)
+//   POST /hit, GET /trending          anonymous usage counts and "Trending in app" (D1)
+//   GET  /a/<id>                      share preview page that opens the story in the app
+//   GET  /site/config                 Editor's Pick and announcement banner for the app
+//   GET  /market/*                    Nifty Realty list and news behind stock moves
+//   /editor/*                         Content Studio (owner key or an editor key)
+//   GET  /stats?key=…                 private stats page for the owner
+//   cron every 10 minutes             new-story alerts, website uptime check, 9 AM morning brief
 import { checkAndNotify, subKey, subscribe } from './push.ts'
 import { sharePage } from './share.ts'
 import { parseHit, recordHit, statsPage, trending } from './stats.ts'
 import { ideas, keywords, overview, SEEDS, seoAudit } from './editor.ts'
 import { competitors } from './competitors.ts'
 import { marketNews, niftyRealty } from './market.ts'
+import {
+  authenticate,
+  checkSite,
+  createEditor,
+  customPush,
+  deleteIdea,
+  listEditors,
+  listIdeas,
+  morningBrief,
+  performance,
+  pushLog,
+  registerOwnerDevice,
+  revokeEditor,
+  sameKey,
+  saveIdea,
+  saveSiteConfig,
+  siteConfig,
+  uptimeSummary,
+  type Who,
+} from './owner.ts'
 
 export interface Env {
   SUBS: KVNamespace
@@ -27,7 +50,8 @@ export { buildNotices, isValidSubscription, matching, newSince } from './push.ts
 export type { NewsItem } from './site.ts'
 
 const MAX_BODY = 4096
-const STUDIO_CACHE = 4
+// Bump when studio/market logic changes, so old cached results are not served.
+const STUDIO_CACHE = 5
 
 function cors(origin: string | null, env: Env): Record<string, string> {
   const allowed = env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
@@ -43,50 +67,84 @@ function json(data: unknown, status: number, headers: Record<string, string>) {
 async function readJson(req: Request): Promise<unknown> {
   const text = await req.text()
   if (text.length > MAX_BODY) throw new Error('too large')
-  return JSON.parse(text)
+  return text ? JSON.parse(text) : {}
 }
 
-/** Constant-time compare for the stats key. */
-function sameKey(a: string, b: string) {
-  if (!a || !b || a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
+/** Serves `make()` from the edge cache for `ttl` seconds (cache key never includes a key or user). */
+async function cachedJson(url: URL, ctx: ExecutionContext, headers: Record<string, string>, ttl: number, make: () => Promise<unknown>) {
+  const key = new Request(`${url.origin}${url.pathname}${url.search}${url.search ? '&' : '?'}v=${STUDIO_CACHE}`)
+  const hit = await caches.default.match(key)
+  if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
+  const res = json(await make(), 200, { 'Cache-Control': `public, max-age=${ttl}` })
+  ctx.waitUntil(caches.default.put(key, res.clone()))
+  return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
 }
 
-/** Owner-only Content Studio data; slow sources are cached (cache key never includes the owner key). */
-async function editor(pathname: string, url: URL, env: Env, ctx: ExecutionContext, headers: Record<string, string>): Promise<Response> {
-  const cached = async (ttl: number, make: () => Promise<unknown>) => {
-    // Bump STUDIO_CACHE when the studio logic changes, so old cached results are not served.
-    const key = new Request(`${url.origin}${pathname}${url.search}${url.search ? '&' : '?'}v=${STUDIO_CACHE}`)
-    const hit = await caches.default.match(key)
-    if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
-    const res = json(await make(), 200, { 'Cache-Control': `public, max-age=${ttl}` })
-    ctx.waitUntil(caches.default.put(key, res.clone()))
-    return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
-  }
+/** Content Studio for the owner and editors. Team management is owner-only. */
+async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, headers: Record<string, string>, who: Who): Promise<Response> {
+  const { pathname } = url
+  const ownerOnly = () => json({ error: 'Only the owner can do this.' }, 403, headers)
   try {
-    switch (pathname) {
-      case '/editor/ping':
-        return json({ ok: true }, 200, headers)
-      case '/editor/overview':
-        return json(await overview(env), 200, headers)
-      case '/editor/ideas':
-        return cached(30 * 60, () => ideas(env))
-      case '/editor/keywords': {
-        const seeds = (url.searchParams.get('seeds') ?? '')
-          .split(',')
-          .map((s) => s.trim().toLowerCase().slice(0, 60))
-          .filter(Boolean)
-        return cached(12 * 60 * 60, () => keywords(seeds.length ? seeds : SEEDS))
+    if (req.method === 'GET') {
+      switch (pathname) {
+        case '/editor/ping':
+          return json({ ok: true, role: who.role, name: who.name }, 200, headers)
+        case '/editor/overview':
+          return json(await overview(env), 200, headers)
+        case '/editor/ideas':
+          return cachedJson(url, ctx, headers, 30 * 60, () => ideas(env))
+        case '/editor/keywords': {
+          const seeds = (url.searchParams.get('seeds') ?? '')
+            .split(',')
+            .map((s) => s.trim().toLowerCase().slice(0, 60))
+            .filter(Boolean)
+          return cachedJson(url, ctx, headers, 12 * 60 * 60, () => keywords(seeds.length ? seeds : SEEDS))
+        }
+        case '/editor/competitors':
+          return cachedJson(url, ctx, headers, 60 * 60, () => competitors(env))
+        case '/editor/seo':
+          return cachedJson(url, ctx, headers, 6 * 60 * 60, () => seoAudit(env))
+        case '/editor/push-log':
+          return json(await pushLog(env), 200, headers)
+        case '/editor/uptime':
+          return json(await uptimeSummary(env), 200, headers)
+        case '/editor/performance': {
+          const days = Math.min(30, Math.max(1, Number(url.searchParams.get('days')) || 7))
+          return json(await performance(env, days), 200, headers)
+        }
+        case '/editor/calendar':
+          return json(await listIdeas(env), 200, headers)
+        case '/editor/site':
+          return json(await siteConfig(env), 200, headers)
+        case '/editor/team':
+          return who.role === 'owner' ? json({ editors: await listEditors(env) }, 200, headers) : ownerOnly()
       }
-      case '/editor/competitors':
-        return cached(60 * 60, () => competitors(env))
-      case '/editor/seo':
-        return cached(6 * 60 * 60, () => seoAudit(env))
-      default:
-        return json({ error: 'not found' }, 404, headers)
+      return json({ error: 'not found' }, 404, headers)
     }
+
+    const body = await readJson(req)
+    switch (pathname) {
+      case '/editor/push':
+        return json(await customPush(env, body, who), 200, headers)
+      case '/editor/site':
+        return json(await saveSiteConfig(env, body), 200, headers)
+      case '/editor/owner-device':
+        return json({ ok: await registerOwnerDevice(env, body, who) }, 200, headers)
+      case '/editor/calendar':
+        return json(await saveIdea(env, body, who), 200, headers)
+      case '/editor/calendar/delete':
+        return json({ ok: await deleteIdea(env, Number((body as { id?: unknown }).id)) }, 200, headers)
+      case '/editor/brief-now':
+        return who.role === 'owner' ? json({ result: await morningBrief(env, true) }, 200, headers) : ownerOnly()
+      case '/editor/team': {
+        if (who.role !== 'owner') return ownerOnly()
+        const name = String((body as { name?: unknown }).name ?? '')
+        return json(await createEditor(env, name), 200, headers)
+      }
+      case '/editor/team/revoke':
+        return who.role === 'owner' ? json({ ok: await revokeEditor(env, String((body as { id?: unknown }).id ?? '')) }, 200, headers) : ownerOnly()
+    }
+    return json({ error: 'not found' }, 404, headers)
   } catch (err) {
     return json({ error: (err as Error).message }, 502, headers)
   }
@@ -100,45 +158,23 @@ export default {
     const headers = cors(origin, env)
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers })
 
+    if (pathname.startsWith('/editor/')) {
+      if (req.method !== 'GET' && !headers['Access-Control-Allow-Origin']) return json({ error: 'not allowed' }, 403, headers)
+      const key = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''
+      const who = await authenticate(key, env, ctx)
+      if (!who) return json({ error: 'owner or editor key required' }, 401, headers)
+      return studio(req, url, env, ctx, headers, who)
+    }
+
     if (req.method === 'GET') {
       if (pathname === '/') return json({ ok: true, service: 'R&M News app server' }, 200, headers)
       if (pathname === '/vapid') return json({ publicKey: env.VAPID_PUBLIC_KEY }, 200, headers)
       const share = /^\/a\/(\d{1,9})$/.exec(pathname)
       if (share) return sharePage(env, Number(share[1]))
-      if (pathname === '/market/nifty-realty') {
-        // NSE's published constituent list (names/symbols, no prices), cached for a day.
-        const key = new Request(`${url.origin}/market/nifty-realty?v=${STUDIO_CACHE}`)
-        const hit = await caches.default.match(key)
-        if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
-        const data = await niftyRealty()
-        const res = json(data, 200, { 'Cache-Control': `public, max-age=${data.source === 'NSE' ? 86400 : 600}` })
-        ctx.waitUntil(caches.default.put(key, res.clone()))
-        return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
-      }
-      if (pathname === '/market/news') {
-        // Public: headlines only, cached 30 minutes for everyone.
-        const key = new Request(`${url.origin}/market/news?v=${STUDIO_CACHE}`)
-        const hit = await caches.default.match(key)
-        if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
-        const res = json(await marketNews(env), 200, { 'Cache-Control': 'public, max-age=1800' })
-        ctx.waitUntil(caches.default.put(key, res.clone()))
-        return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
-      }
-      if (pathname === '/trending') {
-        const cache = caches.default
-        const key = new Request(`${url.origin}/trending`)
-        const hit = await cache.match(key)
-        if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
-        const items = await trending(env).catch(() => [])
-        const res = json({ items }, 200, { 'Cache-Control': 'public, max-age=300' })
-        ctx.waitUntil(cache.put(key, res.clone()))
-        return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
-      }
-      if (pathname.startsWith('/editor/')) {
-        const auth = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''
-        if (!sameKey(auth, env.STATS_KEY ?? '')) return json({ error: 'owner key required' }, 401, headers)
-        return editor(pathname, url, env, ctx, headers)
-      }
+      if (pathname === '/site/config') return json(await siteConfig(env), 200, { ...headers, 'Cache-Control': 'public, max-age=60' })
+      if (pathname === '/market/nifty-realty') return cachedJson(url, ctx, headers, 86400, () => niftyRealty())
+      if (pathname === '/market/news') return cachedJson(url, ctx, headers, 1800, () => marketNews(env))
+      if (pathname === '/trending') return cachedJson(url, ctx, headers, 300, async () => ({ items: await trending(env).catch(() => []) }))
       if (pathname === '/stats') {
         if (!sameKey(url.searchParams.get('key') ?? '', env.STATS_KEY ?? '')) return new Response('Not found', { status: 404 })
         return new Response(await statsPage(env), { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } })
@@ -153,7 +189,6 @@ export default {
     } catch {
       return json({ error: 'bad request' }, 400, headers)
     }
-
     if (pathname === '/subscribe') {
       return (await subscribe(env, body)) ? json({ ok: true }, 200, headers) : json({ error: 'invalid subscription' }, 400, headers)
     }
@@ -173,6 +208,7 @@ export default {
   },
 
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(checkAndNotify(env).then((r) => console.log(r)))
+    const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
+    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env))]))
   },
 } satisfies ExportedHandler<Env>

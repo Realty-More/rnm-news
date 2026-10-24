@@ -85,13 +85,14 @@ export function buildNotices(fresh: NewsItem[]): Notice[] {
   return [{ title: `R&M News · ${fresh.length} new stories`, body: fresh[0].title, url: '#/news', image: fresh[0].image, tag: 'digest' }]
 }
 
-async function sendToAll(env: Env, fresh: NewsItem[]): Promise<{ sent: number; removed: number }> {
+/** Sends to every stored subscription under `prefix`; `noticesFor` decides what each device gets. */
+export async function deliver(env: Env, prefix: string, noticesFor: (s: StoredSub) => Notice[]): Promise<{ sent: number; removed: number }> {
   const vapid = { subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY }
   let sent = 0
   let removed = 0
   let cursor: string | undefined
   do {
-    const page = await env.SUBS.list({ prefix: SUB_PREFIX, cursor })
+    const page = await env.SUBS.list({ prefix, cursor })
     cursor = page.list_complete ? undefined : page.cursor
     await Promise.all(
       page.keys.map(async ({ name }) => {
@@ -99,7 +100,7 @@ async function sendToAll(env: Env, fresh: NewsItem[]): Promise<{ sent: number; r
         if (!raw) return
         // Older entries stored the bare subscription.
         const stored: StoredSub = 'sub' in raw ? raw : { sub: raw }
-        for (const n of buildNotices(matching(fresh, stored.filters))) {
+        for (const n of noticesFor(stored)) {
           try {
             const payload = await buildPushPayload({ data: { ...n }, options: { ttl: 6 * 60 * 60, urgency: 'normal', topic: n.tag.slice(0, 32) } }, stored.sub, vapid)
             const res = await fetch(stored.sub.endpoint, payload)
@@ -119,6 +120,8 @@ async function sendToAll(env: Env, fresh: NewsItem[]): Promise<{ sent: number; r
   } while (cursor)
   return { sent, removed }
 }
+
+const sendToAll = (env: Env, fresh: NewsItem[]) => deliver(env, SUB_PREFIX, (s) => buildNotices(matching(fresh, s.filters)))
 
 export async function checkAndNotify(env: Env): Promise<string> {
   const latest = await fetchLatest(env.SITE_API)

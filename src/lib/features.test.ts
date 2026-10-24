@@ -69,3 +69,22 @@ describe('hindi and links', async () => {
     expect(smartLink({ id: 5, link: 'https://realtynmore.com/x/' })).toMatch(/\/a\/5$|^https:\/\/realtynmore\.com\/x\/$/)
   })
 })
+
+describe('social captions', async () => {
+  const { hashtags, captionsFor } = await import('./captions.ts')
+  const post = { title: 'UP RERA Approves 15 Projects in Noida and Gurugram as DLF Expands', excerpt: 'Lucknow, Oct 14: The Uttar Pradesh Real Estate Regulatory Authority approved 15 projects worth Rs 1,226 crore.', categories: [{ id: 439, name: 'RERA', slug: 'rera' }] }
+  it('uses at most 5 hashtags and ends with #RealtyNMore', () => {
+    const t = hashtags(post)
+    expect(t.length).toBeLessThanOrEqual(5)
+    expect(t[0]).toBe('#RealEstate')
+    expect(t).toContain('#RERA')
+    expect(t[t.length - 1]).toBe('#RealtyNMore')
+  })
+  it('keeps the X post within 280 characters (links count as 23)', () => {
+    const c = captionsFor({ ...post, title: post.title.repeat(6) }, 'https://rnm-news-push.realtynmore.workers.dev/a/119112')
+    const counted = c.x.replace(/https:\/\/\S+/, 'x'.repeat(23))
+    expect(counted.length).toBeLessThanOrEqual(280)
+    expect(c.instagram).toMatch(/link in bio/)
+    expect(c.linkedin).toMatch(/realtynmore\.workers\.dev\/a\/119112/)
+  })
+})

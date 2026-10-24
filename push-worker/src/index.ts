@@ -7,6 +7,7 @@
 import { checkAndNotify, subKey, subscribe } from './push.ts'
 import { sharePage } from './share.ts'
 import { parseHit, recordHit, statsPage, trending } from './stats.ts'
+import { ideas, keywords, overview, SEEDS, seoAudit } from './editor.ts'
 
 export interface Env {
   SUBS: KVNamespace
@@ -28,7 +29,7 @@ const MAX_BODY = 4096
 function cors(origin: string | null, env: Env): Record<string, string> {
   const allowed = env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
   return origin && allowed.includes(origin)
-    ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', Vary: 'Origin' }
+    ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', Vary: 'Origin' }
     : {}
 }
 
@@ -48,6 +49,41 @@ function sameKey(a: string, b: string) {
   let diff = 0
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return diff === 0
+}
+
+/** Owner-only Content Studio data; slow sources are cached (cache key never includes the owner key). */
+async function editor(pathname: string, url: URL, env: Env, ctx: ExecutionContext, headers: Record<string, string>): Promise<Response> {
+  const cached = async (ttl: number, make: () => Promise<unknown>) => {
+    const key = new Request(`${url.origin}${pathname}${url.search}`)
+    const hit = await caches.default.match(key)
+    if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
+    const res = json(await make(), 200, { 'Cache-Control': `public, max-age=${ttl}` })
+    ctx.waitUntil(caches.default.put(key, res.clone()))
+    return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
+  }
+  try {
+    switch (pathname) {
+      case '/editor/ping':
+        return json({ ok: true }, 200, headers)
+      case '/editor/overview':
+        return json(await overview(env), 200, headers)
+      case '/editor/ideas':
+        return cached(30 * 60, () => ideas(env))
+      case '/editor/keywords': {
+        const seeds = (url.searchParams.get('seeds') ?? '')
+          .split(',')
+          .map((s) => s.trim().toLowerCase().slice(0, 60))
+          .filter(Boolean)
+        return cached(12 * 60 * 60, () => keywords(seeds.length ? seeds : SEEDS))
+      }
+      case '/editor/seo':
+        return cached(6 * 60 * 60, () => seoAudit(env))
+      default:
+        return json({ error: 'not found' }, 404, headers)
+    }
+  } catch (err) {
+    return json({ error: (err as Error).message }, 502, headers)
+  }
 }
 
 export default {
@@ -72,6 +108,11 @@ export default {
         const res = json({ items }, 200, { 'Cache-Control': 'public, max-age=300' })
         ctx.waitUntil(cache.put(key, res.clone()))
         return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
+      }
+      if (pathname.startsWith('/editor/')) {
+        const auth = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''
+        if (!sameKey(auth, env.STATS_KEY ?? '')) return json({ error: 'owner key required' }, 401, headers)
+        return editor(pathname, url, env, ctx, headers)
       }
       if (pathname === '/stats') {
         if (!sameKey(url.searchParams.get('key') ?? '', env.STATS_KEY ?? '')) return new Response('Not found', { status: 404 })

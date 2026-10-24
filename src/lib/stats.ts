@@ -60,3 +60,8 @@ export async function fetchTrending(signal?: AbortSignal): Promise<Post[]> {
 export function smartLink(post: { id: number; link: string }): string {
   return PUSH_API ? `${PUSH_API}/a/${post.id}` : post.link
 }
+
+/** What readers search for in the app, and whether it found anything (shows content gaps to the owner). */
+export function trackSearch(q: string, empty: boolean) {
+  send({ kind: 'search', q, empty })
+}

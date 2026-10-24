@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { trackSearch } from '../lib/stats.ts'
 import { useT } from '../lib/i18n.ts'
 import { PostCard } from '../components/PostCard.tsx'
 import { LoadMore, SkeletonList, EmptyState } from '../components/States.tsx'
@@ -44,6 +46,14 @@ export function News() {
 export function PostFeed({ category, search, after }: { category?: number; search?: string; after?: string }) {
   const t = useT()
   const feed = useInfinitePosts({ category, search, after })
+  // Report each search once, after its first page loads (anonymous, see lib/stats.ts).
+  const reported = useRef<string | null>(null)
+  useEffect(() => {
+    if (!search || feed.loading || reported.current === search) return
+    if (feed.posts.length === 0 && !feed.done) return
+    reported.current = search
+    trackSearch(search, feed.posts.length === 0)
+  }, [search, feed.loading, feed.posts.length, feed.done])
   if (feed.posts.length === 0 && feed.loading) return <SkeletonList count={6} />
   if (feed.posts.length === 0 && feed.done && !feed.error) {
     return <EmptyState title={search ? `No stories found for “${search}”` : 'No stories here yet'}>{search && 'Try a shorter word, a city or a company name.'}</EmptyState>

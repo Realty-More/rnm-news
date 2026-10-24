@@ -121,3 +121,36 @@ describe('subscription validation', () => {
     expect(isValidSubscription({ endpoint: 'https://fcm.googleapis.com/x' })).toBe(false)
   })
 })
+
+describe('content studio rules', async () => {
+  const { seoIssues, covered, tokens, slugify } = await import('./editor.ts')
+  const base = { title: 'Inauguration of Dindoshi–Film City Flyover to Boost Mumbai’s East–West Connectivity', content: '<p>' + 'word '.repeat(500) + '</p>', hasImage: true, seoTitle: 'Short title', metaDescription: 'A clear summary of the story that is long enough to be useful in search results, about 120 chars long.', categories: [1, 26], tags: [5] }
+
+  it('spots a URL cut off mid-word', () => {
+    expect(slugify(base.title)).toBe('inauguration-of-dindoshi-film-city-flyover-to-boost-mumbais-east-west-connectivity')
+    expect(seoIssues({ ...base, slug: 'inauguration-of-dindoshi-film-city-flyover-to-boos' }).join()).toMatch(/cut off/)
+    expect(seoIssues({ ...base, slug: 'dindoshi-film-city-flyover' }).join()).not.toMatch(/cut off/)
+  })
+  it('flags missing descriptions, thin content, images without alt and no internal links', () => {
+    const issues = seoIssues({ ...base, slug: 'x', metaDescription: null, content: '<p>short</p><img src="a.jpg">', tags: [] }).join(' | ')
+    expect(issues).toMatch(/No meta description/)
+    expect(issues).toMatch(/Only 1 words/)
+    expect(issues).toMatch(/1 image\(s\) without alt/)
+    expect(issues).toMatch(/No internal links/)
+    expect(issues).toMatch(/No tags/)
+  })
+  it('treats a rival headline as covered when key words match one of ours', () => {
+    const ours = [tokens('UP RERA Approves 15 Real Estate Projects Worth Rs 1,226 Crore Across Eight Districts')]
+    expect(covered('UP RERA approves 15 real estate projects in eight districts', ours)).toBe(true)
+    expect(covered('DLF launches luxury tower in Gurugram sector 63', ours)).toBe(false)
+  })
+})
+
+describe('trend matching', async () => {
+  const { isRealEstate } = await import('./editor.ts')
+  it('matches whole words only', () => {
+    expect(isRealEstate('aston villa vs man city england premier league')).toBe(false)
+    expect(isRealEstate('rbi keeps repo rate unchanged, home loan emi')).toBe(true)
+    expect(isRealEstate('noida airport opening date')).toBe(true)
+  })
+})

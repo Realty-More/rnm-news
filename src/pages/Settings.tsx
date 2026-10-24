@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ownerKey } from '../lib/owner.ts'
 import { useT } from '../lib/i18n.ts'
 import { Icon } from '../components/Icon.tsx'
 import { toast } from '../components/Toast.tsx'
@@ -24,6 +26,14 @@ export function Settings() {
   usePageTitle('Settings')
   const [prefs, update] = usePrefs()
   const [theme, setTheme] = useTheme()
+  const navigate = useNavigate()
+  const taps = useRef({ n: 0, at: 0 })
+  // Hidden owner entry: tap the version number 5 times.
+  const tapVersion = () => {
+    const now = Date.now()
+    taps.current = now - taps.current.at < 1500 ? { n: taps.current.n + 1, at: now } : { n: 1, at: now }
+    if (taps.current.n >= 5) navigate('/studio')
+  }
   const t = useT()
   const [offline, setOffline] = useState<{ at: string; count: number } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -51,6 +61,17 @@ export function Settings() {
         <h1>{t('settings.title')}</h1>
         <p className="page-sub">{t('settings.sub')}</p>
       </div>
+
+      {ownerKey() && (
+        <Link to="/studio" className="studio-entry">
+          <Icon name="sparkle" size={20} />
+          <span>
+            <strong>Content Studio</strong>
+            <small>Owner only · ideas, keywords, SEO</small>
+          </span>
+          <Icon name="chevron" size={18} />
+        </Link>
+      )}
 
       <section className="set-group">
         <h2 className="set-title">{t('settings.language')}</h2>
@@ -171,7 +192,9 @@ export function Settings() {
           </a>
           . The app has no ads and no tracking, and keeps no account.
         </p>
-        <p className="meta">Version {__APP_VERSION__}</p>
+        <p className="meta version" onClick={tapVersion}>
+          Version {__APP_VERSION__}
+        </p>
       </section>
     </div>
   )

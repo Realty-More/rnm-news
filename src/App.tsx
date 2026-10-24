@@ -15,6 +15,7 @@ const Videos = lazy(() => import('./pages/Videos.tsx').then((m) => ({ default: m
 const Podcasts = lazy(() => import('./pages/Podcasts.tsx').then((m) => ({ default: m.Podcasts })))
 const Saved = lazy(() => import('./pages/Saved.tsx').then((m) => ({ default: m.Saved })))
 const Shorts = lazy(() => import('./pages/Shorts.tsx').then((m) => ({ default: m.Shorts })))
+const Studio = lazy(() => import('./pages/Studio.tsx').then((m) => ({ default: m.Studio })))
 const Settings = lazy(() => import('./pages/Settings.tsx').then((m) => ({ default: m.Settings })))
 
 const fallback = (
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="shorts" element={<Suspense fallback={fallback}><Shorts /></Suspense>} />
         <Route path="podcasts" element={<Suspense fallback={fallback}><Podcasts /></Suspense>} />
         <Route path="saved" element={<Suspense fallback={fallback}><Saved /></Suspense>} />
+        <Route path="studio" element={<Suspense fallback={fallback}><Studio /></Suspense>} />
         <Route path="settings" element={<Suspense fallback={fallback}><Settings /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Route>

@@ -1,0 +1,327 @@
+// Owner-only Content Studio: what readers want, what to write next, keywords and SEO fixes.
+// Hidden from readers (no menu link); opened from Settings on the owner's device or #/studio.
+import { useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Icon } from '../components/Icon.tsx'
+import { ErrorState, SkeletonList } from '../components/States.tsx'
+import { toast } from '../components/Toast.tsx'
+import { formatDate } from '../lib/format.ts'
+import { useAsync } from '../lib/hooks.ts'
+import { forgetOwner, ownerKey, studio, unlock } from '../lib/owner.ts'
+import { usePageTitle } from './usePageTitle.ts'
+
+interface Overview {
+  subscribers: number
+  views7: number
+  opens7: number
+  topArticles: { id: number; opens: number; title: string; link?: string }[]
+  searches: { q: string; n: number }[]
+  zeroSearches: { q: string; n: number }[]
+}
+interface Ideas {
+  notCovered: { source: string; title: string; link: string; date: string }[]
+  trends: { title: string; traffic: string; news: string[]; realEstate: boolean }[]
+  sections: { section: string; lastPost: string | null; daysAgo: number | null }[]
+  readerGaps: { q: string; n: number }[]
+}
+interface Keywords {
+  results: { seed: string; suggestions: string[] }[]
+}
+interface Seo {
+  average: number
+  posts: { id: number; title: string; link: string; issues: string[]; score: number }[]
+}
+
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'ideas', label: 'What to write' },
+  { key: 'keywords', label: 'Keywords' },
+  { key: 'seo', label: 'SEO check' },
+] as const
+type Tab = (typeof TABS)[number]['key']
+
+export function Studio() {
+  usePageTitle('Content Studio')
+  const [key, setKey] = useState(ownerKey)
+  if (!key) return <Unlock onDone={() => setKey(ownerKey())} />
+  return (
+    <StudioHome
+      onLock={() => {
+        forgetOwner()
+        setKey(null)
+      }}
+    />
+  )
+}
+
+function Unlock({ onDone }: { onDone: () => void }) {
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    const ok = await unlock(value)
+    setBusy(false)
+    if (ok) onDone()
+    else toast('That key is not right')
+  }
+  return (
+    <div className="page studio-lock">
+      <div className="lock-card">
+        <Icon name="settings" size={28} />
+        <h1>Content Studio</h1>
+        <p>For the RealtyNMore owner only. Enter the owner key once on this device.</p>
+        <form onSubmit={submit}>
+          <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Owner key" aria-label="Owner key" />
+          <button className="btn" disabled={busy || value.trim().length < 8}>
+            {busy ? 'Checking…' : 'Unlock'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function StudioHome({ onLock }: { onLock: () => void }) {
+  const [params, setParams] = useSearchParams()
+  const tab = (TABS.find((t) => t.key === params.get('tab'))?.key ?? 'overview') as Tab
+  return (
+    <div className="page studio">
+      <div className="page-head studio-head">
+        <div>
+          <span className="owner-badge">Owner only</span>
+          <h1>Content Studio</h1>
+          <p className="page-sub">Real data from the app, realtynmore.com, Google and other news sites</p>
+        </div>
+        <button className="btn ghost small" onClick={onLock}>
+          Lock
+        </button>
+      </div>
+      <div className="chips" role="tablist" aria-label="Studio">
+        {TABS.map((t) => (
+          <button key={t.key} role="tab" aria-selected={tab === t.key} className={`chip ${tab === t.key ? 'active' : ''}`} onClick={() => setParams({ tab: t.key }, { replace: true })}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'overview' && <OverviewTab />}
+      {tab === 'ideas' && <IdeasTab />}
+      {tab === 'keywords' && <KeywordsTab />}
+      {tab === 'seo' && <SeoTab />}
+    </div>
+  )
+}
+
+function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <section className="panel">
+      <h2>{title}</h2>
+      {note && <p className="panel-note">{note}</p>}
+      {children}
+    </section>
+  )
+}
+
+function OverviewTab() {
+  const res = useAsync('studio:overview', (s) => studio<Overview>('overview', undefined, s))
+  if (res.error && !res.data) return <ErrorState error={res.error} onRetry={res.reload} />
+  if (!res.data) return <SkeletonList count={3} />
+  const d = res.data
+  return (
+    <>
+      <div className="kpis">
+        <div className="kpi">
+          <b>{d.subscribers}</b>
+          <span>Alert subscribers</span>
+        </div>
+        <div className="kpi">
+          <b>{d.views7.toLocaleString('en-IN')}</b>
+          <span>Screen views · 7 days</span>
+        </div>
+        <div className="kpi">
+          <b>{d.opens7.toLocaleString('en-IN')}</b>
+          <span>Stories read · 7 days</span>
+        </div>
+      </div>
+      <Panel title="Most read in the app · 7 days" note="Write more on topics like these.">
+        {d.topArticles.length ? (
+          <ol className="rank">
+            {d.topArticles.map((a) => (
+              <li key={a.id}>
+                <a href={a.link} target="_blank" rel="noopener noreferrer">
+                  {a.title}
+                </a>
+                <span>{a.opens}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No reads recorded yet.</p>
+        )}
+      </Panel>
+      <Panel title="What readers search for · 30 days">
+        {d.searches.length ? <TagList items={d.searches} /> : <p className="empty">No searches yet.</p>}
+      </Panel>
+      <Panel title="Searches with no results · 30 days" note="Readers looked for these and found nothing: strong story ideas.">
+        {d.zeroSearches.length ? <TagList items={d.zeroSearches} warn /> : <p className="empty">None so far.</p>}
+      </Panel>
+    </>
+  )
+}
+
+function TagList({ items, warn = false }: { items: { q: string; n: number }[]; warn?: boolean }) {
+  return (
+    <div className="tag-list">
+      {items.map((s) => (
+        <span key={s.q} className={`tag ${warn ? 'warn' : ''}`}>
+          {s.q} <b>{s.n}</b>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function IdeasTab() {
+  const res = useAsync('studio:ideas', (s) => studio<Ideas>('ideas', undefined, s))
+  if (res.error && !res.data) return <ErrorState error={res.error} onRetry={res.reload} />
+  if (!res.data) return <SkeletonList count={4} />
+  const d = res.data
+  const reTrends = d.trends.filter((t) => t.realEstate)
+  return (
+    <>
+      <Panel title="Covered by others, not by RealtyNMore" note="Recent stories on ET Realty and Hindustan Times Real Estate with no matching RealtyNMore headline.">
+        {d.notCovered.length ? (
+          <ul className="idea-list">
+            {d.notCovered.map((r) => (
+              <li key={r.link}>
+                <a href={r.link} target="_blank" rel="noopener noreferrer">
+                  {r.title}
+                </a>
+                <span className="meta">
+                  {r.source}
+                  {r.date && !Number.isNaN(Date.parse(r.date)) && ` · ${formatDate(new Date(r.date).toISOString())}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="empty">You have covered everything they published recently.</p>
+        )}
+      </Panel>
+      <Panel title="Sections that need a new post" note="Days since the last story in each section.">
+        <ul className="fresh-list">
+          {d.sections.map((s) => (
+            <li key={s.section} className={s.daysAgo !== null && s.daysAgo > 14 ? 'stale' : ''}>
+              <span>{s.section}</span>
+              <b>{s.daysAgo === null ? 'never' : s.daysAgo === 0 ? 'today' : `${s.daysAgo} days`}</b>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+      <Panel title="Google Trends India today" note={reTrends.length ? 'Real-estate related searches trending now.' : 'Nothing real-estate related is trending today. All trends shown for reference.'}>
+        <ul className="idea-list">
+          {(reTrends.length ? reTrends : d.trends).map((t) => (
+            <li key={t.title}>
+              <span className="trend-title">
+                {t.title} <em>{t.traffic} searches</em>
+              </span>
+              {t.news[0] && <span className="meta">{t.news[0]}</span>}
+            </li>
+          ))}
+        </ul>
+      </Panel>
+      {d.readerGaps.length > 0 && (
+        <Panel title="App searches with no results">
+          <TagList items={d.readerGaps} warn />
+        </Panel>
+      )}
+    </>
+  )
+}
+
+function KeywordsTab() {
+  const [input, setInput] = useState('')
+  const [seeds, setSeeds] = useState('')
+  const res = useAsync(`studio:keywords:${seeds}`, (s) => studio<Keywords>(`keywords${seeds ? `?seeds=${encodeURIComponent(seeds)}` : ''}`, undefined, s))
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast('Copied')
+    } catch {
+      toast('Could not copy')
+    }
+  }
+  return (
+    <>
+      <form
+        className="kw-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          setSeeds(input.trim())
+        }}
+      >
+        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Your topics, comma-separated (e.g. flats in pune, jewar airport)" aria-label="Keyword topics" />
+        <button className="btn small">Find</button>
+      </form>
+      <p className="panel-note">What people actually type into Google in India. Google doesn't share search volumes for free, so these are ordered by Google's own suggestion rank. Tap a phrase to copy it.</p>
+      {res.error && !res.data ? (
+        <ErrorState error={res.error} onRetry={res.reload} />
+      ) : !res.data ? (
+        <SkeletonList count={4} />
+      ) : (
+        res.data.results.map((r) => (
+          <Panel key={r.seed} title={r.seed}>
+            {r.suggestions.length ? (
+              <div className="tag-list">
+                {r.suggestions.map((s) => (
+                  <button key={s} className="tag" onClick={() => copy(s)}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="empty">No suggestions.</p>
+            )}
+          </Panel>
+        ))
+      )}
+    </>
+  )
+}
+
+function SeoTab() {
+  const res = useAsync('studio:seo', (s) => studio<Seo>('seo', undefined, s))
+  if (res.error && !res.data) return <ErrorState error={res.error} onRetry={res.reload} />
+  if (!res.data) return <SkeletonList count={4} />
+  const d = res.data
+  return (
+    <>
+      <div className="kpis">
+        <div className={`kpi ${d.average < 70 ? 'warn' : ''}`}>
+          <b>{d.average}/100</b>
+          <span>Average SEO score · latest 15 stories</span>
+        </div>
+      </div>
+      <p className="panel-note">Checked on the live website: URL, title length, meta description, image alt text, length, subheadings, internal links, tags and section.</p>
+      {d.posts.map((p) => (
+        <section key={p.id} className="panel seo-post">
+          <div className="seo-head">
+            <span className={`score ${p.score < 60 ? 'bad' : p.score < 80 ? 'mid' : 'good'}`}>{p.score}</span>
+            <a href={p.link} target="_blank" rel="noopener noreferrer">
+              {p.title}
+            </a>
+          </div>
+          {p.issues.length ? (
+            <ul className="issues">
+              {p.issues.map((i) => (
+                <li key={i}>{i}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty">No issues found.</p>
+          )}
+        </section>
+      ))}
+    </>
+  )
+}

@@ -8,6 +8,7 @@ import { checkAndNotify, subKey, subscribe } from './push.ts'
 import { sharePage } from './share.ts'
 import { parseHit, recordHit, statsPage, trending } from './stats.ts'
 import { ideas, keywords, overview, SEEDS, seoAudit } from './editor.ts'
+import { competitors } from './competitors.ts'
 
 export interface Env {
   SUBS: KVNamespace
@@ -25,6 +26,7 @@ export { buildNotices, isValidSubscription, matching, newSince } from './push.ts
 export type { NewsItem } from './site.ts'
 
 const MAX_BODY = 4096
+const STUDIO_CACHE = 2
 
 function cors(origin: string | null, env: Env): Record<string, string> {
   const allowed = env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
@@ -54,7 +56,8 @@ function sameKey(a: string, b: string) {
 /** Owner-only Content Studio data; slow sources are cached (cache key never includes the owner key). */
 async function editor(pathname: string, url: URL, env: Env, ctx: ExecutionContext, headers: Record<string, string>): Promise<Response> {
   const cached = async (ttl: number, make: () => Promise<unknown>) => {
-    const key = new Request(`${url.origin}${pathname}${url.search}`)
+    // Bump STUDIO_CACHE when the studio logic changes, so old cached results are not served.
+    const key = new Request(`${url.origin}${pathname}${url.search}${url.search ? '&' : '?'}v=${STUDIO_CACHE}`)
     const hit = await caches.default.match(key)
     if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
     const res = json(await make(), 200, { 'Cache-Control': `public, max-age=${ttl}` })
@@ -76,6 +79,8 @@ async function editor(pathname: string, url: URL, env: Env, ctx: ExecutionContex
           .filter(Boolean)
         return cached(12 * 60 * 60, () => keywords(seeds.length ? seeds : SEEDS))
       }
+      case '/editor/competitors':
+        return cached(60 * 60, () => competitors(env))
       case '/editor/seo':
         return cached(6 * 60 * 60, () => seoAudit(env))
       default:

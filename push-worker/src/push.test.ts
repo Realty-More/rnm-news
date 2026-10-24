@@ -154,3 +154,46 @@ describe('trend matching', async () => {
     expect(isRealEstate('noida airport opening date')).toBe(true)
   })
 })
+
+describe('competitor comparison', async () => {
+  const { topicShares, cityCounts, perDay, peakHours, advise, hotWords } = await import('./competitors.ts')
+  const mk = (title: string, hoursAgo = 1) => ({ title, date: new Date(Date.now() - hoursAgo * 3600000).toISOString(), link: `https://x/${encodeURIComponent(title)}` })
+  const ours = [mk('I Don’t See a Luxury Housing Bubble: Anshuman Magazine interview'), mk('CEO says demand strong in Gurugram'), mk('UP RERA approves 15 projects')]
+  const theirs = [
+    mk('Accenture leases 5.8 lakh sq ft in Navi Mumbai'), mk('DLF Q2 profit rises 20%'), mk('Godrej acquires 10 acre land parcel in Pune'),
+    mk('Mahindra Lifespaces Q2 net profit falls 66%'), mk('Blackstone leases office in Mumbai'), mk('Lodha raises Rs 2,000 crore via QIP'),
+    mk('How to check RERA registration: a guide'), mk('Prestige leases mall space in Bengaluru'),
+  ]
+  it('classifies headlines into topics', () => {
+    const t = topicShares(theirs)
+    expect(t.deals).toBeGreaterThan(40)
+    expect(t.finance).toBeGreaterThan(30)
+    expect(topicShares(ours).people).toBeGreaterThan(50)
+  })
+  it('counts cities without double-counting Navi Mumbai as Mumbai', () => {
+    const c = cityCounts(theirs)
+    expect(c['Navi Mumbai']).toBe(1)
+    expect(c.Mumbai).toBe(1)
+    expect(c.Pune).toBe(1)
+  })
+  it('uses exact counts when known and IST hours', () => {
+    expect(perDay({ name: 'x', items: [], posts7: 21, basis: '' })).toBe(3)
+    expect(peakHours([{ title: 'a', date: '2026-10-24T04:30:00Z', link: '' }])).toEqual([10])
+  })
+  it('advises on gaps and strengths from the numbers', () => {
+    const a = advise({ name: 'RealtyNMore', items: ours, posts7: 7, basis: '' }, [{ name: 'ET', items: theirs, posts7: 35, basis: '' }])
+    const all = a.map((x) => x.text).join(' | ')
+    expect(all).toMatch(/publish about 5 stories a day; RealtyNMore about 1/)
+    expect(all).toMatch(/Cover more deals, leasing & land/)
+    expect(all).toMatch(/Your edge: interviews & opinion/)
+    expect(hotWords(theirs).map((w) => w.word)).toContain('leases')
+  })
+})
+
+describe('our categories count as topics', async () => {
+  const { topicShares } = await import('./competitors.ts')
+  it('uses RealtyNMore categories when the headline has no topic words', () => {
+    const items = [{ title: 'I Don’t See a Luxury Housing Bubble in the Near Future: Anshuman Magazine', date: new Date().toISOString(), link: 'x', tags: ['people'] }]
+    expect(topicShares(items).people).toBe(100)
+  })
+})

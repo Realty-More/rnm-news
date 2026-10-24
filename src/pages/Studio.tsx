@@ -27,6 +27,29 @@ interface Ideas {
 interface Keywords {
   results: { seed: string; suggestions: string[] }[]
 }
+interface RivalItem {
+  title: string
+  date: string
+  link: string
+}
+interface Rivals {
+  generatedAt: string
+  sources: {
+    name: string
+    basis: string
+    sampled: number
+    perDay: number
+    posts30: number | null
+    topics: Record<string, number>
+    cities: Record<string, number>
+    peakHours: number[]
+    style: { avgWords: number; withNumbers: number; questions: number }
+    latest: RivalItem[]
+  }[]
+  topics: { key: string; label: string }[]
+  hotWords: { word: string; n: number; ours: number }[]
+  advice: { kind: 'gap' | 'strength' | 'volume' | 'city' | 'timing' | 'style'; text: string; examples?: RivalItem[] }[]
+}
 interface Seo {
   average: number
   posts: { id: number; title: string; link: string; issues: string[]; score: number }[]
@@ -35,6 +58,7 @@ interface Seo {
 const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'ideas', label: 'What to write' },
+  { key: 'rivals', label: 'Competitors' },
   { key: 'keywords', label: 'Keywords' },
   { key: 'seo', label: 'SEO check' },
 ] as const
@@ -106,6 +130,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       </div>
       {tab === 'overview' && <OverviewTab />}
       {tab === 'ideas' && <IdeasTab />}
+      {tab === 'rivals' && <RivalsTab />}
       {tab === 'keywords' && <KeywordsTab />}
       {tab === 'seo' && <SeoTab />}
     </div>
@@ -235,6 +260,142 @@ function IdeasTab() {
           <TagList items={d.readerGaps} warn />
         </Panel>
       )}
+    </>
+  )
+}
+
+const hour = (h: number) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`
+const ADVICE_ICON: Record<Rivals['advice'][number]['kind'], string> = { gap: '➕', strength: '⭐', volume: '📈', city: '📍', timing: '⏰', style: '✍️' }
+
+function RivalsTab() {
+  const res = useAsync('studio:rivals', (s) => studio<Rivals>('competitors', undefined, s))
+  if (res.error && !res.data) return <ErrorState error={res.error} onRetry={res.reload} />
+  if (!res.data) return <SkeletonList count={5} />
+  const d = res.data
+  const [us, ...them] = d.sources
+  const avg = (key: string) => Math.round(them.reduce((a, s) => a + (s.topics[key] ?? 0), 0) / Math.max(1, them.length))
+  const cityRows = Object.keys(us.cities)
+    .map((c) => ({ c, you: us.cities[c], them: them.reduce((a, s) => a + (s.cities[c] ?? 0), 0) }))
+    .filter((r) => r.you + r.them > 0)
+    .sort((a, b) => b.them + b.you - (a.them + a.you))
+    .slice(0, 10)
+
+  return (
+    <>
+      <Panel title="What RealtyNMore should do next" note="Based on the last 7 days of headlines from RealtyNMore and competitors.">
+        <ul className="advice-list">
+          {d.advice.map((a, i) => (
+            <li key={i} className={`advice ${a.kind}`}>
+              <span className="advice-icon" aria-hidden="true">
+                {ADVICE_ICON[a.kind]}
+              </span>
+              <div>
+                <p>{a.text}</p>
+                {a.examples?.length ? (
+                  <ul className="examples">
+                    {a.examples.map((e) => (
+                      <li key={e.link}>
+                        <a href={e.link} target="_blank" rel="noopener noreferrer">
+                          {e.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      <Panel title="Scoreboard · last 7 days">
+        <div className="table-wrap">
+          <table className="score-table">
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Stories/day</th>
+                <th>Headlines with numbers</th>
+                <th>Busiest hours (IST)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.sources.map((s, i) => (
+                <tr key={s.name} className={i === 0 ? 'us' : ''}>
+                  <td>{s.name}</td>
+                  <td>{s.perDay}</td>
+                  <td>{s.style.withNumbers}%</td>
+                  <td>{s.peakHours.map(hour).join(', ') || '–'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <Panel title="Topic mix: you vs competitors" note="Share of headlines in each topic. Orange = RealtyNMore, grey = competitor average.">
+        <div className="bars">
+          {d.topics.map((t) => {
+            const you = us.topics[t.key] ?? 0
+            const others = avg(t.key)
+            return (
+              <div key={t.key} className="bar-row">
+                <span className="bar-label">{t.label}</span>
+                <div className="bar-pair">
+                  <span className="bar you" style={{ width: `${Math.max(you, 1)}%` }} />
+                  <b>{you}%</b>
+                </div>
+                <div className="bar-pair">
+                  <span className="bar them" style={{ width: `${Math.max(others, 1)}%` }} />
+                  <b>{others}%</b>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </Panel>
+
+      <Panel title="Cities in headlines · 7 days">
+        <ul className="fresh-list">
+          {cityRows.map((r) => (
+            <li key={r.c} className={r.them >= 3 && r.you <= Math.floor(r.them / 4) ? 'stale' : ''}>
+              <span>{r.c}</span>
+              <b>
+                you {r.you} · them {r.them}
+              </b>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      <Panel title="Hot words in competitor headlines" note="How often the word appears in their headlines this week, and in yours.">
+        <div className="tag-list">
+          {d.hotWords.map((w) => (
+            <span key={w.word} className={`tag ${w.ours === 0 ? 'warn' : ''}`}>
+              {w.word} <b>{w.n}</b> <small>you {w.ours}</small>
+            </span>
+          ))}
+        </div>
+      </Panel>
+
+      {them.map((s) => (
+        <Panel key={s.name} title={`Latest from ${s.name}`}>
+          <ul className="idea-list">
+            {s.latest.map((i) => (
+              <li key={i.link}>
+                <a href={i.link} target="_blank" rel="noopener noreferrer">
+                  {i.title}
+                </a>
+                <span className="meta">{formatDate(i.date)}</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      ))}
+
+      <p className="panel-note">
+        Sources: {d.sources.map((s) => `${s.name} (${s.basis})`).join('; ')}. Only public feeds, sitemaps and open APIs are used. Sites that block automated reading (e.g. Realty Plus, 99acres, Housing.com) are not included.
+      </p>
     </>
   )
 }

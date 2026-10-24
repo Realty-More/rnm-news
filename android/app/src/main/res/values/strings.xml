@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">R&amp;M News</string>
+    <string name="title_activity_main">R&amp;M News</string>
+    <string name="package_name">com.realtynmore.news</string>
+    <string name="custom_url_scheme">com.realtynmore.news</string>
+</resources>

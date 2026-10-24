@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en-IN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Realty &amp; More News</title>
+    <meta name="description" content="Indian real estate news, interviews, videos and podcasts from RealtyNMore." />
+    <meta name="theme-color" content="#141416" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="R&amp;M News" />
+    <link rel="icon" type="image/png" sizes="48x48" href="./icons/favicon-48.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://realtynmore.com" crossorigin />
+    <script>
+      // Apply the saved theme before first paint to avoid a flash.
+      try {
+        var t = localStorage.getItem('rnm-theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>This app needs JavaScript. Read the news at <a href="https://realtynmore.com">realtynmore.com</a>.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

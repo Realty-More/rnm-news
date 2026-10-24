@@ -5,3 +5,4 @@ android/.gradle
 android/local.properties
 *.keystore
 *.jks
+deliverables

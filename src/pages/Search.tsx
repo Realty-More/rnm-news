@@ -1,13 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
+import { useT, type TKey } from '../lib/i18n.ts'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { useDebounced } from '../lib/hooks.ts'
 import { PostFeed } from './News.tsx'
+import { CURATED_CATEGORIES } from '../lib/wp.ts'
 import { usePageTitle } from './usePageTitle.ts'
 
 // Shortcuts only: each one runs a normal search on the site.
 const SHORTCUTS = ['RERA', 'Gurugram', 'Noida', 'Mumbai', 'Bengaluru', 'Affordable housing', 'Luxury housing', 'Data centre']
 const RECENT_KEY = 'rnm-recent-searches'
+const PERIODS: { key: string; label: TKey; days: number }[] = [
+  { key: '', label: 'period.any', days: 0 },
+  { key: '1d', label: 'period.1d', days: 1 },
+  { key: '7d', label: 'period.7d', days: 7 },
+  { key: '30d', label: 'period.30d', days: 30 },
+  { key: '365d', label: 'period.365d', days: 365 },
+]
+
+/** Start of the period as an ISO date for the API (rounded to the hour so results cache well). */
+function periodStart(key: string): string | undefined {
+  const p = PERIODS.find((x) => x.key === key)
+  if (!p?.days) return undefined
+  const d = new Date(Date.now() - p.days * 86400000)
+  d.setMinutes(0, 0, 0)
+  return d.toISOString().slice(0, 19)
+}
 
 function readRecent(): string[] {
   try {
@@ -19,6 +37,7 @@ function readRecent(): string[] {
 
 export function Search() {
   usePageTitle('Search')
+  const t = useT()
   const [params, setParams] = useSearchParams()
   const [text, setText] = useState(params.get('q') ?? '')
   const [recent, setRecent] = useState(readRecent)
@@ -29,8 +48,25 @@ export function Search() {
     if (!params.get('q')) input.current?.focus()
   }, [])
 
+  const section = params.get('c') ?? ''
+  const period = params.get('t') ?? ''
+  const setFilter = (name: 'c' | 't', value: string) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(name, value)
+    else next.delete(name)
+    setParams(next, { replace: true })
+  }
+
   useEffect(() => {
-    setParams(query ? { q: query } : {}, { replace: true })
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (query) next.set('q', query)
+        else next.delete('q')
+        return next
+      },
+      { replace: true },
+    )
     if (query.length < 3) return
     const next = [query, ...readRecent().filter((r) => r.toLowerCase() !== query.toLowerCase())].slice(0, 6)
     setRecent(next)
@@ -58,7 +94,7 @@ export function Search() {
           ref={input}
           type="search"
           enterKeyHint="search"
-          placeholder="Search news, cities, developers"
+          placeholder={t('search.placeholder')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           aria-label="Search RealtyNMore news"
@@ -70,16 +106,36 @@ export function Search() {
         )}
       </form>
 
+      {query.length >= 2 && (
+        <div className="search-filters">
+          <select className="filter-select" value={section} onChange={(e) => setFilter('c', e.target.value)} aria-label="Section">
+            <option value="">{t('search.allSections')}</option>
+            {CURATED_CATEGORIES.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <div className="chips" role="radiogroup" aria-label="Published">
+            {PERIODS.map((p) => (
+              <button key={p.key} role="radio" aria-checked={period === p.key} className={`chip ${period === p.key ? 'active' : ''}`} onClick={() => setFilter('t', p.key)}>
+                {t(p.label)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {query.length >= 2 ? (
-        <PostFeed search={query} />
+        <PostFeed search={query} category={CURATED_CATEGORIES.find((c) => c.slug === section)?.id} after={periodStart(period)} />
       ) : (
         <div className="search-idle">
           {recent.length > 0 && (
             <>
               <div className="section-head">
-                <h2>Recent</h2>
+                <h2>{t('search.recent')}</h2>
                 <button className="link-btn" onClick={clearRecent}>
-                  Clear
+                  {t('search.clear')}
                 </button>
               </div>
               <div className="chips wrap">
@@ -92,7 +148,7 @@ export function Search() {
             </>
           )}
           <div className="section-head">
-            <h2>Try</h2>
+            <h2>{t('search.try')}</h2>
           </div>
           <div className="chips wrap">
             {SHORTCUTS.map((s) => (

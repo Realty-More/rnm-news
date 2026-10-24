@@ -1,7 +1,9 @@
-// Breaking-news notifications (Web Push). The push server is push-worker/ on Cloudflare's free plan.
+// Breaking-news notifications (Web Push). The server is push-worker/ on Cloudflare's free plan.
 import { Capacitor } from '@capacitor/core'
+import { readPrefs } from './prefs.ts'
+import { CURATED_CATEGORIES } from './wp.ts'
 
-/** Set after the worker is deployed (see push-worker/README.md). Empty = notifications hidden. */
+/** App server address (repo variable PUSH_API at build time). Empty = server features hidden. */
 export const PUSH_API: string = import.meta.env.VITE_PUSH_API ?? (import.meta.env.DEV ? 'http://localhost:8787' : '')
 
 export type PushState = 'unsupported' | 'ios-install' | 'denied' | 'off' | 'on'
@@ -35,6 +37,14 @@ async function post(path: string, body: unknown) {
   if (!res.ok) throw new Error(`Notification server error (${res.status})`)
 }
 
+/** Sections (category ids) and cities to filter alerts by; undefined = every story. */
+export function currentFilters() {
+  const p = readPrefs()
+  if (p.notifyMode !== 'feed') return undefined
+  const topics = CURATED_CATEGORIES.filter((c) => p.topics.includes(c.slug)).map((c) => c.id)
+  return topics.length || p.cities.length ? { topics, cities: p.cities } : undefined
+}
+
 export async function enablePush(): Promise<PushState> {
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') return permission === 'denied' ? 'denied' : 'off'
@@ -42,8 +52,15 @@ export async function enablePush(): Promise<PushState> {
   const { publicKey } = (await (await fetch(`${PUSH_API}/vapid`)).json()) as { publicKey: string }
   let sub = await reg.pushManager.getSubscription()
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) })
-  await post('/subscribe', { subscription: sub.toJSON() })
+  await post('/subscribe', { subscription: sub.toJSON(), filters: currentFilters() })
   return 'on'
+}
+
+/** Re-sends this device's filters after My Feed or the alert mode changes. */
+export async function syncPushFilters() {
+  if (!pushAvailable() || Notification.permission !== 'granted') return
+  const sub = await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription()
+  if (sub) await post('/subscribe', { subscription: sub.toJSON(), filters: currentFilters() })
 }
 
 export async function disablePush(): Promise<PushState> {

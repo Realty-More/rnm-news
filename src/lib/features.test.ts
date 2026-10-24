@@ -48,3 +48,24 @@ describe('listen', () => {
     expect(chunks.join(' ').replace(/\s+/g, ' ')).toBe(text.replace(/\s+/g, ' ').trim())
   })
 })
+
+describe('hindi and links', async () => {
+  const { translate, hindiUrl } = await import('./i18n.ts')
+  const { screenFor, smartLink } = await import('./stats.ts')
+  it('translates with values and falls back to English', () => {
+    expect(translate('home.newStories', { n: 3 }, 'hi')).toBe('3 नई ख़बरें')
+    expect(translate('home.latest', undefined, 'en')).toBe('Latest')
+  })
+  it("builds Google's free translation link for site articles", () => {
+    expect(hindiUrl('https://realtynmore.com/some-story/')).toBe('https://realtynmore-com.translate.goog/some-story/?_x_tr_sl=en&_x_tr_tl=hi&_x_tr_hl=hi')
+  })
+  it('maps routes to screen names for usage counts', () => {
+    expect(screenFor('/')).toBe('home')
+    expect(screenFor('/read/some-slug')).toBe('article')
+    expect(screenFor('/category/rera')).toBe('category')
+    expect(screenFor('/unknown')).toBeNull()
+  })
+  it('uses the smart share link when the app server is set', () => {
+    expect(smartLink({ id: 5, link: 'https://realtynmore.com/x/' })).toMatch(/\/a\/5$|^https:\/\/realtynmore\.com\/x\/$/)
+  })
+})

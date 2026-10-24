@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildPushPayload } from '@block65/webcrypto-web-push'
-import { buildNotices, isValidSubscription, newSince, type NewsItem } from './index.ts'
+import { buildNotices, isValidSubscription, matching, newSince, type NewsItem } from './index.ts'
 
 const b64u = (b: Uint8Array) => Buffer.from(b).toString('base64url')
 const fromB64u = (s: string) => new Uint8Array(Buffer.from(s, 'base64url'))
@@ -74,7 +74,7 @@ describe('web push payload', () => {
 })
 
 describe('new post detection', () => {
-  const latest: NewsItem[] = [5, 4, 3, 2, 1].map((id) => ({ id, title: `Story ${id}` }))
+  const latest: NewsItem[] = [5, 4, 3, 2, 1].map((id) => ({ id, title: `Story ${id}`, excerpt: '', categories: [] }))
 
   it('finds posts above the last notified one', () => {
     expect(newSince(latest, 3).map((p) => p.id)).toEqual([5, 4])
@@ -85,13 +85,29 @@ describe('new post detection', () => {
   })
   it('falls back to higher ids when the last post is gone', () => {
     expect(newSince(latest, 0).length).toBe(5)
-    expect(newSince([{ id: 9, title: 'x' }, { id: 7, title: 'y' }], 8).map((p) => p.id)).toEqual([9])
+    expect(newSince([{ id: 9, title: 'x', excerpt: '', categories: [] }, { id: 7, title: 'y', excerpt: '', categories: [] }], 8).map((p) => p.id)).toEqual([9])
   })
   it('makes one notice per post, or one summary when many arrive', () => {
     expect(buildNotices(latest.slice(0, 2)).map((n) => n.url)).toEqual(['#/article/5', '#/article/4'])
     const many = buildNotices(latest)
     expect(many).toHaveLength(1)
     expect(many[0].title).toContain('5 new stories')
+  })
+})
+
+describe('topic filters', () => {
+  const posts: NewsItem[] = [
+    { id: 1, title: 'UPRERA approves 15 projects', excerpt: 'Lucknow, Oct 14', categories: [1, 439] },
+    { id: 2, title: 'New tower launched', excerpt: 'Gurugram, Oct 20: a developer…', categories: [1] },
+    { id: 3, title: 'Office leasing rises', excerpt: 'Mumbai, Oct 21', categories: [1, 196] },
+  ]
+  it('sends everything when a device has no filters', () => {
+    expect(matching(posts).length).toBe(3)
+  })
+  it('matches chosen sections or cities (in title or summary)', () => {
+    expect(matching(posts, { topics: [439], cities: [] }).map((p) => p.id)).toEqual([1])
+    expect(matching(posts, { topics: [], cities: ['Gurugram'] }).map((p) => p.id)).toEqual([2])
+    expect(matching(posts, { topics: [196], cities: ['gurugram'] }).map((p) => p.id)).toEqual([2, 3])
   })
 })
 

@@ -1,0 +1,234 @@
+// App text in English and Hindi. News content stays as published on realtynmore.com (English);
+// "Read in Hindi" opens Google's free translation of the original article.
+import { useCallback } from 'react'
+import { readPrefs, usePrefs } from './prefs.ts'
+
+const hi = {
+  'nav.home': 'होम',
+  'nav.news': 'न्यूज़',
+  'nav.categories': 'कैटेगरी',
+  'nav.videos': 'वीडियो',
+  'nav.podcasts': 'पॉडकास्ट',
+  'nav.saved': 'सेव्ड',
+  'home.title': 'आज का रियल एस्टेट',
+  'home.latest': 'ताज़ा ख़बरें',
+  'home.allNews': 'सभी ख़बरें',
+  'home.watch': 'देखें',
+  'home.allVideos': 'सभी वीडियो',
+  'home.more': 'और',
+  'home.forYou': 'आपके लिए',
+  'home.edit': 'बदलें',
+  'home.trending': 'ऐप में ट्रेंडिंग',
+  'home.continue': 'पढ़ना जारी रखें',
+  'home.onboardTitle': 'अपनी फ़ीड बनाएं',
+  'home.onboardText': 'जिन सेक्शन और शहरों की ख़बरें चाहिए, उन्हें चुनें। इन्हें कभी भी सेटिंग्स में बदल सकते हैं।',
+  'home.saveFeed': 'मेरी फ़ीड सेव करें',
+  'home.skip': 'अभी छोड़ें',
+  'home.newStories': '{n} नई ख़बरें',
+  'notify.cardTitle': 'ब्रेकिंग न्यूज़ अलर्ट पाएं',
+  'notify.cardText': 'नई ख़बर आते ही हम आपको बताएंगे।',
+  'notify.turnOn': 'चालू करें',
+  'picker.sections': 'सेक्शन',
+  'picker.cities': 'शहर',
+  'news.title': 'सभी ख़बरें',
+  'news.all': 'सभी',
+  'news.refresh': 'रिफ़्रेश',
+  'article.save': 'सेव करें',
+  'article.saved': 'सेव्ड',
+  'article.share': 'शेयर',
+  'article.listen': 'सुनें',
+  'article.pause': 'रोकें',
+  'article.resume': 'फिर सुनें',
+  'article.readHindi': 'हिंदी में पढ़ें',
+  'article.source': 'मूल रूप से प्रकाशित',
+  'article.readOnSite': 'वेबसाइट पर पढ़ें',
+  'article.next': 'अगली ख़बर',
+  'article.swipeHint': 'टिप: अगली ख़बर के लिए बाईं ओर स्वाइप करें',
+  'article.moreIn': 'और ख़बरें:',
+  'article.minRead': 'मिनट में पढ़ें',
+  'search.placeholder': 'ख़बरें, शहर, डेवलपर खोजें',
+  'search.recent': 'हाल की खोज',
+  'search.try': 'आज़माएं',
+  'search.clear': 'हटाएं',
+  'search.allSections': 'सभी सेक्शन',
+  'period.any': 'कभी भी',
+  'period.1d': 'आज',
+  'period.7d': 'इस हफ़्ते',
+  'period.30d': 'इस महीने',
+  'period.365d': 'इस साल',
+  'videos.title': 'वीडियो',
+  'videos.sub': 'Realty & More यूट्यूब चैनल से',
+  'videos.newest': 'नए',
+  'videos.mostWatched': 'सबसे ज़्यादा देखे गए',
+  'videos.shorts': 'शॉर्ट्स',
+  'podcasts.title': 'पॉडकास्ट',
+  'podcasts.sub': 'R&M पॉडकास्ट एपिसोड और टीज़र, यूट्यूब पर',
+  'library.title': 'लाइब्रेरी',
+  'library.sub': 'सिर्फ़ इसी डिवाइस पर सेव',
+  'library.saved': 'सेव्ड',
+  'library.history': 'इतिहास',
+  'categories.title': 'कैटेगरी',
+  'categories.sub': 'realtynmore.com के सेक्शन',
+  'categories.stories': '{n} ख़बरें',
+  'settings.title': 'सेटिंग्स',
+  'settings.sub': 'सिर्फ़ इसी डिवाइस पर सेव',
+  'settings.language': 'भाषा',
+  'settings.languageHelp': 'मेन्यू और बटन की भाषा। ख़बरें वेबसाइट की तरह अंग्रेज़ी में रहती हैं।',
+  'settings.myFeed': 'मेरी फ़ीड',
+  'settings.notifications': 'नोटिफ़िकेशन',
+  'settings.appearance': 'दिखावट',
+  'settings.offline': 'ऑफ़लाइन पढ़ना',
+  'settings.privacy': 'प्राइवेसी',
+  'settings.about': 'जानकारी',
+  'settings.theme': 'थीम',
+  'settings.textSize': 'ख़बर का टेक्स्ट साइज़',
+  'offline.bar': 'आप ऑफ़लाइन हैं। सेव की गई और हाल में पढ़ी ख़बरें दिख रही हैं।',
+  'update.ready': 'ऐप का नया वर्ज़न तैयार है।',
+  'update.reload': 'रीलोड',
+  'install.title': 'R&M News ऐप पाएं',
+  'install.text': 'तेज़, फ़ुल स्क्रीन, और ऑफ़लाइन भी चलता है।',
+  'install.button': 'इंस्टॉल करें',
+  'state.offline': 'आप ऑफ़लाइन हैं',
+  'state.failed': 'लोड नहीं हो सका',
+  'state.retry': 'फिर कोशिश करें',
+  'state.loadMore': 'और देखें',
+  'state.caughtUp': 'आपने सब देख लिया',
+  'time.now': 'अभी-अभी',
+  'time.min': '{n} मिनट पहले',
+  'time.hour': '{n} घंटे पहले',
+  'time.yesterday': 'कल',
+}
+
+export type TKey = keyof typeof hi
+
+const en: Record<TKey, string> = {
+  'nav.home': 'Home',
+  'nav.news': 'News',
+  'nav.categories': 'Categories',
+  'nav.videos': 'Videos',
+  'nav.podcasts': 'Podcasts',
+  'nav.saved': 'Saved',
+  'home.title': 'Today in Real Estate',
+  'home.latest': 'Latest',
+  'home.allNews': 'All news',
+  'home.watch': 'Watch',
+  'home.allVideos': 'All videos',
+  'home.more': 'More',
+  'home.forYou': 'For You',
+  'home.edit': 'Edit',
+  'home.trending': 'Trending in app',
+  'home.continue': 'Continue reading',
+  'home.onboardTitle': 'Make it your feed',
+  'home.onboardText': 'Pick sections and cities you follow. You can change them anytime in Settings.',
+  'home.saveFeed': 'Save my feed',
+  'home.skip': 'Skip for now',
+  'home.newStories': '{n} new stories',
+  'notify.cardTitle': 'Get breaking news alerts',
+  'notify.cardText': 'We’ll notify you when a new story is published.',
+  'notify.turnOn': 'Turn on',
+  'picker.sections': 'Sections',
+  'picker.cities': 'Cities',
+  'news.title': 'All News',
+  'news.all': 'All',
+  'news.refresh': 'Refresh',
+  'article.save': 'Save',
+  'article.saved': 'Saved',
+  'article.share': 'Share',
+  'article.listen': 'Listen',
+  'article.pause': 'Pause',
+  'article.resume': 'Resume',
+  'article.readHindi': 'Read in Hindi',
+  'article.source': 'Originally published on',
+  'article.readOnSite': 'Read on website',
+  'article.next': 'Next story',
+  'article.swipeHint': 'Tip: swipe left on any story for the next one',
+  'article.moreIn': 'More in',
+  'article.minRead': 'min read',
+  'search.placeholder': 'Search news, cities, developers',
+  'search.recent': 'Recent',
+  'search.try': 'Try',
+  'search.clear': 'Clear',
+  'search.allSections': 'All sections',
+  'period.any': 'Any time',
+  'period.1d': 'Today',
+  'period.7d': 'This week',
+  'period.30d': 'This month',
+  'period.365d': 'This year',
+  'videos.title': 'Videos',
+  'videos.sub': 'From the Realty & More YouTube channel',
+  'videos.newest': 'Newest',
+  'videos.mostWatched': 'Most watched',
+  'videos.shorts': 'Shorts',
+  'podcasts.title': 'Podcasts',
+  'podcasts.sub': 'R&M Podcast episodes and teasers, on YouTube',
+  'library.title': 'Library',
+  'library.sub': 'Stored on this device only',
+  'library.saved': 'Saved',
+  'library.history': 'History',
+  'categories.title': 'Categories',
+  'categories.sub': 'Sections from realtynmore.com',
+  'categories.stories': '{n} stories',
+  'settings.title': 'Settings',
+  'settings.sub': 'Saved on this device only',
+  'settings.language': 'Language',
+  'settings.languageHelp': 'For menus and buttons. News stays in English, as published on the website.',
+  'settings.myFeed': 'My Feed',
+  'settings.notifications': 'Notifications',
+  'settings.appearance': 'Appearance',
+  'settings.offline': 'Offline reading',
+  'settings.privacy': 'Privacy',
+  'settings.about': 'About',
+  'settings.theme': 'Theme',
+  'settings.textSize': 'Article text size',
+  'offline.bar': 'Offline. Showing saved and recently read stories.',
+  'update.ready': 'A new version is ready.',
+  'update.reload': 'Reload',
+  'install.title': 'Get the R&M News app',
+  'install.text': 'Fast, full screen, and works offline.',
+  'install.button': 'Install',
+  'state.offline': 'You are offline',
+  'state.failed': 'Could not load this',
+  'state.retry': 'Try again',
+  'state.loadMore': 'Load more',
+  'state.caughtUp': 'You’re all caught up',
+  'time.now': 'Just now',
+  'time.min': '{n} min ago',
+  'time.hour': '{n}h ago',
+  'time.yesterday': 'Yesterday',
+}
+
+const DICTS = { en, hi }
+
+export function translate(key: TKey, vars?: Record<string, string | number>, lang = readPrefs().lang): string {
+  let s = (DICTS[lang] ?? en)[key] ?? en[key]
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, String(v))
+  return s
+}
+
+/** `t('home.latest')` in the reader's chosen language; re-renders when it changes. */
+export function useT() {
+  const [prefs] = usePrefs()
+  return useCallback((key: TKey, vars?: Record<string, string | number>) => translate(key, vars, prefs.lang), [prefs.lang])
+}
+
+/** Relative time in the chosen language ("2h ago" / "2 घंटे पहले"). */
+export function ago(iso: string, now = Date.now()): string | null {
+  const min = Math.floor(Math.max(0, now - new Date(iso).getTime()) / 60000)
+  if (min < 1) return translate('time.now')
+  if (min < 60) return translate('time.min', { n: min })
+  const h = Math.floor(min / 60)
+  if (h < 24) return translate('time.hour', { n: h })
+  if (h < 48) return translate('time.yesterday')
+  return null // caller shows the date
+}
+
+/** Google's free web translation of a realtynmore.com page into Hindi. */
+export function hindiUrl(link: string): string {
+  try {
+    const u = new URL(link)
+    const host = u.hostname.replace(/-/g, '--').replace(/\./g, '-')
+    return `https://${host}.translate.goog${u.pathname}?_x_tr_sl=en&_x_tr_tl=hi&_x_tr_hl=hi`
+  } catch {
+    return `https://translate.google.com/translate?sl=en&tl=hi&u=${encodeURIComponent(link)}`
+  }
+}

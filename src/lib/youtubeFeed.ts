@@ -24,6 +24,8 @@ export interface Video {
   thumb: string
   url: string
   views?: number
+  /** Set by scripts/fetch-youtube.ts (the RSS feed itself doesn't say). */
+  isShort?: boolean
 }
 
 export interface Feed {

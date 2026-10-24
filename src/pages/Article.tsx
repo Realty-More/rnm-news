@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { hindiUrl, useT } from '../lib/i18n.ts'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ListenButton } from '../components/Listen.tsx'
@@ -8,6 +9,7 @@ import { toast } from '../components/Toast.tsx'
 import { formatDateTime, readingMinutes } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { recordRead } from '../lib/history.ts'
+import { smartLink, trackOpen } from '../lib/stats.ts'
 import { getOfflinePost } from '../lib/offline.ts'
 import { TEXT_SIZES, usePrefs } from '../lib/prefs.ts'
 import { getSaved, isSaved, onSavedChange, removeSaved, savePost } from '../lib/saved.ts'
@@ -21,6 +23,7 @@ export function Article() {
   const key = id ?? slug ?? ''
   const preview = (useLocation().state as { post?: Post } | null)?.post
   const navigate = useNavigate()
+  const t = useT()
 
   const res = useAsync(`post:${key}`, async (signal) => {
     try {
@@ -43,6 +46,11 @@ export function Article() {
   const articleRef = useRef<HTMLElement>(null)
   const proseRef = useRef<HTMLDivElement>(null)
   const progress = useReadProgress(articleRef, res.data ?? null)
+  const next = useNextStory(post ?? null)
+  useSwipe(articleRef, post?.id, {
+    onLeft: () => next && navigate(`/article/${next.id}`, { state: { post: next } }),
+    onRight: () => (window.history.length > 1 ? navigate(-1) : undefined),
+  })
 
   // Links to other realtynmore.com stories open inside the app.
   const onContentClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -92,7 +100,7 @@ export function Article() {
         <h1 className="article-title">{post.title}</h1>
         <p className="meta">
           <time dateTime={post.date}>{formatDateTime(post.date)}</time>
-          {res.data?.content && ` · ${readingMinutes(res.data.content)} min read`}
+          {res.data?.content && ` · ${readingMinutes(res.data.content)} ${t('article.minRead')}`}
         </p>
         <ArticleActions post={res.data ?? null} fallback={post} getText={() => proseRef.current?.innerText ?? ''} />
       </header>
@@ -117,12 +125,22 @@ export function Article() {
 
       <aside className="source-box">
         <p>
-          Originally published on <strong>realtynmore.com</strong>
+          {t('article.source')} <strong>realtynmore.com</strong>
         </p>
         <a className="btn" href={post.link} target="_blank" rel="noopener noreferrer">
-          Read on website <Icon name="external" size={16} />
+          {t('article.readOnSite')} <Icon name="external" size={16} />
         </a>
       </aside>
+
+      {next && (
+        <Link to={`/article/${next.id}`} state={{ post: next }} className="next-story">
+          <span className="next-label">
+            {t('article.next')} <Icon name="chevron" size={16} />
+          </span>
+          <span className="next-title">{next.title}</span>
+          <span className="next-hint">{t('article.swipeHint')}</span>
+        </Link>
+      )}
 
       <Related post={post} />
     </article>
@@ -137,6 +155,7 @@ function useReadProgress(ref: React.RefObject<HTMLElement | null>, post: Post | 
     if (!post) return
     furthest.current = 0
     recordRead(post, 0)
+    trackOpen(post.id)
     let frame = 0
     const measure = () => {
       frame = 0
@@ -169,6 +188,7 @@ function useReadProgress(ref: React.RefObject<HTMLElement | null>, post: Post | 
 
 function ArticleActions({ post, fallback, getText }: { post: Post | null; fallback: Post; getText: () => string }) {
   const [prefs, update] = usePrefs()
+  const t = useT()
   const [saved, setSaved] = useState(false)
   useEffect(() => {
     const check = () => void isSaved(fallback.id).then(setSaved)
@@ -187,7 +207,7 @@ function ArticleActions({ post, fallback, getText }: { post: Post | null; fallba
     }
   }
   const share = async () => {
-    const r = await shareLink(fallback.title, fallback.link)
+    const r = await shareLink(fallback.title, smartLink(fallback))
     if (r === 'copied') toast('Link copied')
     if (r === 'failed') toast('Could not share this link')
   }
@@ -195,12 +215,17 @@ function ArticleActions({ post, fallback, getText }: { post: Post | null; fallba
   return (
     <div className="action-row">
       <button className={`btn ghost ${saved ? 'on' : ''}`} onClick={toggleSave} aria-pressed={saved}>
-        <Icon name="bookmark" size={18} filled={saved} /> {saved ? 'Saved' : 'Save'}
+        <Icon name="bookmark" size={18} filled={saved} /> {saved ? t('article.saved') : t('article.save')}
       </button>
       <button className="btn ghost" onClick={share}>
-        <Icon name="share" size={18} /> Share
+        <Icon name="share" size={18} /> {t('article.share')}
       </button>
       {post?.content && <ListenButton title={post.title} getText={getText} />}
+      {prefs.lang === 'hi' && (
+        <a className="btn ghost" href={hindiUrl(fallback.link)} target="_blank" rel="noopener noreferrer">
+          {t('article.readHindi')} <Icon name="external" size={15} />
+        </a>
+      )}
       <button
         className="btn ghost icon-only"
         onClick={() => update({ textSize: (prefs.textSize + 1) % TEXT_SIZES.length })}
@@ -213,14 +238,54 @@ function ArticleActions({ post, fallback, getText }: { post: Post | null; fallba
   )
 }
 
+/** The story published just before this one, in the same section when possible. */
+function useNextStory(post: Post | null): Post | null {
+  const cat = post ? primaryCategory(post) : null
+  const res = useAsync(post ? `next:${post.id}` : null, (s) => fetchPosts({ category: cat?.id, before: post!.date, perPage: 1, exclude: [post!.id] }, s))
+  return res.data?.posts[0] ?? null
+}
+
+/** Horizontal swipe on the article (ignores swipes that start in tables, videos or carousels). */
+function useSwipe(ref: React.RefObject<HTMLElement | null>, key: unknown, { onLeft, onRight }: { onLeft: () => void; onRight: () => void }) {
+  const handlers = useRef({ onLeft, onRight })
+  handlers.current = { onLeft, onRight }
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let start: { x: number; y: number; t: number } | null = null
+    const down = (e: TouchEvent) => {
+      const target = e.target as HTMLElement
+      start = target.closest('table, iframe, .h-scroll, .chips') ? null : { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() }
+    }
+    const up = (e: TouchEvent) => {
+      if (!start) return
+      const dx = e.changedTouches[0].clientX - start.x
+      const dy = e.changedTouches[0].clientY - start.y
+      const quick = Date.now() - start.t < 600
+      start = null
+      if (!quick || Math.abs(dx) < 90 || Math.abs(dy) > 60) return
+      if (dx < 0) handlers.current.onLeft()
+      else handlers.current.onRight()
+    }
+    el.addEventListener('touchstart', down, { passive: true })
+    el.addEventListener('touchend', up, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', down)
+      el.removeEventListener('touchend', up)
+    }
+    // The article element only exists once the story has loaded.
+  }, [ref, key])
+}
+
 function Related({ post }: { post: Post }) {
+  const t = useT()
   const cat = primaryCategory(post)
   const res = useAsync(cat ? `related:${cat.id}:${post.id}` : null, (s) => fetchPosts({ category: cat!.id, perPage: 4, exclude: [post.id] }, s))
   if (!cat || !res.data?.posts.length) return null
   return (
     <section className="related" aria-labelledby="related-h">
       <div className="section-head">
-        <h2 id="related-h">More in {cat.label}</h2>
+        <h2 id="related-h">{t('article.moreIn')} {cat.label}</h2>
         <Link to={`/category/${cat.slug}`} className="see-all">
           All <Icon name="chevron" size={16} />
         </Link>

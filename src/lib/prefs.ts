@@ -9,6 +9,9 @@ export interface Prefs {
   cities: string[]
   autoOffline: boolean
   onboarded: boolean
+  notifyMode: 'all' | 'feed' // alerts for every story, or only My Feed sections and cities
+  shareStats: boolean // anonymous usage counts (no personal data)
+  lang: 'en' | 'hi'
 }
 
 export const TEXT_SIZES = [15.5, 17.5, 19.5, 22]
@@ -18,7 +21,7 @@ const KEY = 'rnm-prefs'
 const THEME_KEY = 'rnm-theme' // also read by the inline script in index.html
 const EVENT = 'rnm:prefs-changed'
 
-export const DEFAULT_PREFS: Prefs = { textSize: 1, topics: [], cities: [], autoOffline: true, onboarded: false }
+export const DEFAULT_PREFS: Prefs = { textSize: 1, topics: [], cities: [], autoOffline: true, onboarded: false, notifyMode: 'all', shareStats: true, lang: 'en' }
 
 export function readPrefs(): Prefs {
   try {

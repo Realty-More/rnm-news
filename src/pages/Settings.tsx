@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useT } from '../lib/i18n.ts'
 import { Icon } from '../components/Icon.tsx'
 import { toast } from '../components/Toast.tsx'
 import { TopicPicker } from '../components/TopicPicker.tsx'
@@ -23,6 +24,7 @@ export function Settings() {
   usePageTitle('Settings')
   const [prefs, update] = usePrefs()
   const [theme, setTheme] = useTheme()
+  const t = useT()
   const [offline, setOffline] = useState<{ at: string; count: number } | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -46,27 +48,45 @@ export function Settings() {
   return (
     <div className="page settings">
       <div className="page-head">
-        <h1>Settings</h1>
-        <p className="page-sub">Saved on this device only</p>
+        <h1>{t('settings.title')}</h1>
+        <p className="page-sub">{t('settings.sub')}</p>
       </div>
 
       <section className="set-group">
-        <h2 className="set-title">My Feed</h2>
+        <h2 className="set-title">{t('settings.language')}</h2>
+        <div className="set-row">
+          <span>
+            English / हिंदी
+            <small>{t('settings.languageHelp')}</small>
+          </span>
+          <div className="segmented" role="radiogroup" aria-label="Language">
+            <button role="radio" aria-checked={prefs.lang === 'en'} className={prefs.lang === 'en' ? 'on' : ''} onClick={() => update({ lang: 'en' })}>
+              English
+            </button>
+            <button role="radio" aria-checked={prefs.lang === 'hi'} className={prefs.lang === 'hi' ? 'on' : ''} onClick={() => update({ lang: 'hi' })} lang="hi">
+              हिंदी
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="set-group">
+        <h2 className="set-title">{t('settings.myFeed')}</h2>
         <p className="set-help">Pick sections and cities. Home shows a “For You” feed built from them.</p>
         <TopicPicker topics={prefs.topics} cities={prefs.cities} onChange={(topics, cities) => update({ topics, cities, onboarded: true })} />
       </section>
 
       {pushAvailable() && (
         <section className="set-group">
-          <h2 className="set-title">Notifications</h2>
+          <h2 className="set-title">{t('settings.notifications')}</h2>
           <NotifyToggle />
         </section>
       )}
 
       <section className="set-group">
-        <h2 className="set-title">Appearance</h2>
+        <h2 className="set-title">{t('settings.appearance')}</h2>
         <div className="set-row">
-          <span>Theme</span>
+          <span>{t('settings.theme')}</span>
           <div className="segmented" role="radiogroup" aria-label="Theme">
             {THEMES.map((t) => (
               <button key={t.value} role="radio" aria-checked={theme === t.value} className={theme === t.value ? 'on' : ''} onClick={() => setTheme(t.value)}>
@@ -76,7 +96,7 @@ export function Settings() {
           </div>
         </div>
         <div className="set-row">
-          <span>Article text size</span>
+          <span>{t('settings.textSize')}</span>
           <div className="stepper">
             <button className="icon-btn" aria-label="Smaller text" disabled={prefs.textSize === 0} onClick={() => update({ textSize: prefs.textSize - 1 })}>
               A−
@@ -93,7 +113,7 @@ export function Settings() {
       </section>
 
       <section className="set-group">
-        <h2 className="set-title">Offline reading</h2>
+        <h2 className="set-title">{t('settings.offline')}</h2>
         <label className="set-row toggle">
           <span>
             Auto-download latest stories
@@ -113,7 +133,14 @@ export function Settings() {
       </section>
 
       <section className="set-group">
-        <h2 className="set-title">Privacy</h2>
+        <h2 className="set-title">{t('settings.privacy')}</h2>
+        <label className="set-row toggle">
+          <span>
+            Share anonymous usage counts
+            <small>Counts which screens and stories are opened, to show “Trending”. No name, id or location.</small>
+          </span>
+          <input type="checkbox" checked={prefs.shareStats} onChange={(e) => update({ shareStats: e.target.checked })} />
+        </label>
         <div className="set-row">
           <span>
             Reading history
@@ -132,7 +159,7 @@ export function Settings() {
       </section>
 
       <section className="set-group about">
-        <h2 className="set-title">About</h2>
+        <h2 className="set-title">{t('settings.about')}</h2>
         <p>
           All news, photos and dates come from{' '}
           <a href={SITE} target="_blank" rel="noopener noreferrer">

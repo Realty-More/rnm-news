@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
+import { useT } from '../lib/i18n.ts'
 import { EmptyState } from '../components/States.tsx'
 import { Icon } from '../components/Icon.tsx'
 import { useAsync } from '../lib/hooks.ts'
@@ -8,14 +9,15 @@ import { usePageTitle } from './usePageTitle.ts'
 
 export function Categories() {
   usePageTitle('Categories')
+  const t = useT()
   const res = useAsync('categories', (s) => fetchCategories(s))
   const counts = new Map(res.data?.map((c) => [c.id, c]))
 
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Categories</h1>
-        <p className="page-sub">Sections from realtynmore.com</p>
+        <h1>{t('categories.title')}</h1>
+        <p className="page-sub">{t('categories.sub')}</p>
       </div>
       <div className="cat-grid">
         {CURATED_CATEGORIES.map((c, i) => {
@@ -23,7 +25,7 @@ export function Categories() {
           return (
             <Link key={c.slug} to={`/category/${c.slug}`} className={`cat-tile ${i === 0 ? 'feature' : ''}`}>
               <span className="cat-name">{c.label}</span>
-              <span className="cat-count">{live ? `${live.count.toLocaleString('en-IN')} stories` : res.loading ? ' ' : ''}</span>
+              <span className="cat-count">{live ? t('categories.stories', { n: live.count.toLocaleString('en-IN') }) : res.loading ? ' ' : ''}</span>
               <Icon name="chevron" size={18} className="cat-arrow" />
             </Link>
           )

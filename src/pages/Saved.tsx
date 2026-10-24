@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useT } from '../lib/i18n.ts'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { PostCard } from '../components/PostCard.tsx'
@@ -13,19 +14,20 @@ export function Saved() {
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') === 'history' ? 'history' : 'saved'
   usePageTitle(tab === 'history' ? 'History' : 'Saved')
+  const t = useT()
 
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Library</h1>
-        <p className="page-sub">Stored on this device only</p>
+        <h1>{t('library.title')}</h1>
+        <p className="page-sub">{t('library.sub')}</p>
       </div>
       <div className="segmented wide" role="tablist" aria-label="Library">
         <button role="tab" aria-selected={tab === 'saved'} className={tab === 'saved' ? 'on' : ''} onClick={() => setParams({}, { replace: true })}>
-          <Icon name="bookmark" size={16} /> Saved
+          <Icon name="bookmark" size={16} /> {t('library.saved')}
         </button>
         <button role="tab" aria-selected={tab === 'history'} className={tab === 'history' ? 'on' : ''} onClick={() => setParams({ tab: 'history' }, { replace: true })}>
-          <Icon name="history" size={16} /> History
+          <Icon name="history" size={16} /> {t('library.history')}
         </button>
       </div>
       {tab === 'saved' ? <SavedList /> : <HistoryList />}

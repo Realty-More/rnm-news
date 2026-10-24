@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useT } from '../lib/i18n.ts'
 import { Link } from 'react-router-dom'
 import { PostCard, PostImg } from '../components/PostCard.tsx'
 import { PullToRefresh } from '../components/PullToRefresh.tsx'
@@ -13,17 +14,19 @@ import { usePrefs } from '../lib/prefs.ts'
 import { loadFeed } from '../lib/videos.ts'
 import { fetchPosts, CURATED_CATEGORIES } from '../lib/wp.ts'
 import type { Video } from '../lib/youtubeFeed.ts'
+import { fetchTrending } from '../lib/stats.ts'
 import { usePageTitle } from './usePageTitle.ts'
 
 // Sections that publish regularly (see CURATED_CATEGORIES).
 const HOME_SECTIONS = ['interviews', 'rera', 'leadership-updates', 'guest-column', 'blogs', 'report']
 const POLL_MS = 5 * 60 * 1000
 
-const today = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+const todayFmt = (lang: string) => new Intl.DateTimeFormat(lang === 'hi' ? 'hi-IN' : 'en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
 export function Home() {
   usePageTitle(null)
   const [prefs, update] = usePrefs()
+  const t = useT()
   const latest = useAsync('home:latest', (s) => fetchPosts({ perPage: 9 }, s))
   const [playing, setPlaying] = useState<Video | null>(null)
   const [epoch, setEpoch] = useState(0)
@@ -45,13 +48,13 @@ export function Home() {
       <div className="page home">
         {fresh > 0 && (
           <button className="new-pill" onClick={refresh}>
-            <Icon name="arrowUp" size={16} /> {fresh} new {fresh === 1 ? 'story' : 'stories'}
+            <Icon name="arrowUp" size={16} /> {t('home.newStories', { n: fresh })}
           </button>
         )}
 
         <div className="masthead">
-          <span className="dateline">{today.format(new Date())}</span>
-          <h1 className="masthead-title">Today in Real Estate</h1>
+          <span className="dateline">{todayFmt(prefs.lang).format(new Date())}</span>
+          <h1 className="masthead-title">{t('home.title')}</h1>
         </div>
 
         <ContinueReading />
@@ -66,9 +69,9 @@ export function Home() {
             {latest.data.posts[0] && <PostCard post={latest.data.posts[0]} variant="hero" />}
             <section className="latest-col" aria-labelledby="latest-h">
               <div className="section-head">
-                <h2 id="latest-h">Latest</h2>
+                <h2 id="latest-h">{t('home.latest')}</h2>
                 <Link to="/news" className="see-all">
-                  All news <Icon name="chevron" size={16} />
+                  {t('home.allNews')} <Icon name="chevron" size={16} />
                 </Link>
               </div>
               <div className="row-list">
@@ -85,14 +88,14 @@ export function Home() {
             <div className="onboard-head">
               <Icon name="sparkle" size={20} />
               <div>
-                <h2>Make it your feed</h2>
-                <p>Pick sections and cities you follow. You can change them anytime in Settings.</p>
+                <h2>{t('home.onboardTitle')}</h2>
+                <p>{t('home.onboardText')}</p>
               </div>
             </div>
             <TopicPicker topics={prefs.topics} cities={prefs.cities} onChange={(topics, cities) => update({ topics, cities })} />
             <div className="action-row">
               <button className="btn" onClick={() => update({ onboarded: true })}>
-                {prefs.topics.length || prefs.cities.length ? 'Save my feed' : 'Skip for now'}
+                {prefs.topics.length || prefs.cities.length ? t('home.saveFeed') : t('home.skip')}
               </button>
             </div>
           </section>
@@ -102,6 +105,8 @@ export function Home() {
 
         {prefs.onboarded &&
           prefs.cities.map((city) => <CitySection key={city} city={city} epoch={epoch} />)}
+
+        <Trending epoch={epoch} />
 
         <VideoStrip onPlay={setPlaying} epoch={epoch} />
 
@@ -143,6 +148,7 @@ function useNewStories(topId: number | undefined): number {
 }
 
 function ContinueReading() {
+  const t = useT()
   const [item, setItem] = useState<HistoryItem | null>(() => continueReading(readHistory()))
   useEffect(() => onHistoryChange(() => setItem(continueReading(readHistory()))), [])
   if (!item) return null
@@ -151,7 +157,7 @@ function ContinueReading() {
       <PostImg image={item.post.image} sizes="72px" className="continue-img" />
       <div className="continue-body">
         <span className="continue-label">
-          <Icon name="history" size={14} /> Continue reading · {Math.round(item.progress * 100)}%
+          <Icon name="history" size={14} /> {t('home.continue')} · {Math.round(item.progress * 100)}%
         </span>
         <span className="continue-title">{item.post.title}</span>
         <span className="continue-bar">
@@ -162,15 +168,37 @@ function ContinueReading() {
   )
 }
 
+/** Most-read stories in the app over the last 2 days (hidden until there is enough real data). */
+function Trending({ epoch }: { epoch: number }) {
+  const t = useT()
+  const res = useAsync(`home:trending:${epoch}`, (s) => fetchTrending(s))
+  if (!res.data || res.data.length < 3) return null
+  return (
+    <section className="band trending" aria-labelledby="trending-h">
+      <div className="section-head">
+        <h2 id="trending-h">
+          <Icon name="flame" size={18} /> {t('home.trending')}
+        </h2>
+      </div>
+      <div className="trending-list">
+        {res.data.slice(0, 5).map((p, i) => (
+          <PostCard key={p.id} post={p} variant="compact" index={i} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function ForYou({ ids, epoch }: { ids: number[]; epoch: number }) {
+  const t = useT()
   const res = useAsync(`home:foryou:${ids.join(',')}:${epoch}`, (s) => fetchPosts({ categories: ids, perPage: 8 }, s))
   if (res.error && !res.data) return null
   return (
     <section className="band for-you" aria-labelledby="foryou-h">
       <div className="section-head">
-        <h2 id="foryou-h">For You</h2>
+        <h2 id="foryou-h">{t('home.forYou')}</h2>
         <Link to="/settings" className="see-all">
-          Edit <Icon name="settings" size={15} />
+          {t('home.edit')} <Icon name="settings" size={15} />
         </Link>
       </div>
       <div className="h-scroll">
@@ -183,6 +211,7 @@ function ForYou({ ids, epoch }: { ids: number[]; epoch: number }) {
 }
 
 function CitySection({ city, epoch }: { city: string; epoch: number }) {
+  const t = useT()
   const res = useAsync(`home:city:${city}:${epoch}`, (s) => fetchPosts({ search: city, perPage: 6 }, s))
   if ((res.error && !res.data) || res.data?.posts.length === 0) return null
   return (
@@ -190,7 +219,7 @@ function CitySection({ city, epoch }: { city: string; epoch: number }) {
       <div className="section-head">
         <h2 id={`city-${city}`}>{city}</h2>
         <Link to={`/search?q=${encodeURIComponent(city)}`} className="see-all">
-          More <Icon name="chevron" size={16} />
+          {t('home.more')} <Icon name="chevron" size={16} />
         </Link>
       </div>
       <div className="h-scroll">
@@ -203,14 +232,18 @@ function CitySection({ city, epoch }: { city: string; epoch: number }) {
 }
 
 function VideoStrip({ onPlay, epoch }: { onPlay: (v: Video) => void; epoch: number }) {
+  const t = useT()
   const feed = useAsync(`yt:latest${epoch ? `:${epoch}` : ''}`, () => loadFeed('latest'))
   if (feed.error && !feed.data) return null // the Videos tab shows the full error
   return (
     <section className="band dark" aria-labelledby="watch-h">
       <div className="section-head">
-        <h2 id="watch-h">Watch</h2>
+        <h2 id="watch-h">{t('home.watch')}</h2>
+        <Link to="/shorts" className="see-all shorts-pill">
+          <Icon name="play" size={14} filled /> {t('videos.shorts')}
+        </Link>
         <Link to="/videos" className="see-all">
-          All videos <Icon name="chevron" size={16} />
+          {t('home.allVideos')} <Icon name="chevron" size={16} />
         </Link>
       </div>
       <div className="h-scroll">
@@ -223,6 +256,7 @@ function VideoStrip({ onPlay, epoch }: { onPlay: (v: Video) => void; epoch: numb
 }
 
 function CategorySection({ id, slug, label, epoch }: { id: number; slug: string; label: string; epoch: number }) {
+  const t = useT()
   const res = useAsync(`home:cat:${id}:${epoch}`, (s) => fetchPosts({ category: id, perPage: 6 }, s))
   if (res.error && !res.data) return null
   if (res.data && res.data.posts.length === 0) return null
@@ -231,7 +265,7 @@ function CategorySection({ id, slug, label, epoch }: { id: number; slug: string;
       <div className="section-head">
         <h2 id={`sec-${slug}`}>{label}</h2>
         <Link to={`/category/${slug}`} className="see-all">
-          More <Icon name="chevron" size={16} />
+          {t('home.more')} <Icon name="chevron" size={16} />
         </Link>
       </div>
       <div className="h-scroll">

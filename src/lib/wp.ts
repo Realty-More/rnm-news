@@ -145,6 +145,11 @@ export interface PostQuery {
   categories?: number[]
   search?: string
   exclude?: number[]
+  /** Exactly these posts, in this order (used by Trending). */
+  include?: number[]
+  /** ISO dates: only posts published before / after. */
+  before?: string
+  after?: string
   withContent?: boolean
 }
 
@@ -159,6 +164,12 @@ export async function fetchPosts(q: PostQuery = {}, signal?: AbortSignal): Promi
   if (cats.length) params.set('categories', cats.join(','))
   if (q.search) params.set('search', q.search)
   if (q.exclude?.length) params.set('exclude', q.exclude.join(','))
+  if (q.include?.length) {
+    params.set('include', q.include.join(','))
+    params.set('orderby', 'include')
+  }
+  if (q.before) params.set('before', q.before)
+  if (q.after) params.set('after', q.after)
   const { data, totalPages } = await getJson<RawPost[]>(`/posts?${params}`, signal)
   return { posts: data.map(toPost), totalPages }
 }

@@ -68,3 +68,13 @@ export async function snapshotTime(): Promise<string | null> {
     return null
   }
 }
+
+/** Shorts from all playlists, newest first. Flags come from the build-time snapshot (also served in dev). */
+export async function loadShorts(): Promise<Video[]> {
+  const snap = await loadSnapshot()
+  const seen = new Set<string>()
+  return Object.values(snap.feeds)
+    .flatMap((f) => f?.videos ?? [])
+    .filter((v) => v.isShort && (seen.has(v.id) ? false : (seen.add(v.id), true)))
+    .sort((a, b) => b.published.localeCompare(a.published))
+}

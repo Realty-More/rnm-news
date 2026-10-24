@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { useT } from '../lib/i18n.ts'
 import { Icon } from './Icon.tsx'
 
 export function SkeletonList({ count = 5, hero = false }: { count?: number; hero?: boolean }) {
@@ -20,15 +21,16 @@ export function SkeletonList({ count = 5, hero = false }: { count?: number; hero
 }
 
 export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => void }) {
+  const t = useT()
   const offline = typeof navigator !== 'undefined' && !navigator.onLine
   return (
     <div className="state">
       <Icon name={offline ? 'offline' : 'refresh'} size={28} />
-      <p className="state-title">{offline ? 'You are offline' : 'Could not load this'}</p>
+      <p className="state-title">{offline ? t('state.offline') : t('state.failed')}</p>
       <p className="state-text">{offline ? 'Connect to the internet to see the latest stories. Saved articles still work offline.' : error.message}</p>
       {onRetry && (
         <button className="btn" onClick={onRetry}>
-          Try again
+          {t('state.retry')}
         </button>
       )}
     </div>
@@ -46,6 +48,7 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
 
 /** Loads the next page when it scrolls into view; also offers a button for accessibility. */
 export function LoadMore({ onMore, loading, done, error, onRetry }: { onMore: () => void; loading: boolean; done: boolean; error: Error | null; onRetry: () => void }) {
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = ref.current
@@ -56,10 +59,10 @@ export function LoadMore({ onMore, loading, done, error, onRetry }: { onMore: ()
   }, [onMore, done, error])
 
   if (error) return <ErrorState error={error} onRetry={onRetry} />
-  if (done) return <p className="list-end">You're all caught up</p>
+  if (done) return <p className="list-end">{t('state.caughtUp')}</p>
   return (
     <div ref={ref} className="load-more">
-      {loading ? <span className="spinner" aria-label="Loading more" /> : <button className="btn ghost" onClick={onMore}>Load more</button>}
+      {loading ? <span className="spinner" aria-label="Loading more" /> : <button className="btn ghost" onClick={onMore}>{t('state.loadMore')}</button>}
     </div>
   )
 }

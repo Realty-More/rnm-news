@@ -1,5 +1,6 @@
 {
-  // Cloudflare Workers free plan. Deploy with: npx wrangler deploy
+  // R&M News app server on the Cloudflare Workers free plan (account desk@realtynmore.com).
+  // Deploy with: npx wrangler deploy
   "name": "rnm-news-push",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
@@ -8,11 +9,19 @@
     // Subscribed devices (created with: npx wrangler kv namespace create SUBS)
     { "binding": "SUBS", "id": "b085d47b2dc444aba1c68fa0713e2a0a" }
   ],
+  "d1_databases": [
+    // Anonymous usage counts; tables in schema.sql (npx wrangler d1 execute rnm-news-stats --remote --file schema.sql)
+    { "binding": "DB", "database_name": "rnm-news-stats", "database_id": "83092bce-faa5-4b24-af81-43fb2ac4c003" }
+  ],
   "vars": {
     "VAPID_PUBLIC_KEY": "BA4nnOG7Awwqw50N7abJcS4V9vi8uq7Srw-hS5HEyNljhLSWByPvnM7JHvenvzBg2mAbUVLDngWXZxLIa-1vLwU",
     "VAPID_SUBJECT": "mailto:desk@realtynmore.com",
     "ALLOWED_ORIGINS": "https://realty-more.github.io,http://localhost:5173,http://localhost:4173",
-    "SITE_API": "https://realtynmore.com/wp-json/wp/v2"
-  }
-  // VAPID_PRIVATE_KEY is a secret: npx wrangler secret put VAPID_PRIVATE_KEY (locally it comes from .dev.vars)
+    "SITE_API": "https://realtynmore.com/wp-json/wp/v2",
+    "APP_URL": "https://realty-more.github.io/rnm-news/"
+  },
+  "secrets": { "required": ["VAPID_PRIVATE_KEY", "STATS_KEY"] }
+  // Secrets (npx wrangler secret put <NAME>; locally they come from .dev.vars):
+  //   VAPID_PRIVATE_KEY  signs notifications
+  //   STATS_KEY          opens the private /stats page
 }

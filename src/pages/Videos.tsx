@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useT } from '../lib/i18n.ts'
+import { Link } from 'react-router-dom'
 import { ErrorState, EmptyState } from '../components/States.tsx'
 import { Icon } from '../components/Icon.tsx'
 import { VideoCard, VideoPlayer } from '../components/Video.tsx'
@@ -11,6 +13,7 @@ const SHELVES: FeedKey[] = ['latest', 'podium', 'webseries', 'anniversary']
 
 export function Videos() {
   usePageTitle('Videos')
+  const t = useT()
   const [shelf, setShelf] = useState<FeedKey>('latest')
   const [playing, setPlaying] = useState<Video | null>(null)
   const [sort, setSort] = useState<'new' | 'views'>('new')
@@ -24,8 +27,8 @@ export function Videos() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Videos</h1>
-        <p className="page-sub">From the Realty &amp; More YouTube channel</p>
+        <h1>{t('videos.title')}</h1>
+        <p className="page-sub">{t('videos.sub')}</p>
       </div>
       <div className="chips" role="tablist" aria-label="Playlists">
         {SHELVES.map((k) => (
@@ -35,12 +38,15 @@ export function Videos() {
         ))}
       </div>
       <div className="sort-row">
+        <Link to="/shorts" className="shorts-link">
+          <Icon name="play" size={16} filled /> {t('videos.shorts')}
+        </Link>
         <div className="segmented small" role="radiogroup" aria-label="Sort videos">
           <button role="radio" aria-checked={sort === 'new'} className={sort === 'new' ? 'on' : ''} onClick={() => setSort('new')}>
-            Newest
+            {t('videos.newest')}
           </button>
           <button role="radio" aria-checked={sort === 'views'} className={sort === 'views' ? 'on' : ''} onClick={() => setSort('views')}>
-            <Icon name="flame" size={14} /> Most watched
+            <Icon name="flame" size={14} /> {t('videos.mostWatched')}
           </button>
         </div>
       </div>

@@ -28,6 +28,25 @@ for (const key of Object.keys(FEEDS) as FeedKey[]) {
   }
 }
 
+// The feed doesn't mark Shorts: youtube.com/shorts/<id> answers 200 for a Short and redirects otherwise.
+const shortCache = new Map<string, boolean>()
+for (const feed of Object.values(previous.feeds ?? {})) for (const v of feed.videos) if (v.isShort !== undefined) shortCache.set(v.id, v.isShort)
+async function isShort(id: string): Promise<boolean | undefined> {
+  if (shortCache.has(id)) return shortCache.get(id)
+  try {
+    const res = await fetch(`https://www.youtube.com/shorts/${id}`, { method: 'HEAD', redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0' } })
+    const value = res.status === 200 ? true : res.status >= 300 && res.status < 400 ? false : undefined
+    if (value !== undefined) shortCache.set(id, value)
+    return value
+  } catch {
+    return undefined
+  }
+}
+const ids = [...new Set(Object.values(feeds).flatMap((f) => f!.videos.map((v) => v.id)))]
+for (let i = 0; i < ids.length; i += 6) await Promise.all(ids.slice(i, i + 6).map(isShort))
+for (const feed of Object.values(feeds)) for (const v of feed!.videos) v.isShort = shortCache.get(v.id)
+console.log(`  shorts: ${[...shortCache.values()].filter(Boolean).length} of ${ids.length} videos`)
+
 await mkdir(new URL('.', out), { recursive: true })
 await writeFile(out, JSON.stringify({ generatedAt: new Date().toISOString(), feeds }))
 console.log(`YouTube snapshot written (${failures} feed(s) failed).`)

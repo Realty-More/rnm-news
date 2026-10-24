@@ -4,17 +4,20 @@ import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Capacitor } from '@capacitor/core'
 import { useOnline } from '../lib/hooks.ts'
 import { refreshOffline } from '../lib/offline.ts'
-import { effectiveTheme, setTheme, useTheme } from '../lib/prefs.ts'
+import { effectiveTheme, setTheme, usePrefs, useTheme } from '../lib/prefs.ts'
+import { syncPushFilters } from '../lib/push.ts'
+import { trackScreen } from '../lib/stats.ts'
 import { Icon, type IconName } from './Icon.tsx'
 import { Toaster } from './Toast.tsx'
+import { useT, type TKey } from '../lib/i18n.ts'
 
-const TABS: { to: string; label: string; icon: IconName; mobile: boolean }[] = [
-  { to: '/', label: 'Home', icon: 'home', mobile: true },
-  { to: '/news', label: 'News', icon: 'news', mobile: true },
-  { to: '/categories', label: 'Categories', icon: 'grid', mobile: false },
-  { to: '/videos', label: 'Videos', icon: 'play', mobile: true },
-  { to: '/podcasts', label: 'Podcasts', icon: 'mic', mobile: true },
-  { to: '/saved', label: 'Saved', icon: 'bookmark', mobile: true },
+const TABS: { to: string; label: TKey; icon: IconName; mobile: boolean }[] = [
+  { to: '/', label: 'nav.home', icon: 'home', mobile: true },
+  { to: '/news', label: 'nav.news', icon: 'news', mobile: true },
+  { to: '/categories', label: 'nav.categories', icon: 'grid', mobile: false },
+  { to: '/videos', label: 'nav.videos', icon: 'play', mobile: true },
+  { to: '/podcasts', label: 'nav.podcasts', icon: 'mic', mobile: true },
+  { to: '/saved', label: 'nav.saved', icon: 'bookmark', mobile: true },
 ]
 
 interface InstallEvent extends Event {
@@ -50,6 +53,7 @@ function useInstall() {
 
 function InstallBanner() {
   const { canInstall, isIos, install } = useInstall()
+  const t = useT()
   const [dismissed, setDismissed] = useState(() => {
     try {
       return localStorage.getItem('rnm-install-dismissed') === '1'
@@ -70,12 +74,12 @@ function InstallBanner() {
     <div className="install-banner">
       <img src="./icons/icon-192.png" alt="" width={40} height={40} />
       <div className="install-text">
-        <strong>Get the R&amp;M News app</strong>
-        <span>{canInstall ? 'Fast, full screen, and works offline.' : 'Tap Share, then “Add to Home Screen”.'}</span>
+        <strong>{t('install.title')}</strong>
+        <span>{canInstall ? t('install.text') : 'Tap Share, then “Add to Home Screen”.'}</span>
       </div>
       {canInstall && (
         <button className="btn small" onClick={install}>
-          Install
+          {t('install.button')}
         </button>
       )}
       <button className="icon-btn" onClick={close} aria-label="Dismiss">
@@ -91,6 +95,7 @@ function UpdatePrompt() {
     offlineReady: [offlineReady, setOfflineReady],
     updateServiceWorker,
   } = useRegisterSW({ immediate: true })
+  const t = useT()
   useEffect(() => {
     if (!offlineReady) return
     const t = setTimeout(() => setOfflineReady(false), 3500)
@@ -100,9 +105,9 @@ function UpdatePrompt() {
   if (needRefresh) {
     return (
       <div className="update-bar" role="status">
-        <span>A new version is ready.</span>
+        <span>{t('update.ready')}</span>
         <button className="btn small" onClick={() => updateServiceWorker(true)}>
-          Reload
+          {t('update.reload')}
         </button>
         <button className="icon-btn" onClick={() => setNeedRefresh(false)} aria-label="Later">
           <Icon name="close" size={18} />
@@ -122,6 +127,19 @@ export function Layout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const isArticle = pathname.startsWith('/article') || pathname.startsWith('/read')
+  const [prefs] = usePrefs()
+  const t = useT()
+
+  useEffect(() => {
+    trackScreen(pathname)
+  }, [pathname])
+
+  // Keep topic-filtered alerts in step with My Feed.
+  const feedKey = JSON.stringify([prefs.notifyMode, prefs.topics, prefs.cities])
+  useEffect(() => {
+    const t = setTimeout(() => void syncPushFilters().catch(() => {}), 1500)
+    return () => clearTimeout(t)
+  }, [feedKey])
 
   useEffect(() => {
     if (!isArticle) window.scrollTo(0, 0)
@@ -155,9 +173,9 @@ export function Layout() {
             <img className="logo logo-dark" src="./brand/logo_white.png" alt="" width={84} height={48} />
           </NavLink>
           <nav className="desk-nav" aria-label="Sections">
-            {TABS.map((t) => (
-              <NavLink key={t.to} to={t.to} end={t.to === '/'}>
-                {t.label}
+            {TABS.map((tab) => (
+              <NavLink key={tab.to} to={tab.to} end={tab.to === '/'}>
+                {t(tab.label)}
               </NavLink>
             ))}
           </nav>
@@ -180,7 +198,7 @@ export function Layout() {
 
       {!online && (
         <div className="offline-bar" role="status">
-          <Icon name="offline" size={16} /> Offline. Showing saved and recently read stories.
+          <Icon name="offline" size={16} /> {t('offline.bar')}
         </div>
       )}
 
@@ -200,10 +218,10 @@ export function Layout() {
       </footer>
 
       <nav className="tabbar" aria-label="Main">
-        {TABS.filter((t) => t.mobile).map((t) => (
-          <NavLink key={t.to} to={t.to} end={t.to === '/'} className="tab">
-            <Icon name={t.icon} />
-            <span>{t.label}</span>
+        {TABS.filter((tab) => tab.mobile).map((tab) => (
+          <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="tab">
+            <Icon name={tab.icon} />
+            <span>{t(tab.label)}</span>
           </NavLink>
         ))}
       </nav>

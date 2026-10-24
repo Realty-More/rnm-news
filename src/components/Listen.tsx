@@ -1,6 +1,7 @@
 // "Listen" uses the phone's built-in text-to-speech (Web Speech API): free, works without an account.
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon.tsx'
+import { useT } from '../lib/i18n.ts'
 
 type State = 'idle' | 'playing' | 'paused'
 
@@ -34,6 +35,7 @@ export function chunkText(text: string, max = 220): string[] {
 
 export function ListenButton({ title, getText }: { title: string; getText: () => string }) {
   const [state, setState] = useState<State>('idle')
+  const t = useT()
   const queue = useRef<string[]>([])
   const run = useRef(0)
 
@@ -91,7 +93,7 @@ export function ListenButton({ title, getText }: { title: string; getText: () =>
   return (
     <>
       <button className={`btn ghost ${state !== 'idle' ? 'on' : ''}`} onClick={toggle} aria-label={state === 'playing' ? 'Pause listening' : 'Listen to this article'}>
-        <Icon name={state === 'playing' ? 'pause' : 'headphones'} size={18} /> {state === 'idle' ? 'Listen' : state === 'playing' ? 'Pause' : 'Resume'}
+        <Icon name={state === 'playing' ? 'pause' : 'headphones'} size={18} /> {state === 'idle' ? t('article.listen') : state === 'playing' ? t('article.pause') : t('article.resume')}
       </button>
       {state !== 'idle' && (
         <button className="btn ghost" onClick={stop} aria-label="Stop listening">

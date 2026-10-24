@@ -35,6 +35,13 @@ export default defineConfig({
         background_color: '#141416',
         theme_color: '#141416',
         categories: ['news', 'business'],
+        // Long-press the app icon for these.
+        shortcuts: [
+          { name: 'Latest news', short_name: 'Latest', url: './#/news', icons: [{ src: 'icons/shortcut-news.png', sizes: '96x96', type: 'image/png' }] },
+          { name: 'Videos', short_name: 'Videos', url: './#/videos', icons: [{ src: 'icons/shortcut-videos.png', sizes: '96x96', type: 'image/png' }] },
+          { name: 'Search', short_name: 'Search', url: './#/search', icons: [{ src: 'icons/shortcut-search.png', sizes: '96x96', type: 'image/png' }] },
+          { name: 'Saved stories', short_name: 'Saved', url: './#/saved', icons: [{ src: 'icons/shortcut-saved.png', sizes: '96x96', type: 'image/png' }] },
+        ],
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },

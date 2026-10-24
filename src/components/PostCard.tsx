@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { timeAgo } from '../lib/format.ts'
+import { formatDate } from '../lib/format.ts'
+import { ago } from '../lib/i18n.ts'
 import { CURATED_CATEGORIES, type Post, type PostImage } from '../lib/wp.ts'
 
 export function PostImg({ image, sizes, eager = false, className = '' }: { image: PostImage | null; sizes: string; eager?: boolean; className?: string }) {
@@ -46,7 +47,7 @@ type Variant = 'hero' | 'row' | 'card' | 'compact'
 
 export function PostCard({ post, variant = 'row', index }: { post: Post; variant?: Variant; index?: number }) {
   const to = `/article/${post.id}`
-  const meta = <time dateTime={post.date}>{timeAgo(post.date)}</time>
+  const meta = <time dateTime={post.date}>{ago(post.date) ?? formatDate(post.date)}</time>
 
   if (variant === 'hero') {
     return (

@@ -107,6 +107,17 @@ const hi = {
   'wa.follow': 'फ़ॉलो करें',
   'home.followUs': 'हमें फ़ॉलो करें',
   'home.mostWatched': 'सबसे ज़्यादा देखे गए',
+  'nav.markets': 'मार्केट',
+  'markets.title': 'रियल्टी मार्केट',
+  'markets.stocks': 'रियल्टी शेयर',
+  'markets.movers': 'टॉप गेनर और लूज़र (BSE)',
+  'markets.moversOpen': 'पूरे BSE मार्केट के आज के आंकड़े। Gainers या Losers पर टैप करें।',
+  'markets.moversClosed': 'मार्केट बंद है: ये BSE के आज के फ़ाइनल गेनर और लूज़र हैं।',
+  'markets.why': 'शेयर क्यों चढ़े या गिरे?',
+  'markets.whyNote': 'हर कंपनी से जुड़ी ताज़ा ख़बरें (पिछले 3 दिन)। इनसे पता चलता है कि शेयर क्यों हिला।',
+  'markets.sector': 'रियल्टी सेक्टर',
+  'markets.noNews': 'पिछले 3 दिनों में कोई नई ख़बर नहीं',
+  'home.realtyStocks': 'रियल्टी शेयर',
 }
 
 export type TKey = keyof typeof hi
@@ -215,6 +226,17 @@ const en: Record<TKey, string> = {
   'wa.follow': 'Follow',
   'home.followUs': 'Follow us',
   'home.mostWatched': 'Most watched',
+  'nav.markets': 'Markets',
+  'markets.title': 'Realty Markets',
+  'markets.stocks': 'Realty stocks',
+  'markets.movers': 'Top gainers & losers (BSE)',
+  'markets.moversOpen': 'Live for the whole BSE market today. Tap Gainers or Losers.',
+  'markets.moversClosed': 'Market is closed: these are the day’s final gainers and losers on BSE.',
+  'markets.why': 'Why are they moving?',
+  'markets.whyNote': 'Latest news that names each company (last 3 days). Read it to see what may be behind the move.',
+  'markets.sector': 'Realty sector',
+  'markets.noNews': 'No fresh news in the last 3 days',
+  'home.realtyStocks': 'Realty stocks',
 }
 
 const DICTS = { en, hi }

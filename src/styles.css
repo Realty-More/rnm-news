@@ -2419,6 +2419,105 @@ a.ticker-item:hover {
   }
 }
 
+.tv-card {
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+  padding: 4px;
+}
+.tv {
+  width: 100%;
+}
+.tv-offline {
+  padding: 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--mute);
+  font-size: 14px;
+  text-align: center;
+}
+.realty-strip .tv {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.market-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.market-status .live-dot {
+  background: var(--mute);
+  animation: none;
+}
+.market-status.open .live-dot {
+  background: #2f9e5b;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.movers-note {
+  margin: -6px 0 12px;
+}
+.why-card {
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+}
+.why-card.sector {
+  border-left-color: var(--ink);
+}
+.why-card h3 {
+  font: 700 17px var(--cond);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.why-news {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.why-news li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14.5px;
+}
+.why-news li:last-child {
+  border-bottom: 0;
+}
+.why-news a {
+  font-weight: 600;
+}
+.why-news a svg {
+  display: inline;
+  vertical-align: -1px;
+  opacity: 0.6;
+}
+.no-news {
+  font-size: 13.5px;
+  color: var(--mute);
+}
+.market-disclaimer {
+  margin: 8px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--mute);
+}
+
 /* ---------- Larger screens ---------- */
 @media (min-width: 640px) {
   :root {

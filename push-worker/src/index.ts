@@ -9,6 +9,7 @@ import { sharePage } from './share.ts'
 import { parseHit, recordHit, statsPage, trending } from './stats.ts'
 import { ideas, keywords, overview, SEEDS, seoAudit } from './editor.ts'
 import { competitors } from './competitors.ts'
+import { marketNews } from './market.ts'
 
 export interface Env {
   SUBS: KVNamespace
@@ -26,7 +27,7 @@ export { buildNotices, isValidSubscription, matching, newSince } from './push.ts
 export type { NewsItem } from './site.ts'
 
 const MAX_BODY = 4096
-const STUDIO_CACHE = 2
+const STUDIO_CACHE = 4
 
 function cors(origin: string | null, env: Env): Record<string, string> {
   const allowed = env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
@@ -104,6 +105,15 @@ export default {
       if (pathname === '/vapid') return json({ publicKey: env.VAPID_PUBLIC_KEY }, 200, headers)
       const share = /^\/a\/(\d{1,9})$/.exec(pathname)
       if (share) return sharePage(env, Number(share[1]))
+      if (pathname === '/market/news') {
+        // Public: headlines only, cached 30 minutes for everyone.
+        const key = new Request(`${url.origin}/market/news?v=${STUDIO_CACHE}`)
+        const hit = await caches.default.match(key)
+        if (hit) return new Response(hit.body, { headers: { ...Object.fromEntries(hit.headers), ...headers } })
+        const res = json(await marketNews(env), 200, { 'Cache-Control': 'public, max-age=1800' })
+        ctx.waitUntil(caches.default.put(key, res.clone()))
+        return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
+      }
       if (pathname === '/trending') {
         const cache = caches.default
         const key = new Request(`${url.origin}/trending`)

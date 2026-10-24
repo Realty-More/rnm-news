@@ -19,6 +19,7 @@ const TABS: { to: string; label: TKey; icon: IconName; mobile: boolean }[] = [
   { to: '/categories', label: 'nav.categories', icon: 'grid', mobile: false },
   { to: '/videos', label: 'nav.videos', icon: 'play', mobile: true },
   { to: '/podcasts', label: 'nav.podcasts', icon: 'mic', mobile: true },
+  { to: '/markets', label: 'nav.markets', icon: 'chart', mobile: false },
   { to: '/saved', label: 'nav.saved', icon: 'bookmark', mobile: true },
 ]
 
@@ -184,6 +185,9 @@ export function Layout() {
           <div className="topbar-actions">
             <NavLink to="/search" className="icon-btn" aria-label="Search">
               <Icon name="search" />
+            </NavLink>
+            <NavLink to="/markets" className="icon-btn mobile-only" aria-label="Markets">
+              <Icon name="chart" />
             </NavLink>
             <NavLink to="/categories" className="icon-btn mobile-only" aria-label="Categories">
               <Icon name="grid" />

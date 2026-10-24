@@ -197,3 +197,27 @@ describe('our categories count as topics', async () => {
     expect(topicShares(items).people).toBe(100)
   })
 })
+
+describe('market news', async () => {
+  const { matchNews, STOCKS } = await import('./market.ts')
+  const now = Date.parse('2026-10-24T12:00:00Z')
+  const h = (title: string, source = 'Mint', hoursAgo = 2) => ({ title, source, link: `https://x/${title}`, date: new Date(now - hoursAgo * 3600000).toISOString() })
+  it('matches headlines that name the company, newest first, ours first, within 3 days', () => {
+    const r = matchNews([
+      h('Mahindra Lifespace Q2 net profit falls 66%', 'ET Realty', 5),
+      h('Mahindra Lifespaces posts strong H1 sales', 'RealtyNMore', 1),
+      h('DLF shares slip 2% after block deal'),
+      h('Old DLF story', 'Mint', 100),
+      h('Realty stocks drag Nifty; realty index falls 2.6%'),
+      h('Godrej Industries results'),
+    ], now)
+    const mah = r.stocks.find((s) => s.symbol === 'MAHLIFE')!
+    expect(mah.news.map((n) => n.source)).toEqual(['RealtyNMore', 'ET Realty'])
+    expect(r.stocks.find((s) => s.symbol === 'DLF')!.news.map((n) => n.title)).toEqual(['DLF shares slip 2% after block deal'])
+    expect(r.stocks.find((s) => s.symbol === 'GODREJPROP')!.news).toEqual([])
+    expect(r.sector.length).toBe(1)
+  })
+  it('covers the realty stocks shown in the app', () => {
+    expect(STOCKS.map((s) => s.symbol)).toEqual(expect.arrayContaining(['DLF', 'GODREJPROP', 'LODHA', 'OBEROIRLTY', 'PRESTIGE', 'PHOENIXLTD']))
+  })
+})

@@ -10,6 +10,7 @@ import { VideoCard, VideoPlayer } from '../components/Video.tsx'
 import { Icon } from '../components/Icon.tsx'
 import { WhatsAppCard } from '../components/WhatsAppCard.tsx'
 import { SocialLinks } from '../components/SiteFooter.tsx'
+import { REALTY_INDEX, REALTY_STOCKS, TvWidget, useTvTheme } from '../components/TvWidget.tsx'
 import { continueReading, onHistoryChange, readHistory, type HistoryItem } from '../lib/history.ts'
 import { invalidate, useAsync } from '../lib/hooks.ts'
 import { usePrefs } from '../lib/prefs.ts'
@@ -108,6 +109,8 @@ export function Home() {
         {prefs.onboarded &&
           prefs.cities.map((city) => <CitySection key={city} city={city} epoch={epoch} />)}
 
+        <RealtyStrip />
+
         <Trending epoch={epoch} />
 
         <VideoStrip onPlay={setPlaying} epoch={epoch} />
@@ -182,6 +185,36 @@ function ContinueReading() {
         </span>
       </div>
     </Link>
+  )
+}
+
+/** Scrolling realty stock prices (TradingView, BSE); the heading opens the Markets page. */
+function RealtyStrip() {
+  const t = useT()
+  const theme = useTvTheme()
+  return (
+    <section className="band realty-strip" aria-labelledby="stocks-strip-h">
+      <div className="section-head">
+        <h2 id="stocks-strip-h">
+          <Icon name="chart" size={18} /> {t('home.realtyStocks')}
+        </h2>
+        <Link to="/markets" className="see-all">
+          {t('nav.markets')} <Icon name="chevron" size={16} />
+        </Link>
+      </div>
+      <TvWidget
+        kind="ticker-tape"
+        height={46}
+        config={{
+          symbols: [REALTY_INDEX, ...REALTY_STOCKS].map((s) => ({ proName: s.symbol, title: s.name })),
+          showSymbolLogo: true,
+          isTransparent: true,
+          displayMode: 'adaptive',
+          colorTheme: theme,
+          locale: 'en',
+        }}
+      />
+    </section>
   )
 }
 

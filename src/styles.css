@@ -2429,6 +2429,10 @@ a.ticker-item:hover {
 .tv {
   width: 100%;
 }
+/* Match the widget documents' colour scheme so browsers don't paint a white backdrop behind them in dark mode. */
+.tv iframe {
+  color-scheme: light;
+}
 .tv-offline {
   padding: 18px;
   border-radius: var(--radius);
@@ -2516,6 +2520,34 @@ a.ticker-item:hover {
   background: var(--surface);
   font-size: 12.5px;
   color: var(--mute);
+}
+
+.nse-box {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--line);
+  background: var(--surface);
+}
+.nse-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.nse-head strong {
+  font: 700 15px var(--cond);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.nse-head span {
+  font-size: 12.5px;
+  color: var(--mute);
+}
+.nse-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ---------- Larger screens ---------- */

@@ -118,6 +118,8 @@ const hi = {
   'markets.sector': 'रियल्टी सेक्टर',
   'markets.noNews': 'पिछले 3 दिनों में कोई नई ख़बर नहीं',
   'home.realtyStocks': 'रियल्टी शेयर',
+  'markets.indices': 'इंडेक्स',
+  'markets.nseNote': 'NSE अपना डेटा फ़्री ऐप्स में दिखाने की इजाज़त नहीं देता। Nifty देखने के लिए NSE की वेबसाइट खोलें।',
 }
 
 export type TKey = keyof typeof hi
@@ -237,6 +239,8 @@ const en: Record<TKey, string> = {
   'markets.sector': 'Realty sector',
   'markets.noNews': 'No fresh news in the last 3 days',
   'home.realtyStocks': 'Realty stocks',
+  'markets.indices': 'Indices',
+  'markets.nseNote': 'NSE doesn’t allow its data in free app widgets. Tap to see Nifty on NSE’s own website.',
 }
 
 const DICTS = { en, hi }

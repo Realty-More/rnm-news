@@ -3,7 +3,7 @@
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
-import { REALTY_INDEX, REALTY_STOCKS, TvWidget, useTvTheme } from '../components/TvWidget.tsx'
+import { INDICES, NSE_LINKS, REALTY_INDEX, REALTY_STOCKS, TvWidget, useTvTheme } from '../components/TvWidget.tsx'
 import { ago, useT } from '../lib/i18n.ts'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
@@ -54,6 +54,40 @@ export function Markets() {
           </span>
         </p>
       </div>
+
+      <section className="band" aria-labelledby="indices-h">
+        <div className="section-head">
+          <h2 id="indices-h">{t('markets.indices')}</h2>
+        </div>
+        <div className="tv-card">
+          <TvWidget
+            kind="market-quotes"
+            height={INDICES.length * 40 + 90}
+            config={{
+              width: '100%',
+              height: INDICES.length * 40 + 90,
+              symbolsGroups: [{ name: 'Indices', symbols: INDICES.map((s) => ({ name: s.symbol, displayName: s.name })) }],
+              showSymbolLogo: true,
+              colorTheme: theme,
+              isTransparent: true,
+              locale: 'en',
+            }}
+          />
+        </div>
+        <div className="nse-box">
+          <div className="nse-head">
+            <strong>NSE · Nifty</strong>
+            <span>{t('markets.nseNote')}</span>
+          </div>
+          <div className="nse-links">
+            {NSE_LINKS.map((l) => (
+              <a key={l.label} className="btn ghost small" href={l.url} target="_blank" rel="noopener noreferrer">
+                {l.label} <Icon name="external" size={14} />
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="band" aria-labelledby="idx-h">
         <div className="section-head">

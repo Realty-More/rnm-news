@@ -10,7 +10,7 @@ import { VideoCard, VideoPlayer } from '../components/Video.tsx'
 import { Icon } from '../components/Icon.tsx'
 import { WhatsAppCard } from '../components/WhatsAppCard.tsx'
 import { SocialLinks } from '../components/SiteFooter.tsx'
-import { REALTY_INDEX, REALTY_STOCKS, TvWidget, useTvTheme } from '../components/TvWidget.tsx'
+import { REALTY_INDEX, REALTY_STOCKS, SENSEX, TvWidget, useTvTheme } from '../components/TvWidget.tsx'
 import { continueReading, onHistoryChange, readHistory, type HistoryItem } from '../lib/history.ts'
 import { invalidate, useAsync } from '../lib/hooks.ts'
 import { usePrefs } from '../lib/prefs.ts'
@@ -206,7 +206,7 @@ function RealtyStrip() {
         kind="ticker-tape"
         height={46}
         config={{
-          symbols: [REALTY_INDEX, ...REALTY_STOCKS].map((s) => ({ proName: s.symbol, title: s.name })),
+          symbols: [SENSEX, REALTY_INDEX, ...REALTY_STOCKS].map((s) => ({ proName: s.symbol, title: s.name })),
           showSymbolLogo: true,
           isTransparent: true,
           displayMode: 'adaptive',

@@ -20,6 +20,15 @@ export const REALTY_STOCKS = [
   { symbol: 'BSE:KOLTEPATIL', name: 'Kolte-Patil' },
 ]
 export const REALTY_INDEX = { symbol: 'BSE:REALTY', name: 'BSE Realty' }
+export const SENSEX = { symbol: 'BSE:SENSEX', name: 'Sensex' }
+export const INDICES = [SENSEX, REALTY_INDEX, { symbol: 'BSE:BSE500', name: 'BSE 500' }]
+
+/** NSE isn't licensed for free embedding, so NSE figures are links to NSE's own website. */
+export const NSE_LINKS = [
+  { label: 'Nifty 50', url: 'https://www.nseindia.com/market-data/live-equity-market?symbol=NIFTY%2050' },
+  { label: 'Nifty Realty', url: 'https://www.nseindia.com/market-data/live-equity-market?symbol=NIFTY%20REALTY' },
+  { label: 'NSE top gainers & losers', url: 'https://www.nseindia.com/market-data/top-gainers-losers' },
+]
 
 export function useTvTheme(): 'light' | 'dark' {
   const [pref] = useTheme()

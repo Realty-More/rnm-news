@@ -18,6 +18,15 @@ const PATHS = {
   download: 'M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
   trash: 'M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13',
+  settings: 'M4 7h10M18 7h2M4 17h4M12 17h8M16 4.5v5M10 14.5v5',
+  headphones: 'M4 15v-3a8 8 0 0 1 16 0v3M4 15a2 2 0 0 1 2-2h1v7H6a2 2 0 0 1-2-2zM20 15a2 2 0 0 0-2-2h-1v7h1a2 2 0 0 0 2-2z',
+  pause: 'M8 5v14M16 5v14',
+  stop: 'M6 6h12v12H6z',
+  text: 'M4 7V5h11v2M9.5 5v14M7.5 19h4M14 12v-1.5h6V12M17 10.5V19M15.5 19h3',
+  sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
+  arrowUp: 'M12 19V5M6 11l6-6 6 6',
+  history: 'M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4M12 8v4l3 2',
+  flame: 'M12 21c-3.9 0-7-2.9-7-6.7 0-2.7 1.7-4.6 3.2-6.1.4 1.7 1.3 2.8 2.3 3.3C10 8 11.2 5.2 13.7 3c.3 3.1 5.3 5.4 5.3 11.3 0 3.8-3.1 6.7-7 6.7z',
 } as const
 
 export type IconName = keyof typeof PATHS

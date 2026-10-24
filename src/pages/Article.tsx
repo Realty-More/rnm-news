@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
+import { ListenButton } from '../components/Listen.tsx'
 import { Kicker, PostCard, PostImg, primaryCategory } from '../components/PostCard.tsx'
 import { EmptyState, ErrorState } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDateTime, readingMinutes } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
+import { recordRead } from '../lib/history.ts'
+import { getOfflinePost } from '../lib/offline.ts'
+import { TEXT_SIZES, usePrefs } from '../lib/prefs.ts'
 import { getSaved, isSaved, onSavedChange, removeSaved, savePost } from '../lib/saved.ts'
 import { sanitizeArticle } from '../lib/sanitize.ts'
 import { shareLink } from '../lib/share.ts'
@@ -22,9 +26,9 @@ export function Article() {
     try {
       return await fetchPost(key, signal)
     } catch (err) {
-      // Offline: fall back to the copy saved on this device.
-      const saved = id ? await getSaved(Number(id)) : undefined
-      if (saved) return saved
+      // Offline: fall back to a copy on this device (saved, or auto-downloaded).
+      const local = id ? ((await getSaved(Number(id))) ?? (await getOfflinePost(Number(id)))) : undefined
+      if (local) return local
       throw err
     }
   })
@@ -36,6 +40,9 @@ export function Article() {
   }, [key])
 
   const html = useMemo(() => (res.data?.content ? sanitizeArticle(res.data.content) : ''), [res.data])
+  const articleRef = useRef<HTMLElement>(null)
+  const proseRef = useRef<HTMLDivElement>(null)
+  const progress = useReadProgress(articleRef, res.data ?? null)
 
   // Links to other realtynmore.com stories open inside the app.
   const onContentClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -78,7 +85,8 @@ export function Article() {
   }
 
   return (
-    <article className="page article">
+    <article className="page article" ref={articleRef}>
+      <div className="read-progress" aria-hidden="true" style={{ transform: `scaleX(${progress})` }} />
       <header className="article-head">
         <Kicker post={post} />
         <h1 className="article-title">{post.title}</h1>
@@ -86,7 +94,7 @@ export function Article() {
           <time dateTime={post.date}>{formatDateTime(post.date)}</time>
           {res.data?.content && ` · ${readingMinutes(res.data.content)} min read`}
         </p>
-        <ArticleActions post={res.data ?? null} fallback={post} />
+        <ArticleActions post={res.data ?? null} fallback={post} getText={() => proseRef.current?.innerText ?? ''} />
       </header>
 
       {post.image && (
@@ -96,7 +104,7 @@ export function Article() {
       )}
 
       {html ? (
-        <div className="prose" onClick={onContentClick} dangerouslySetInnerHTML={{ __html: html }} />
+        <div className="prose" ref={proseRef} onClick={onContentClick} dangerouslySetInnerHTML={{ __html: html }} />
       ) : res.loading ? (
         <div className="prose-loading">
           {[1, 2, 3, 4, 5].map((i) => (
@@ -121,7 +129,46 @@ export function Article() {
   )
 }
 
-function ArticleActions({ post, fallback }: { post: Post | null; fallback: Post }) {
+/** Share of the article scrolled past (0..1); also keeps reading history up to date. */
+function useReadProgress(ref: React.RefObject<HTMLElement | null>, post: Post | null): number {
+  const [p, setP] = useState(0)
+  const furthest = useRef(0)
+  useEffect(() => {
+    if (!post) return
+    furthest.current = 0
+    recordRead(post, 0)
+    let frame = 0
+    const measure = () => {
+      frame = 0
+      const el = ref.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const total = r.height - window.innerHeight * 0.6
+      const value = total > 0 ? Math.min(1, Math.max(0, -r.top / total)) : 1
+      furthest.current = Math.max(furthest.current, value)
+      setP(value)
+    }
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(measure)
+    }
+    const save = () => recordRead(post, furthest.current)
+    const timer = setInterval(save, 5000)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    document.addEventListener('visibilitychange', save)
+    measure()
+    return () => {
+      cancelAnimationFrame(frame)
+      clearInterval(timer)
+      window.removeEventListener('scroll', onScroll)
+      document.removeEventListener('visibilitychange', save)
+      save()
+    }
+  }, [post, ref])
+  return p
+}
+
+function ArticleActions({ post, fallback, getText }: { post: Post | null; fallback: Post; getText: () => string }) {
+  const [prefs, update] = usePrefs()
   const [saved, setSaved] = useState(false)
   useEffect(() => {
     const check = () => void isSaved(fallback.id).then(setSaved)
@@ -152,6 +199,15 @@ function ArticleActions({ post, fallback }: { post: Post | null; fallback: Post 
       </button>
       <button className="btn ghost" onClick={share}>
         <Icon name="share" size={18} /> Share
+      </button>
+      {post?.content && <ListenButton title={post.title} getText={getText} />}
+      <button
+        className="btn ghost icon-only"
+        onClick={() => update({ textSize: (prefs.textSize + 1) % TEXT_SIZES.length })}
+        aria-label="Change text size"
+        title="Text size"
+      >
+        <Icon name="text" size={18} />
       </button>
     </div>
   )

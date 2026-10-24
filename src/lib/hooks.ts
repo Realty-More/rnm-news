@@ -5,6 +5,11 @@ import { fetchPosts, type Post, type PostQuery } from './wp.ts'
 const memo = new Map<string, { at: number; value: unknown }>()
 const FRESH_MS = 3 * 60 * 1000
 
+/** Drops cached results whose key starts with `prefix`, so the next render fetches again. */
+export function invalidate(prefix: string) {
+  for (const k of memo.keys()) if (k.startsWith(prefix)) memo.delete(k)
+}
+
 export interface AsyncState<T> {
   data: T | undefined
   error: Error | null

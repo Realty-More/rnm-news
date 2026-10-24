@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom'
 import { PostCard } from '../components/PostCard.tsx'
 import { LoadMore, SkeletonList, EmptyState } from '../components/States.tsx'
 import { Icon } from '../components/Icon.tsx'
+import { PullToRefresh } from '../components/PullToRefresh.tsx'
 import { useInfinitePosts } from '../lib/hooks.ts'
 import { CURATED_CATEGORIES } from '../lib/wp.ts'
 import { usePageTitle } from './usePageTitle.ts'
@@ -45,7 +46,7 @@ export function PostFeed({ category, search }: { category?: number; search?: str
     return <EmptyState title={search ? `No stories found for “${search}”` : 'No stories here yet'}>{search && 'Try a shorter word, a city or a company name.'}</EmptyState>
   }
   return (
-    <>
+    <PullToRefresh onRefresh={feed.refresh}>
       {!search && feed.posts.length > 0 && (
         <div className="feed-tools">
           <button className="link-btn" onClick={feed.refresh} disabled={feed.loading}>
@@ -59,6 +60,6 @@ export function PostFeed({ category, search }: { category?: number; search?: str
         ))}
       </div>
       <LoadMore onMore={feed.loadMore} loading={feed.loading} done={feed.done} error={feed.error} onRetry={feed.reload} />
-    </>
+    </PullToRefresh>
   )
 }

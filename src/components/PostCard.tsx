@@ -23,7 +23,6 @@ export function PostImg({ image, sizes, eager = false, className = '' }: { image
       height={image.height}
       loading={eager ? 'eager' : 'lazy'}
       decoding="async"
-      crossOrigin="anonymous"
       onError={() => setFailed(true)}
     />
   )

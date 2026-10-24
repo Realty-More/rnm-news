@@ -15,6 +15,7 @@ const youtubeProxy = {
 export default defineConfig({
   // Relative base: works on GitHub Pages project paths and inside the Capacitor Android shell.
   base: './',
+  define: { __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev') },
   plugins: [
     react(),
     VitePWA({
@@ -67,8 +68,9 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'rnm-images',
-              expiration: { maxEntries: 250, maxAgeSeconds: 30 * 24 * 60 * 60, purgeOnQuotaError: true },
-              cacheableResponse: { statuses: [200] },
+              // Some uploads (e.g. .avif) are served without CORS headers, so opaque responses (status 0) are allowed.
+              expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60, purgeOnQuotaError: true },
+              cacheableResponse: { statuses: [0, 200] },
             },
           },
           {

@@ -47,7 +47,7 @@ Only GET requests to these hosts are cached. When a new version is deployed, the
 
 ## Hosting (GitHub Pages, free)
 
-Live at **<https://thekaushiktank.github.io/rnm-news/>**, from the repo <https://github.com/thekaushiktank/rnm-news> (public, with Pages set to build from GitHub Actions).
+Live at **<https://realty-more.github.io/rnm-news/>**, from the company repo <https://github.com/Realty-More/rnm-news> (organization **Realty & More**; public, with Pages set to build from GitHub Actions).
 
 `.github/workflows/deploy.yml` builds and publishes the app on every push to `main` and **every 30 minutes**, which also refreshes the YouTube video list. To publish a change, commit it and run `git push`. To redeploy by hand, open **Actions ▸ Build and deploy ▸ Run workflow**.
 

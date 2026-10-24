@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ErrorState, EmptyState } from '../components/States.tsx'
 import { Icon } from '../components/Icon.tsx'
 import { VideoCard, VideoPlayer } from '../components/Video.tsx'
@@ -13,7 +13,13 @@ export function Videos() {
   usePageTitle('Videos')
   const [shelf, setShelf] = useState<FeedKey>('latest')
   const [playing, setPlaying] = useState<Video | null>(null)
+  const [sort, setSort] = useState<'new' | 'views'>('new')
   const feed = useAsync(`yt:${shelf}`, () => loadFeed(shelf))
+  const sorted = useMemo(() => {
+    if (!feed.data || sort === 'new') return feed
+    const videos = [...feed.data.videos].sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
+    return { ...feed, data: { ...feed.data, videos } }
+  }, [feed, sort])
 
   return (
     <div className="page">
@@ -28,7 +34,17 @@ export function Videos() {
           </button>
         ))}
       </div>
-      <VideoGrid feed={feed} onPlay={setPlaying} moreUrl={FEEDS[shelf].playlistUrl} />
+      <div className="sort-row">
+        <div className="segmented small" role="radiogroup" aria-label="Sort videos">
+          <button role="radio" aria-checked={sort === 'new'} className={sort === 'new' ? 'on' : ''} onClick={() => setSort('new')}>
+            Newest
+          </button>
+          <button role="radio" aria-checked={sort === 'views'} className={sort === 'views' ? 'on' : ''} onClick={() => setSort('views')}>
+            <Icon name="flame" size={14} /> Most watched
+          </button>
+        </div>
+      </div>
+      <VideoGrid feed={sorted} onPlay={setPlaying} moreUrl={FEEDS[shelf].playlistUrl} />
       <VideoPlayer video={playing} onClose={() => setPlaying(null)} />
     </div>
   )

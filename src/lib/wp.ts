@@ -141,8 +141,11 @@ export interface PostQuery {
   page?: number
   perPage?: number
   category?: number
+  /** Posts in any of these categories (used by My Feed). */
+  categories?: number[]
   search?: string
   exclude?: number[]
+  withContent?: boolean
 }
 
 export async function fetchPosts(q: PostQuery = {}, signal?: AbortSignal): Promise<{ posts: Post[]; totalPages: number }> {
@@ -150,9 +153,10 @@ export async function fetchPosts(q: PostQuery = {}, signal?: AbortSignal): Promi
     per_page: String(q.perPage ?? 12),
     page: String(q.page ?? 1),
     _embed: 'wp:featuredmedia,wp:term',
-    _fields: LIST_FIELDS,
+    _fields: q.withContent ? FULL_FIELDS : LIST_FIELDS,
   })
-  if (q.category) params.set('categories', String(q.category))
+  const cats = q.category ? [q.category] : q.categories ?? []
+  if (cats.length) params.set('categories', cats.join(','))
   if (q.search) params.set('search', q.search)
   if (q.exclude?.length) params.set('exclude', q.exclude.join(','))
   const { data, totalPages } = await getJson<RawPost[]>(`/posts?${params}`, signal)

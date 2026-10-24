@@ -9,6 +9,9 @@ import './styles.css'
 import { Capacitor } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
 import App from './App.tsx'
+import { applyPrefs } from './lib/prefs.ts'
+
+applyPrefs()
 
 // Android back button: go back inside the app, exit only from the first screen.
 if (Capacitor.isNativePlatform()) {

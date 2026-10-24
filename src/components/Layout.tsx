@@ -3,6 +3,8 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Capacitor } from '@capacitor/core'
 import { useOnline } from '../lib/hooks.ts'
+import { refreshOffline } from '../lib/offline.ts'
+import { effectiveTheme, setTheme, useTheme } from '../lib/prefs.ts'
 import { Icon, type IconName } from './Icon.tsx'
 import { Toaster } from './Toast.tsx'
 
@@ -14,28 +16,6 @@ const TABS: { to: string; label: string; icon: IconName; mobile: boolean }[] = [
   { to: '/podcasts', label: 'Podcasts', icon: 'mic', mobile: true },
   { to: '/saved', label: 'Saved', icon: 'bookmark', mobile: true },
 ]
-
-type Theme = 'light' | 'dark'
-
-function useTheme(): [Theme, () => void] {
-  const system = (): Theme => (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme as Theme | undefined) ?? system())
-  const toggle = () => {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    document.documentElement.dataset.theme = next
-    try {
-      localStorage.setItem('rnm-theme', next)
-    } catch {
-      /* private mode */
-    }
-    setTheme(next)
-  }
-  useEffect(() => {
-    const meta = document.querySelector('meta[name="theme-color"]')
-    meta?.setAttribute('content', theme === 'dark' ? '#0E0E10' : '#141416')
-  }, [theme])
-  return [theme, toggle]
-}
 
 interface InstallEvent extends Event {
   prompt: () => Promise<void>
@@ -135,7 +115,9 @@ function UpdatePrompt() {
 }
 
 export function Layout() {
-  const [theme, toggleTheme] = useTheme()
+  const [themePref] = useTheme()
+  const theme = effectiveTheme(themePref)
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')
   const online = useOnline()
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -144,6 +126,17 @@ export function Layout() {
   useEffect(() => {
     if (!isArticle) window.scrollTo(0, 0)
   }, [pathname, isArticle])
+
+  // Keep the latest stories downloaded for offline reading (throttled inside).
+  useEffect(() => {
+    const run = () => void refreshOffline().catch(() => {})
+    const t = setTimeout(run, 4000)
+    window.addEventListener('online', run)
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('online', run)
+    }
+  }, [])
 
   return (
     <div className="app">
@@ -178,6 +171,9 @@ export function Layout() {
             <button className="icon-btn" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
               <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
             </button>
+            <NavLink to="/settings" className="icon-btn" aria-label="Settings">
+              <Icon name="settings" />
+            </NavLink>
           </div>
         </div>
       </header>

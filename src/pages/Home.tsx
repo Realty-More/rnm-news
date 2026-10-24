@@ -4,6 +4,7 @@ import { PostCard, PostImg } from '../components/PostCard.tsx'
 import { PullToRefresh } from '../components/PullToRefresh.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { TopicPicker } from '../components/TopicPicker.tsx'
+import { NotifyPrompt } from '../components/NotifyToggle.tsx'
 import { VideoCard, VideoPlayer } from '../components/Video.tsx'
 import { Icon } from '../components/Icon.tsx'
 import { continueReading, onHistoryChange, readHistory, type HistoryItem } from '../lib/history.ts'
@@ -54,6 +55,7 @@ export function Home() {
         </div>
 
         <ContinueReading />
+        {prefs.onboarded && <NotifyPrompt />}
 
         {latest.error && !latest.data ? (
           <ErrorState error={latest.error} onRetry={latest.reload} />

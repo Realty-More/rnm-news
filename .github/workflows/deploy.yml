@@ -30,6 +30,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Address of the push-worker (repo Settings ▸ Variables ▸ PUSH_API). Empty = alerts hidden.
+          VITE_PUSH_API: ${{ vars.PUSH_API }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

@@ -47,6 +47,8 @@ export default defineConfig({
         globIgnores: ['**/*{cyrillic,greek,vietnamese,latin-ext}*'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
+        // Breaking-news notifications (push and notificationclick handlers).
+        importScripts: ['push-sw.js'],
         runtimeCaching: [
           {
             // Read-only news API: fresh first, cached copy when offline or slow.

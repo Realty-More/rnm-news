@@ -1,0 +1,18 @@
+{
+  // Cloudflare Workers free plan. Deploy with: npx wrangler deploy
+  "name": "rnm-news-push",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "triggers": { "crons": ["*/10 * * * *"] },
+  "kv_namespaces": [
+    // Replaced with the real id after: npx wrangler kv namespace create SUBS
+    { "binding": "SUBS", "id": "local-dev-subs" }
+  ],
+  "vars": {
+    "VAPID_PUBLIC_KEY": "BA4nnOG7Awwqw50N7abJcS4V9vi8uq7Srw-hS5HEyNljhLSWByPvnM7JHvenvzBg2mAbUVLDngWXZxLIa-1vLwU",
+    "VAPID_SUBJECT": "mailto:desk@realtynmore.com",
+    "ALLOWED_ORIGINS": "https://realty-more.github.io,http://localhost:5173,http://localhost:4173",
+    "SITE_API": "https://realtynmore.com/wp-json/wp/v2"
+  }
+  // VAPID_PRIVATE_KEY is a secret: npx wrangler secret put VAPID_PRIVATE_KEY (locally it comes from .dev.vars)
+}

@@ -36,3 +36,10 @@ for name in ("logo.png", "logo_white.png"):
     logo.thumbnail((420, 240), Image.LANCZOS)
     logo.save(OUT / "brand" / name, optimize=True)
 print("icons written")
+
+# Monochrome status-bar badge for notifications (Android shows only the alpha shape).
+badge = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
+shape = icon.copy()
+shape.thumbnail((76, 76), Image.LANCZOS)
+badge.paste(Image.new("RGBA", shape.size, (255, 255, 255, 255)), ((96 - shape.width) // 2, (96 - shape.height) // 2), shape.split()[3])
+badge.save(OUT / "icons" / "badge-96.png", optimize=True)

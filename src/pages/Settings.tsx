@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Icon } from '../components/Icon.tsx'
 import { toast } from '../components/Toast.tsx'
 import { TopicPicker } from '../components/TopicPicker.tsx'
+import { NotifyToggle } from '../components/NotifyToggle.tsx'
+import { pushAvailable } from '../lib/push.ts'
 import { formatDateTime } from '../lib/format.ts'
 import { clearHistory } from '../lib/history.ts'
 import { offlineInfo, refreshOffline } from '../lib/offline.ts'
@@ -53,6 +55,13 @@ export function Settings() {
         <p className="set-help">Pick sections and cities. Home shows a “For You” feed built from them.</p>
         <TopicPicker topics={prefs.topics} cities={prefs.cities} onChange={(topics, cities) => update({ topics, cities, onboarded: true })} />
       </section>
+
+      {pushAvailable() && (
+        <section className="set-group">
+          <h2 className="set-title">Notifications</h2>
+          <NotifyToggle />
+        </section>
+      )}
 
       <section className="set-group">
         <h2 className="set-title">Appearance</h2>

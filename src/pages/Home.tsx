@@ -50,6 +50,8 @@ export function Home() {
   return (
     <PullToRefresh onRefresh={refresh}>
       <div className="page home">
+        <RealtyStrip />
+
         {fresh > 0 && (
           <button className="new-pill" onClick={refresh}>
             <Icon name="arrowUp" size={16} /> {t('home.newStories', { n: fresh })}
@@ -111,8 +113,6 @@ export function Home() {
 
         {prefs.onboarded &&
           prefs.cities.map((city) => <CitySection key={city} city={city} epoch={epoch} />)}
-
-        <RealtyStrip />
 
         <Trending epoch={epoch} />
 
@@ -197,27 +197,26 @@ function RealtyStrip() {
   const theme = useTvTheme()
   const nifty = useNiftyRealty()
   return (
-    <section className="band realty-strip" aria-labelledby="stocks-strip-h">
-      <div className="section-head">
-        <h2 id="stocks-strip-h">
-          <Icon name="chart" size={18} /> {t('home.realtyStocks')}
-        </h2>
-        <Link to="/markets" className="see-all">
-          {t('nav.markets')} <Icon name="chevron" size={16} />
-        </Link>
+    <section className="market-top" aria-label={t('home.realtyStocks')}>
+      <Link to="/markets" className="market-top-label">
+        <Icon name="chart" size={15} />
+        <span>{t('nav.markets')}</span>
+        <Icon name="chevron" size={14} />
+      </Link>
+      <div className="market-top-tape">
+        <TvWidget
+          kind="ticker-tape"
+          height={46}
+          config={{
+            symbols: [SENSEX, REALTY_INDEX, ...nifty, ...MORE_REALTY].map((s) => ({ proName: s.symbol, title: s.name })),
+            showSymbolLogo: true,
+            isTransparent: true,
+            displayMode: 'compact',
+            colorTheme: theme,
+            locale: 'en',
+          }}
+        />
       </div>
-      <TvWidget
-        kind="ticker-tape"
-        height={46}
-        config={{
-          symbols: [SENSEX, REALTY_INDEX, ...nifty, ...MORE_REALTY].map((s) => ({ proName: s.symbol, title: s.name })),
-          showSymbolLogo: true,
-          isTransparent: true,
-          displayMode: 'adaptive',
-          colorTheme: theme,
-          locale: 'en',
-        }}
-      />
     </section>
   )
 }

@@ -2893,6 +2893,46 @@ a.ticker-item:hover {
   }
 }
 
+/* Market strip at the top of Home */
+.market-top {
+  display: flex;
+  align-items: stretch;
+  margin: -18px calc(-1 * var(--gutter)) 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.market-top-label {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px 0 var(--gutter);
+  border-right: 1px solid var(--line);
+  font: 700 13px var(--cond);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.market-top-label svg:first-child {
+  color: var(--accent-deep);
+}
+.market-top-tape {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.market-top-tape .tv {
+  min-height: 46px !important;
+}
+@media (min-width: 960px) {
+  .market-top {
+    margin: -28px 0 22px;
+    border: 1px solid var(--line);
+    border-top: 0;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  }
+}
+
 /* ---------- Larger screens ---------- */
 @media (min-width: 640px) {
   :root {
@@ -3072,5 +3112,15 @@ a.ticker-item:hover {
   }
   .page.home > .new-pill {
     grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1180px) {
+  /* Strip spans the full width in row 1; the sidebar starts below it. */
+  .page.home > .market-top {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .page.home > .home-side {
+    grid-row: 2 / span 60;
   }
 }

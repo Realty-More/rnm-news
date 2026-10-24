@@ -97,6 +97,16 @@ const hi = {
   'time.min': '{n} मिनट पहले',
   'time.hour': '{n} घंटे पहले',
   'time.yesterday': 'कल',
+  'ticker.label': 'ताज़ा',
+  'footer.about': 'Realty & More: भारत के रियल एस्टेट की ख़बरें, इंटरव्यू, रिपोर्ट और वीडियो।',
+  'footer.sections': 'सेक्शन',
+  'footer.app': 'ऐप',
+  'footer.source': 'ख़बरें और फ़ोटो:',
+  'wa.title': 'WhatsApp पर R&M News',
+  'wa.text': 'रोज़ की बड़ी ख़बरें और वीडियो सीधे WhatsApp पर।',
+  'wa.follow': 'फ़ॉलो करें',
+  'home.followUs': 'हमें फ़ॉलो करें',
+  'home.mostWatched': 'सबसे ज़्यादा देखे गए',
 }
 
 export type TKey = keyof typeof hi
@@ -195,6 +205,16 @@ const en: Record<TKey, string> = {
   'time.min': '{n} min ago',
   'time.hour': '{n}h ago',
   'time.yesterday': 'Yesterday',
+  'ticker.label': 'Latest',
+  'footer.about': 'Realty & More: Indian real estate news, interviews, reports and videos.',
+  'footer.sections': 'Sections',
+  'footer.app': 'App',
+  'footer.source': 'News and photos from',
+  'wa.title': 'R&M News on WhatsApp',
+  'wa.text': 'Top stories and videos every day, right in WhatsApp.',
+  'wa.follow': 'Follow',
+  'home.followUs': 'Follow us',
+  'home.mostWatched': 'Most watched',
 }
 
 const DICTS = { en, hi }

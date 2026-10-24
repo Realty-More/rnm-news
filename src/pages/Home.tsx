@@ -8,6 +8,8 @@ import { TopicPicker } from '../components/TopicPicker.tsx'
 import { NotifyPrompt } from '../components/NotifyToggle.tsx'
 import { VideoCard, VideoPlayer } from '../components/Video.tsx'
 import { Icon } from '../components/Icon.tsx'
+import { WhatsAppCard } from '../components/WhatsAppCard.tsx'
+import { SocialLinks } from '../components/SiteFooter.tsx'
 import { continueReading, onHistoryChange, readHistory, type HistoryItem } from '../lib/history.ts'
 import { invalidate, useAsync } from '../lib/hooks.ts'
 import { usePrefs } from '../lib/prefs.ts'
@@ -110,10 +112,25 @@ export function Home() {
 
         <VideoStrip onPlay={setPlaying} epoch={epoch} />
 
+        <div className="mobile-only-block">
+          <WhatsAppCard />
+        </div>
+
         {sections.map((slug) => {
           const cat = CURATED_CATEGORIES.find((c) => c.slug === slug)!
           return <CategorySection key={slug} id={cat.id} slug={cat.slug} label={cat.label} epoch={epoch} />
         })}
+
+        <aside className="home-side" aria-label="More">
+          <div className="side-sticky">
+            <MostWatched onPlay={setPlaying} />
+            <WhatsAppCard />
+            <section className="side-box">
+              <h2 className="side-title">{t('home.followUs')}</h2>
+              <SocialLinks />
+            </section>
+          </div>
+        </aside>
 
         <VideoPlayer video={playing} onClose={() => setPlaying(null)} />
       </div>
@@ -165,6 +182,34 @@ function ContinueReading() {
         </span>
       </div>
     </Link>
+  )
+}
+
+/** Desktop sidebar: the channel's most-viewed recent videos (real YouTube view counts). */
+function MostWatched({ onPlay }: { onPlay: (v: Video) => void }) {
+  const t = useT()
+  const feed = useAsync('yt:latest', () => loadFeed('latest'))
+  const top = [...(feed.data?.videos ?? [])].sort((a, b) => (b.views ?? 0) - (a.views ?? 0)).slice(0, 4)
+  if (!top.length) return null
+  return (
+    <section className="side-box">
+      <h2 className="side-title">
+        <Icon name="flame" size={16} /> {t('home.mostWatched')}
+      </h2>
+      <ol className="side-videos">
+        {top.map((v) => (
+          <li key={v.id}>
+            <button onClick={() => onPlay(v)}>
+              <img src={v.thumb} alt="" loading="lazy" />
+              <span>
+                <span className="side-video-title">{v.title}</span>
+                <span className="meta">{v.views?.toLocaleString('en-IN')} views</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 

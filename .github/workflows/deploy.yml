@@ -33,6 +33,8 @@ jobs:
         env:
           # Address of the push-worker (repo Settings ▸ Variables ▸ PUSH_API). Empty = alerts hidden.
           VITE_PUSH_API: ${{ vars.PUSH_API }}
+          # WhatsApp Channel invite link (repo variable WHATSAPP_CHANNEL). Empty = join buttons hidden.
+          VITE_WHATSAPP_CHANNEL: ${{ vars.WHATSAPP_CHANNEL }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

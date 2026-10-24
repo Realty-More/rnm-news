@@ -9,6 +9,8 @@ import { syncPushFilters } from '../lib/push.ts'
 import { trackScreen } from '../lib/stats.ts'
 import { Icon, type IconName } from './Icon.tsx'
 import { Toaster } from './Toast.tsx'
+import { Ticker } from './Ticker.tsx'
+import { SiteFooter } from './SiteFooter.tsx'
 import { useT, type TKey } from '../lib/i18n.ts'
 
 const TABS: { to: string; label: TKey; icon: IconName; mobile: boolean }[] = [
@@ -196,6 +198,8 @@ export function Layout() {
         </div>
       </header>
 
+      {!isArticle && !pathname.startsWith('/studio') && <Ticker />}
+
       {!online && (
         <div className="offline-bar" role="status">
           <Icon name="offline" size={16} /> {t('offline.bar')}
@@ -207,17 +211,9 @@ export function Layout() {
         <Outlet />
       </main>
 
-      <footer className="site-footer">
-        <p>
-          News, images and videos are published by{' '}
-          <a href="https://realtynmore.com" target="_blank" rel="noopener noreferrer">
-            RealtyNMore
-          </a>
-          . Videos via YouTube.
-        </p>
-      </footer>
+      <SiteFooter />
 
-      <nav className="tabbar" aria-label="Main">
+      <nav className={`tabbar ${isArticle ? 'reading' : ''}`} aria-label="Main">
         {TABS.filter((tab) => tab.mobile).map((tab) => (
           <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="tab">
             <Icon name={tab.icon} />

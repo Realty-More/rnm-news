@@ -9,6 +9,10 @@ import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, ownerKey, studio, unlock } from '../lib/owner.ts'
 import { usePageTitle } from './usePageTitle.ts'
+import { WHATSAPP_CHANNEL, whatsappShareUrl } from '../lib/config.ts'
+import { smartLink } from '../lib/stats.ts'
+import { loadFeed } from '../lib/videos.ts'
+import { fetchPosts } from '../lib/wp.ts'
 
 interface Overview {
   subscribers: number
@@ -59,6 +63,7 @@ const TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'ideas', label: 'What to write' },
   { key: 'rivals', label: 'Competitors' },
+  { key: 'whatsapp', label: 'WhatsApp post' },
   { key: 'keywords', label: 'Keywords' },
   { key: 'seo', label: 'SEO check' },
 ] as const
@@ -131,6 +136,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'overview' && <OverviewTab />}
       {tab === 'ideas' && <IdeasTab />}
       {tab === 'rivals' && <RivalsTab />}
+      {tab === 'whatsapp' && <WhatsAppTab />}
       {tab === 'keywords' && <KeywordsTab />}
       {tab === 'seo' && <SeoTab />}
     </div>
@@ -396,6 +402,102 @@ function RivalsTab() {
       <p className="panel-note">
         Sources: {d.sources.map((s) => `${s.name} (${s.basis})`).join('; ')}. Only public feeds, sitemaps and open APIs are used. Sites that block automated reading (e.g. Realty Plus, 99acres, Housing.com) are not included.
       </p>
+    </>
+  )
+}
+
+/** Builds a ready-to-paste WhatsApp post (channel, community or broadcast list) from real stories and videos. */
+function WhatsAppTab() {
+  const stories = useAsync('studio:wa:stories', (s) => fetchPosts({ perPage: 15 }, s))
+  const videos = useAsync('yt:latest', () => loadFeed('latest'))
+  const [picked, setPicked] = useState<number[] | null>(null)
+  const [pickedVideos, setPickedVideos] = useState<string[]>([])
+  const [edited, setEdited] = useState<string | null>(null)
+
+  const posts = stories.data?.posts ?? []
+  const chosen = picked ?? posts.slice(0, 5).map((p) => p.id)
+  const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
+
+  const today = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())
+  const lines: string[] = [`🏠 *R&M News | ${today}*`, '']
+  posts
+    .filter((p) => chosen.includes(p.id))
+    .forEach((p, i) => lines.push(`${i + 1}. *${p.title}*`, `👉 ${smartLink(p)}`, ''))
+  ;(videos.data?.videos ?? [])
+    .filter((v) => pickedVideos.includes(v.id))
+    .forEach((v) => lines.push(`▶️ *${v.title}*`, v.url, ''))
+  lines.push('📲 Read more in the R&M News app: https://realty-more.github.io/rnm-news/')
+  if (WHATSAPP_CHANNEL) lines.push(`🔔 Follow our WhatsApp Channel: ${WHATSAPP_CHANNEL}`)
+  const generated = lines.join('\n')
+  const message = edited ?? generated
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(message)
+      toast('Post copied. Paste it in your WhatsApp Channel.')
+    } catch {
+      toast('Could not copy')
+    }
+  }
+
+  return (
+    <>
+      <Panel title="How to reach 1,000+ people for free" note="Post once in a WhatsApp Channel and every follower gets it. No per-message cost and no ban risk.">
+        <ol className="steps">
+          <li>WhatsApp → <b>Updates</b> → <b>+</b> → <b>Create channel</b> (one time; use the company number).</li>
+          <li>Pick stories and videos below, then tap <b>Copy post</b>.</li>
+          <li>Open your channel and paste. For a video, attach the video file from your gallery and paste this text as its caption.</li>
+          <li>Share the channel link in the app, on Instagram and in your email signature so people follow it.</li>
+        </ol>
+      </Panel>
+
+      <Panel title="Pick stories" note="The latest 5 are selected; tap to change.">
+        {stories.error && !stories.data ? (
+          <ErrorState error={stories.error} onRetry={stories.reload} />
+        ) : (
+          <ul className="pick-list">
+            {posts.map((p) => (
+              <li key={p.id}>
+                <label>
+                  <input type="checkbox" checked={chosen.includes(p.id)} onChange={() => (setPicked(toggle(chosen, p.id)), setEdited(null))} />
+                  <span>{p.title}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel title="Add videos (optional)">
+        <ul className="pick-list">
+          {(videos.data?.videos ?? []).slice(0, 8).map((v) => (
+            <li key={v.id}>
+              <label>
+                <input type="checkbox" checked={pickedVideos.includes(v.id)} onChange={() => (setPickedVideos(toggle(pickedVideos, v.id)), setEdited(null))} />
+                <span>▶️ {v.title}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+
+      <Panel title="Your post" note="Story links show a photo-and-title preview in WhatsApp and open in the app. You can edit the text before copying.">
+        <textarea className="wa-compose" value={message} onChange={(e) => setEdited(e.target.value)} rows={14} aria-label="WhatsApp post text" />
+        <div className="action-row">
+          <button className="btn" onClick={copy}>
+            <Icon name="share" size={16} /> Copy post
+          </button>
+          <a className="btn ghost wa-share" href={whatsappShareUrl(message)} target="_blank" rel="noopener noreferrer">
+            <Icon name="whatsapp" size={16} /> Open in WhatsApp
+          </a>
+          {edited !== null && (
+            <button className="btn ghost" onClick={() => setEdited(null)}>
+              Reset
+            </button>
+          )}
+        </div>
+        <p className="panel-note">{message.length.toLocaleString('en-IN')} characters</p>
+      </Panel>
     </>
   )
 }

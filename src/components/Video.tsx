@@ -5,6 +5,7 @@ import type { Video } from '../lib/youtubeFeed.ts'
 import { useOnline } from '../lib/hooks.ts'
 import { Icon } from './Icon.tsx'
 import { toast } from './Toast.tsx'
+import { whatsappShareUrl } from '../lib/config.ts'
 
 export function VideoCard({ video, onPlay, wide = false }: { video: Video; onPlay: (v: Video) => void; wide?: boolean }) {
   return (
@@ -79,6 +80,9 @@ export function VideoPlayer({ video, onClose }: { video: Video | null; onClose: 
             <button className="btn" onClick={share}>
               <Icon name="share" size={18} /> Share
             </button>
+            <a className="btn ghost wa-share" href={whatsappShareUrl(`*${video.title}*\n\n${video.url}`)} target="_blank" rel="noopener noreferrer">
+              <Icon name="whatsapp" size={18} /> WhatsApp
+            </a>
             <a className="btn ghost" href={video.url} target="_blank" rel="noopener noreferrer">
               <Icon name="external" size={18} /> Watch on YouTube
             </a>

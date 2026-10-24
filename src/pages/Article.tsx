@@ -10,6 +10,8 @@ import { formatDateTime, readingMinutes } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { recordRead } from '../lib/history.ts'
 import { smartLink, trackOpen } from '../lib/stats.ts'
+import { whatsappShareUrl } from '../lib/config.ts'
+import { WhatsAppCard } from '../components/WhatsAppCard.tsx'
 import { getOfflinePost } from '../lib/offline.ts'
 import { TEXT_SIZES, usePrefs } from '../lib/prefs.ts'
 import { getSaved, isSaved, onSavedChange, removeSaved, savePost } from '../lib/saved.ts'
@@ -142,7 +144,13 @@ export function Article() {
         </Link>
       )}
 
+      <WhatsAppCard />
+
       <Related post={post} />
+
+      <div className="article-bar">
+        <ArticleActions post={res.data ?? null} fallback={post} getText={() => proseRef.current?.innerText ?? ''} compact />
+      </div>
     </article>
   )
 }
@@ -186,7 +194,7 @@ function useReadProgress(ref: React.RefObject<HTMLElement | null>, post: Post | 
   return p
 }
 
-function ArticleActions({ post, fallback, getText }: { post: Post | null; fallback: Post; getText: () => string }) {
+function ArticleActions({ post, fallback, getText, compact = false }: { post: Post | null; fallback: Post; getText: () => string; compact?: boolean }) {
   const [prefs, update] = usePrefs()
   const t = useT()
   const [saved, setSaved] = useState(false)
@@ -213,13 +221,16 @@ function ArticleActions({ post, fallback, getText }: { post: Post | null; fallba
   }
 
   return (
-    <div className="action-row">
+    <div className={`action-row ${compact ? 'compact' : ''}`}>
       <button className={`btn ghost ${saved ? 'on' : ''}`} onClick={toggleSave} aria-pressed={saved}>
         <Icon name="bookmark" size={18} filled={saved} /> {saved ? t('article.saved') : t('article.save')}
       </button>
       <button className="btn ghost" onClick={share}>
         <Icon name="share" size={18} /> {t('article.share')}
       </button>
+      <a className="btn ghost wa-share" href={whatsappShareUrl(`*${fallback.title}*\n\n${smartLink(fallback)}`)} target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp">
+        <Icon name="whatsapp" size={18} /> {compact ? '' : 'WhatsApp'}
+      </a>
       {post?.content && <ListenButton title={post.title} getText={getText} />}
       {prefs.lang === 'hi' && (
         <a className="btn ghost" href={hindiUrl(fallback.link)} target="_blank" rel="noopener noreferrer">

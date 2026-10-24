@@ -45,13 +45,11 @@ Other commands:
 
 Only GET requests to these hosts are cached. When a new version is deployed, the app shows a "New version is ready · Reload" bar.
 
-## Hosting (GitHub Pages, free) — not set up yet
+## Hosting (GitHub Pages, free)
 
-`.github/workflows/deploy.yml` builds and publishes the app on every push to `main` and **every 30 minutes**, which also refreshes the YouTube video list.
+Live at **<https://thekaushiktank.github.io/rnm-news/>**, from the repo <https://github.com/thekaushiktank/rnm-news> (public, with Pages set to build from GitHub Actions).
 
-1. Create a GitHub repository (Pages is free on public repositories) and push this folder to `main`.
-2. In the repo, go to **Settings ▸ Pages ▸ Build and deployment ▸ Source** and choose **GitHub Actions**.
-3. The app will be live at `https://<user>.github.io/<repo>/`. Phones can install it from there (HTTPS is required for installing).
+`.github/workflows/deploy.yml` builds and publishes the app on every push to `main` and **every 30 minutes**, which also refreshes the YouTube video list. To publish a change, commit it and run `git push`. To redeploy by hand, open **Actions ▸ Build and deploy ▸ Run workflow**.
 
 Note: GitHub pauses scheduled workflows in a public repository after 60 days with no commits. Any push, or re-enabling the workflow in the **Actions** tab, restarts it.
 

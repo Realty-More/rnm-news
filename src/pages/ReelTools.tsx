@@ -6,7 +6,7 @@ import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDateTime } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
-import { ownerKey, ownerRole, studio, studioPost } from '../lib/owner.ts'
+import { hasFullAccess, ownerKey, studio, studioPost } from '../lib/owner.ts'
 import { PUSH_API } from '../lib/push.ts'
 import { clock, dailyScript, pctChange, scriptDoc, signed, timeline, weeklyScript, weeklyTables, type Daily, type Scene, type Script, type Weekly } from '../lib/reelScript.ts'
 import { Panel } from './StudioTools.tsx'
@@ -310,7 +310,7 @@ function References() {
   const res = useAsync('studio:reel-refs', (s) => studio<{ refs: Ref[] }>('reels/refs', undefined, s))
   const [kind, setKind] = useState('daily')
   const [busy, setBusy] = useState(false)
-  const isOwner = ownerRole()?.role === 'owner'
+  const isOwner = hasFullAccess()
   const upload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = [...(e.target.files ?? [])]
     e.target.value = ''
@@ -406,7 +406,7 @@ function References() {
 function FetchDay() {
   const [day, setDay] = useState('')
   const [busy, setBusy] = useState(false)
-  if (ownerRole()?.role !== 'owner') return null
+  if (!hasFullAccess()) return null
   const run = async () => {
     setBusy(true)
     try {

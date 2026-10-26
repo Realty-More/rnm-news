@@ -7,7 +7,7 @@ import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDateTime } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
-import { ownerRole, studio, studioPost } from '../lib/owner.ts'
+import { hasFullAccess, studio, studioPost } from '../lib/owner.ts'
 
 export interface Contact {
   id: number
@@ -96,7 +96,7 @@ export function MagazineTab() {
   const [courier, setCourier] = useState('')
   const [editing, setEditing] = useState<Contact | Omit<Contact, 'id'> | null>(null)
   const [busy, setBusy] = useState(false)
-  const isOwner = ownerRole()?.role === 'owner'
+  const isOwner = hasFullAccess()
 
   const status = useMemo(() => new Map((disp.data?.rows ?? []).map((d) => [d.id, d])), [disp.data])
   const contacts = book.data?.contacts ?? []

@@ -128,17 +128,18 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   }, [])
   // Owner tools (business numbers, traffic, team, notifications) only for the owner's login;
   // staff tools (check-in and daily report) only for team logins. Palash Roy is not tracked as staff.
-  const isOwner = me?.role !== 'editor'
-  const visible = TABS.filter((t) => (isOwner ? !('staff' in t) : !('owner' in t)))
+  // Full access (owner, or staff the owner trusts) sees owner sections; only the owner skips staff tools.
+  const isFull = me?.role === 'owner' || me?.role === 'admin' || !me
+  const visible = TABS.filter((t) => ('owner' in t ? isFull : 'staff' in t ? me?.role !== 'owner' : true))
   // Employees land on their own day; the owner on the overview.
   const tab = (visible.find((t) => t.key === params.get('tab'))?.key ?? (me?.role === 'editor' ? 'myday' : 'overview')) as Tab
   const group = TABS.find((t) => t.key === tab)!.group
   return (
     <div className="page studio">
       <div className="page-head studio-head">
-        {me?.role === 'editor' ? (
+        {me?.role === 'editor' || me?.role === 'admin' ? (
           <div>
-            <span className="owner-badge">Team · {me.name}</span>
+            <span className="owner-badge">{me.role === 'admin' ? `Full access · ${me.name}` : `Team · ${me.name}`}</span>
             <h1>Content Studio</h1>
             <p className="page-sub">Real data from the app, realtynmore.com, Google and other news sites</p>
           </div>

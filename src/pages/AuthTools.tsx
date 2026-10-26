@@ -153,7 +153,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
   )
 }
 
-interface Account { phone: string; name: string; role: 'owner' | 'editor'; status: 'pending' | 'active' | 'rejected'; created: string; approved: string | null; lastLogin: string | null }
+interface Account { phone: string; name: string; role: 'owner' | 'admin' | 'editor'; status: 'pending' | 'active' | 'rejected'; created: string; approved: string | null; lastLogin: string | null }
 
 const showPhone = (p: string) => `+91 ${p.slice(0, 5)} ${p.slice(5)}`
 
@@ -162,14 +162,22 @@ export function AccountsPanel() {
   const res = useAsync('studio:accounts', (s) => studio<{ accounts: Account[] }>('accounts', undefined, s))
   const [busy, setBusy] = useState<string | null>(null)
   const [newPw, setNewPw] = useState<{ name: string; password: string } | null>(null)
-  const act = async (a: Account, action: 'approve' | 'reject' | 'remove' | 'reset') => {
-    const ask = { reject: `Turn down ${a.name}'s request?`, remove: `Remove ${a.name}'s account? They will be logged out.`, reset: `Set a new password for ${a.name}? They will be logged out everywhere.`, approve: '' }[action]
+  const iAmOwner = ownerRole()?.role === 'owner'
+  const act = async (a: Account, action: 'approve' | 'reject' | 'remove' | 'reset' | 'grant' | 'ungrant') => {
+    const ask = {
+      reject: `Turn down ${a.name}'s request?`,
+      remove: `Remove ${a.name}'s account? They will be logged out.`,
+      reset: `Set a new password for ${a.name}? They will be logged out everywhere.`,
+      grant: `Give ${a.name} full access? They will see everything you see: business numbers, traffic, team, attendance and settings.`,
+      approve: '',
+      ungrant: '',
+    }[action]
     if (ask && !window.confirm(ask)) return
     setBusy(a.phone + action)
     try {
       const r = await studioPost<{ password?: string }>(`accounts/${action}`, { phone: a.phone })
       if (r.password) setNewPw({ name: a.name, password: r.password })
-      else toast(action === 'approve' ? `${a.name} can now log in` : 'Done')
+      else toast(action === 'approve' ? `${a.name} can now log in` : action === 'grant' ? `${a.name} now has full access` : 'Done')
       res.reload()
     } catch (e) {
       toast((e as Error).message)
@@ -234,6 +242,7 @@ export function AccountsPanel() {
                 <div>
                   <strong>
                     {a.name} {a.role === 'owner' && <span className="acct-tag">Owner</span>}
+                    {a.role === 'admin' && <span className="acct-tag">Full access</span>}
                     {a.status === 'rejected' && <span className="acct-tag off">Declined</span>}
                   </strong>
                   <small>
@@ -246,7 +255,12 @@ export function AccountsPanel() {
                       New password
                     </button>
                   )}
-                  {a.role !== 'owner' && (
+                  {iAmOwner && a.status === 'active' && a.role !== 'owner' && (
+                    <button className="btn ghost small" disabled={!!busy} onClick={() => act(a, a.role === 'admin' ? 'ungrant' : 'grant')}>
+                      {a.role === 'admin' ? 'Team access' : 'Full access'}
+                    </button>
+                  )}
+                  {a.role !== 'owner' && (iAmOwner || a.role !== 'admin') && (
                     <button className="btn ghost small" disabled={!!busy} onClick={() => act(a, 'remove')} aria-label={`Remove ${a.name}`}>
                       <Icon name="trash" size={15} />
                     </button>

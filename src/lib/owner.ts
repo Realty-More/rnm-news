@@ -5,7 +5,13 @@ import { ensureSubscription, PUSH_API } from './push.ts'
 const KEY = 'rnm-owner-key'
 const ROLE = 'rnm-owner-role'
 
-export type Role = 'owner' | 'editor'
+export type Role = 'owner' | 'admin' | 'editor'
+
+/** Owner (Palash Roy) or staff with full access: sees every owner section. */
+export const hasFullAccess = () => {
+  const r = ownerRole()?.role
+  return r === 'owner' || r === 'admin'
+}
 
 export function ownerKey(): string | null {
   try {

@@ -7,7 +7,7 @@ import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDateTime } from '../lib/format.ts'
 import { invalidate, useAsync } from '../lib/hooks.ts'
-import { ownerRole, studio, studioPost } from '../lib/owner.ts'
+import { hasFullAccess, studio, studioPost } from '../lib/owner.ts'
 import { Panel } from './StudioTools.tsx'
 
 interface Row { id: number; title: string; link: string; section: string; published: string; views: number; gain24: number | null; gain7: number | null; app: number }
@@ -53,7 +53,7 @@ export function WebsiteTab() {
   const res = useAsync('studio:web-traffic', (s) => studio<Traffic>('web/traffic', undefined, s))
   const [view, setView] = useState<'day' | 'week' | 'all' | 'app'>('all')
   const [busy, setBusy] = useState(false)
-  const isOwner = ownerRole()?.role === 'owner'
+  const isOwner = hasFullAccess()
 
   const refresh = async () => {
     setBusy(true)

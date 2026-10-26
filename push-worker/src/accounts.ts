@@ -13,7 +13,7 @@ const MAX_FAILS = 8
 const DAY = 86400000
 
 type Status = 'pending' | 'active' | 'rejected'
-interface Account { phone: string; name: string; role: 'owner' | 'editor'; status: Status; salt: string; hash: string; created_at: string; approved_at: string | null; last_login: string | null }
+interface Account { phone: string; name: string; role: 'owner' | 'admin' | 'editor'; status: Status; salt: string; hash: string; created_at: string; approved_at: string | null; last_login: string | null }
 
 /** Indian mobile number → 10 digits ("+91 98100 79064" → "9810079064"), or null. */
 export function normPhone(v: unknown): string | null {
@@ -130,14 +130,14 @@ export async function sessionWho(env: Env, token: string): Promise<Who | null> {
     "SELECT a.phone, a.name, a.role FROM sessions s JOIN accounts a ON a.phone = s.phone WHERE s.token_hash = ? AND s.expires_at > ? AND a.status = 'active'",
   )
     .bind(await sha256hex(token), new Date().toISOString())
-    .first<{ phone: string; name: string; role: 'owner' | 'editor' }>()
+    .first<{ phone: string; name: string; role: 'owner' | 'admin' | 'editor' }>()
   if (!row) return null
-  return row.role === 'owner' ? { role: 'owner', name: row.name, phone: row.phone } : { role: 'editor', name: row.name, id: `ph:${row.phone}`, phone: row.phone }
+  return row.role === 'owner' ? { role: 'owner', name: row.name, phone: row.phone } : { role: row.role, name: row.name, id: `ph:${row.phone}`, phone: row.phone }
 }
 
 /** Staff with an active account, in the shape the team lists use. */
 export async function accountStaff(env: Env): Promise<{ id: string; name: string; active: boolean }[]> {
-  const { results } = await env.DB.prepare("SELECT phone, name FROM accounts WHERE role = 'editor' AND status = 'active' ORDER BY name").all<{ phone: string; name: string }>()
+  const { results } = await env.DB.prepare("SELECT phone, name FROM accounts WHERE role IN ('editor', 'admin') AND status = 'active' ORDER BY name").all<{ phone: string; name: string }>()
   return results.map((r) => ({ id: `ph:${r.phone}`, name: r.name, active: true }))
 }
 
@@ -161,6 +161,8 @@ export async function manageAccount(env: Env, action: string, body: unknown, who
   if (!a) throw new Error('Account not found.')
   if (a.role === 'owner' && action !== 'reset') throw new Error('The owner account can’t be changed here.')
   if (a.role === 'owner' && who.phone !== phone) throw new Error('Only the owner can reset the owner password.')
+  // Only the owner can change a full-access account or hand out full access.
+  if ((a.role === 'admin' || action === 'grant' || action === 'ungrant') && who.role !== 'owner') throw new Error('Only the owner can change full access.')
   const endSessions = env.DB.prepare('DELETE FROM sessions WHERE phone = ?').bind(phone)
   switch (action) {
     case 'approve':
@@ -171,6 +173,10 @@ export async function manageAccount(env: Env, action: string, body: unknown, who
       return { ok: true }
     case 'remove':
       await env.DB.batch([env.DB.prepare('DELETE FROM accounts WHERE phone = ?').bind(phone), endSessions])
+      return { ok: true }
+    case 'grant':
+    case 'ungrant':
+      await env.DB.prepare('UPDATE accounts SET role = ? WHERE phone = ?').bind(action === 'grant' ? 'admin' : 'editor', phone).run()
       return { ok: true }
     case 'reset': {
       const password = randomPassword()

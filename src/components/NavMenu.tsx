@@ -168,7 +168,7 @@ function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
             )}
             <span>
               <strong>{who.name}</strong>
-              <small>{who.role === 'owner' ? 'Founder & Editor · Content Studio' : `${t('menu.team')} · Content Studio`}</small>
+              <small>{who.role === 'owner' ? 'Founder & Editor · Content Studio' : who.role === 'admin' ? 'Full access · Content Studio' : `${t('menu.team')} · Content Studio`}</small>
             </span>
           </Link>
           <button className="btn ghost small" onClick={logout}>

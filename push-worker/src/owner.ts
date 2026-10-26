@@ -11,8 +11,12 @@ import { sessionWho } from './accounts.ts'
 export const OWNER_NAME = 'Palash Roy'
 export const OWNER_TITLE = 'Founder & Editor'
 
+/**
+ * owner: Palash Roy. admin: "full access" staff the owner trusts with every owner section
+ * (only the owner can give or take it away). editor: team member.
+ */
 export interface Who {
-  role: 'owner' | 'editor'
+  role: 'owner' | 'admin' | 'editor'
   name: string
   id?: string
   /** Set when signed in with a mobile number and password. */
@@ -24,7 +28,12 @@ interface Editor {
   created: string
   lastUsed?: string
   active: boolean
+  /** Full access: sees and does everything the owner does. */
+  admin?: boolean
 }
+
+/** Owner or full-access staff: allowed into the owner sections. */
+export const full = (who: Who) => who.role === 'owner' || who.role === 'admin'
 
 export async function sha256hex(s: string): Promise<string> {
   const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
@@ -48,7 +57,7 @@ export async function authenticate(key: string, env: Env, ctx: ExecutionContext)
   if (!ed?.active) return null
   // Note last use at most once an hour (KV writes are limited on the free plan).
   if (!ed.lastUsed || Date.now() - Date.parse(ed.lastUsed) > 3600000) ctx.waitUntil(env.SUBS.put(`editor:${id}`, JSON.stringify({ ...ed, lastUsed: new Date().toISOString() })))
-  return { role: 'editor', name: ed.name, id }
+  return { role: ed.admin ? 'admin' : 'editor', name: ed.name, id }
 }
 
 export async function listEditors(env: Env): Promise<Editor[]> {
@@ -64,6 +73,19 @@ export async function createEditor(env: Env, name: string): Promise<{ key: strin
   const editor: Editor = { id, name: name.trim().slice(0, 40) || 'Editor', created: new Date().toISOString(), active: true }
   await env.SUBS.put(`editor:${id}`, JSON.stringify(editor))
   return { key, editor }
+}
+
+/** Owner only: give or take away full access for a login key. */
+export async function setKeyAccess(env: Env, id: string, admin: boolean) {
+  if (!/^[0-9a-f]{64}$/.test(id)) return false
+  const ed = await env.SUBS.get<Editor>(`editor:${id}`, 'json')
+  if (!ed) return false
+  await env.SUBS.put(`editor:${id}`, JSON.stringify({ ...ed, admin }))
+  return true
+}
+
+export async function isAdminKey(env: Env, id: string): Promise<boolean> {
+  return !!(/^[0-9a-f]{64}$/.test(id) && (await env.SUBS.get<Editor>(`editor:${id}`, 'json'))?.admin)
 }
 
 export async function revokeEditor(env: Env, id: string) {

@@ -20,6 +20,9 @@ import { competitors } from './competitors.ts'
 import { marketNews, niftyRealty } from './market.ts'
 import {
   authenticate,
+  full,
+  isAdminKey,
+  setKeyAccess,
   checkSite,
   createEditor,
   customPush,
@@ -103,7 +106,7 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
   const { pathname } = url
   const ownerOnly = () => json({ error: 'Only the owner can do this.' }, 403, headers)
   // Business numbers, traffic, notifications and site settings are for the owner (Palash Roy) only.
-  if (who.role !== 'owner' && OWNER_ONLY.has(pathname) && !(req.method === 'GET' && pathname === '/editor/site')) return ownerOnly()
+  if (!full(who) && OWNER_ONLY.has(pathname) && !(req.method === 'GET' && pathname === '/editor/site')) return ownerOnly()
   // Check-in, daily report and report reminders are for team members; the owner is not tracked as staff.
   if (who.role === 'owner' && TEAM_ONLY.has(pathname)) return json({ error: 'Attendance and daily reports are for team members.' }, 403, headers)
   try {
@@ -139,7 +142,7 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         case '/editor/site':
           return json(await siteConfig(env), 200, headers)
         case '/editor/team':
-          return who.role === 'owner' ? json({ editors: await listEditors(env) }, 200, headers) : ownerOnly()
+          return full(who) ? json({ editors: await listEditors(env) }, 200, headers) : ownerOnly()
         case '/editor/me/today':
           return json(await myToday(env, who), 200, headers)
         case '/editor/me/history':
@@ -163,11 +166,11 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         case '/editor/web/seo':
           return cachedJson(url, ctx, headers, 12 * 60 * 60, () => seoCompare(env))
         case '/editor/accounts':
-          return who.role === 'owner' ? json(await listAccounts(env), 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
+          return full(who) ? json(await listAccounts(env), 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
         case '/editor/team/day':
-          return who.role === 'owner' ? json(await teamDay(env, url.searchParams.get('date') ?? ''), 200, headers) : ownerOnly()
+          return full(who) ? json(await teamDay(env, url.searchParams.get('date') ?? ''), 200, headers) : ownerOnly()
         case '/editor/team/month':
-          return who.role === 'owner' ? json(await teamMonth(env, url.searchParams.get('month') ?? ''), 200, headers) : ownerOnly()
+          return full(who) ? json(await teamMonth(env, url.searchParams.get('month') ?? ''), 200, headers) : ownerOnly()
       }
       return json({ error: 'not found' }, 404, headers)
     }
@@ -187,9 +190,9 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       case '/editor/calendar/delete':
         return json({ ok: await deleteIdea(env, Number((body as { id?: unknown }).id)) }, 200, headers)
       case '/editor/brief-now':
-        return who.role === 'owner' ? json({ result: await morningBrief(env, true) }, 200, headers) : ownerOnly()
+        return full(who) ? json({ result: await morningBrief(env, true) }, 200, headers) : ownerOnly()
       case '/editor/team': {
-        if (who.role !== 'owner') return ownerOnly()
+        if (!full(who)) return ownerOnly()
         const name = String((body as { name?: unknown }).name ?? '')
         return json(await createEditor(env, name), 200, headers)
       }
@@ -205,15 +208,17 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       case '/editor/accounts/reject':
       case '/editor/accounts/remove':
       case '/editor/accounts/reset':
-        return who.role === 'owner' ? json(await manageAccount(env, pathname.split('/').pop()!, body, who), 200, headers) : ownerOnly()
+      case '/editor/accounts/grant':
+      case '/editor/accounts/ungrant':
+        return full(who) ? json(await manageAccount(env, pathname.split('/').pop()!, body, who), 200, headers) : ownerOnly()
       case '/editor/me/password':
         return json(await changePassword(env, body, who, req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''), 200, headers)
       case '/editor/ai/write':
         return json(await write(env, body, who), 200, headers)
       case '/editor/reels/ref-remove':
-        return who.role === 'owner' ? json(await removeRef(env, String((body as { id?: unknown }).id ?? '')), 200, headers) : ownerOnly()
+        return full(who) ? json(await removeRef(env, String((body as { id?: unknown }).id ?? '')), 200, headers) : ownerOnly()
       case '/editor/reels/capture': {
-        if (who.role !== 'owner') return ownerOnly()
+        if (!full(who)) return ownerOnly()
         const day = String((body as { day?: unknown }).day ?? '')
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: 'Pick a date.' }, 400, headers)
         return json({ result: await captureDay(env, day) }, 200, headers)
@@ -221,26 +226,35 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       case '/editor/mag/contact':
         return json(await saveContact(env, body, who), 200, headers)
       case '/editor/mag/contact/remove':
-        return who.role === 'owner' ? json(await removeContact(env, Number((body as { id?: unknown }).id), who), 200, headers) : ownerOnly()
+        return full(who) ? json(await removeContact(env, Number((body as { id?: unknown }).id), who), 200, headers) : ownerOnly()
       case '/editor/mag/issue':
-        return who.role === 'owner' ? json(await createIssue(env, body), 200, headers) : ownerOnly()
+        return full(who) ? json(await createIssue(env, body), 200, headers) : ownerOnly()
       case '/editor/mag/dispatch':
         return json(await setDispatch(env, body, who), 200, headers)
       case '/editor/yt/refresh':
         return json({ result: await collectYouTube(env) }, 200, headers)
       case '/editor/web/refresh': {
         // Owner can pull fresh counts; at most once every 5 minutes.
-        if (who.role !== 'owner') return ownerOnly()
+        if (!full(who)) return ownerOnly()
         if (await env.SUBS.get('web:refresh-lock')) return json({ result: 'Updated a moment ago; try again in a few minutes.' }, 200, headers)
         await env.SUBS.put('web:refresh-lock', '1', { expirationTtl: 300 })
         return json({ result: await collectViews(env) }, 200, headers)
       }
       case '/editor/team/settings':
-        return who.role === 'owner' ? json(await saveTeamSettings(env, body), 200, headers) : ownerOnly()
+        return full(who) ? json(await saveTeamSettings(env, body), 200, headers) : ownerOnly()
       case '/editor/team/remind-now':
-        return who.role === 'owner' ? json({ result: await reportReminders(env, true) }, 200, headers) : ownerOnly()
-      case '/editor/team/revoke':
-        return who.role === 'owner' ? json({ ok: await revokeEditor(env, String((body as { id?: unknown }).id ?? '')) }, 200, headers) : ownerOnly()
+        return full(who) ? json({ result: await reportReminders(env, true) }, 200, headers) : ownerOnly()
+      case '/editor/team/revoke': {
+        const id = String((body as { id?: unknown }).id ?? '')
+        // Full-access keys can only be removed by the owner.
+        if (!full(who) || ((await isAdminKey(env, id)) && who.role !== 'owner')) return ownerOnly()
+        return json({ ok: await revokeEditor(env, id) }, 200, headers)
+      }
+      case '/editor/team/access': {
+        if (who.role !== 'owner') return json({ error: 'Only the owner can change full access.' }, 403, headers)
+        const b = body as { id?: unknown; admin?: unknown }
+        return json({ ok: await setKeyAccess(env, String(b.id ?? ''), b.admin === true) }, 200, headers)
+      }
     }
     return json({ error: 'not found' }, 404, headers)
   } catch (err) {

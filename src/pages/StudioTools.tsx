@@ -7,7 +7,7 @@ import { toast } from '../components/Toast.tsx'
 import { captionsFor } from '../lib/captions.ts'
 import { formatDate, formatDateTime } from '../lib/format.ts'
 import { invalidate, useAsync } from '../lib/hooks.ts'
-import { ownerRole, registerOwnerDevice, studio, studioPost } from '../lib/owner.ts'
+import { hasFullAccess, ownerRole, registerOwnerDevice, studio, studioPost } from '../lib/owner.ts'
 import { smartLink } from '../lib/stats.ts'
 import { fetchPost, fetchPosts, type Post } from '../lib/wp.ts'
 
@@ -342,7 +342,7 @@ export function SiteTab() {
   const [bLink, setBLink] = useState('')
   const [bUntil, setBUntil] = useState('')
   const [bTone, setBTone] = useState<'accent' | 'dark'>('accent')
-  const isOwner = ownerRole()?.role === 'owner'
+  const isOwner = hasFullAccess()
 
   const saveCfg = async (body: unknown, done: string) => {
     try {
@@ -658,12 +658,24 @@ interface Editor {
   name: string
   created: string
   lastUsed?: string
+  admin?: boolean
 }
 export function TeamTab() {
   const res = useAsync('studio:team', (s) => studio<{ editors: Editor[] }>('team', undefined, s))
   const [name, setName] = useState('')
   const [newKey, setNewKey] = useState<{ name: string; key: string } | null>(null)
-  if (ownerRole()?.role !== 'owner') return <p className="empty">Only the owner can manage team keys.</p>
+  const iAmOwner = ownerRole()?.role === 'owner'
+  if (!hasFullAccess()) return <p className="empty">Only the owner can manage team keys.</p>
+  const setAccess = async (e: Editor, admin: boolean) => {
+    if (admin && !window.confirm(`Give ${e.name} full access? They will see everything you see: business numbers, traffic, team, attendance and settings.`)) return
+    try {
+      await studioPost('team/access', { id: e.id, admin })
+      toast(admin ? `${e.name} now has full access` : `${e.name} is back to team access`)
+      res.reload()
+    } catch (err) {
+      toast((err as Error).message)
+    }
+  }
   const create = async (e: FormEvent) => {
     e.preventDefault()
     try {
@@ -711,14 +723,25 @@ export function TeamTab() {
             {res.data.editors.map((e) => (
               <li key={e.id}>
                 <div>
-                  <strong>{e.name}</strong>
+                  <strong>
+                    {e.name} {e.admin && <span className="acct-tag">Full access</span>}
+                  </strong>
                   <span className="meta">
                     Created {formatDate(e.created)} · {e.lastUsed ? `last used ${formatDateTime(e.lastUsed)}` : 'not used yet'}
                   </span>
                 </div>
-                <button className="mini-btn danger" onClick={() => revoke(e.id)}>
-                  Revoke
-                </button>
+                <div className="acct-btns">
+                  {iAmOwner && (
+                    <button className="mini-btn" onClick={() => setAccess(e, !e.admin)}>
+                      {e.admin ? 'Team access' : 'Give full access'}
+                    </button>
+                  )}
+                  {(iAmOwner || !e.admin) && (
+                    <button className="mini-btn danger" onClick={() => revoke(e.id)}>
+                      Revoke
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

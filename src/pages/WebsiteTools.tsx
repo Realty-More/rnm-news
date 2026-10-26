@@ -226,3 +226,127 @@ function SeoVersus() {
     </Panel>
   )
 }
+
+interface YtRow { id: string; title: string; published: string; playlists: string; short: number | null; views: number; likes: number | null; thumb: string; gain24: number | null; gain7: number | null }
+interface YtStats {
+  updatedAt: string | null
+  hoursTracked: number
+  totals: { videos: number; views: number; likes: number; gain24: number | null; gain7: number | null; avg: number; likeRate: number | null }
+  formats: { key: string; videos: number; avg: number; likeRate: number | null }[]
+  playlists: { key: string; videos: number; avg: number }[]
+  days: Avg<number>[]
+  hours: Avg<number>[]
+  top: { all: YtRow[]; day: YtRow[]; week: YtRow[]; shorts: YtRow[]; long: YtRow[] }
+}
+
+/** YouTube channel performance: views, likes, Shorts vs long, playlists, best time to post. */
+export function YouTubeTab() {
+  const res = useAsync('studio:yt', (s) => studio<YtStats>('yt', undefined, s))
+  const [view, setView] = useState<'all' | 'day' | 'week' | 'shorts' | 'long'>('all')
+  const [busy, setBusy] = useState(false)
+  const refresh = async () => {
+    setBusy(true)
+    try {
+      const r = await studioPost<{ result: string }>('yt/refresh', {})
+      toast(`Updated: ${r.result}`)
+      res.reload()
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (res.error && !res.data) return <ErrorState error={res.error} onRetry={res.reload} />
+  if (!res.data) return <SkeletonList count={4} />
+  const d = res.data
+  const rows = d.top[view]
+  const best = [...d.formats].sort((a, b) => b.avg - a.avg)[0]
+  return (
+    <>
+      <div className="kpis">
+        <div className="kpi">
+          <b>{n(d.totals.views)}</b>
+          <span>Views · {d.totals.videos} videos tracked</span>
+        </div>
+        <div className="kpi">
+          <b>{d.totals.gain24 == null ? '…' : `+${n(d.totals.gain24)}`}</b>
+          <span>{d.hoursTracked < 24 ? `Views since tracking began (${d.hoursTracked}h)` : 'Views in the last 24 hours'}</span>
+        </div>
+        <div className="kpi">
+          <b>{n(d.totals.avg)}</b>
+          <span>Average views per video</span>
+        </div>
+        <div className="kpi">
+          <b>{d.totals.likeRate == null ? n(d.totals.likes) : `${d.totals.likeRate}%`}</b>
+          <span>{d.totals.likeRate == null ? 'Likes' : `Like rate (${n(d.totals.likes)} likes)`}</span>
+        </div>
+      </div>
+      <p className="panel-note web-source">
+        From the channel’s public YouTube feeds (latest uploads and playlists), saved every hour. {d.updatedAt ? `Last update ${formatDateTime(d.updatedAt)}.` : ''}{' '}
+        <button className="mini-btn" onClick={refresh} disabled={busy}>
+          <Icon name="refresh" size={14} /> {busy ? 'Updating…' : 'Update now'}
+        </button>
+      </p>
+
+      <Panel title="Top videos" note="Tap to open on YouTube.">
+        <div className="segmented small web-seg" role="radiogroup" aria-label="Period">
+          {(
+            [
+              ['all', 'All time'],
+              ['day', 'Last 24 h'],
+              ['week', '7 days'],
+              ['shorts', 'Shorts'],
+              ['long', 'Long videos'],
+            ] as const
+          ).map(([k, label]) => (
+            <button key={k} role="radio" aria-checked={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {rows.length === 0 ? (
+          <p className="panel-note">{view === 'day' || view === 'week' ? 'Collecting: needs a few hourly snapshots first.' : 'No videos yet.'}</p>
+        ) : (
+          <ol className="web-top yt-top">
+            {rows.map((r, i) => (
+              <li key={r.id}>
+                <span className="web-rank">{i + 1}</span>
+                <a href={`https://www.youtube.com/watch?v=${r.id}`} target="_blank" rel="noopener noreferrer" className="web-title yt-title">
+                  <img src={r.thumb} alt="" loading="lazy" />
+                  <span>
+                    <span className="yt-t">{r.title}</span>
+                    <small>
+                      {r.short === 1 ? 'Short' : 'Video'}
+                      {r.playlists ? ` · ${r.playlists}` : ''} · {formatDateTime(r.published)}
+                    </small>
+                  </span>
+                </a>
+                <span className="web-num">
+                  <b>{n(view === 'day' ? r.gain24 : view === 'week' ? r.gain7 : r.views)}</b>
+                  <small>{r.likes != null ? `${n(r.likes)} likes` : 'views'}</small>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Panel>
+
+      <div className="web-two">
+        <Panel title="Shorts vs long videos" note={best ? `${best.key} get more views on average.` : undefined}>
+          <Bars rows={d.formats.map((f) => ({ key: f.key, stories: f.videos, avg: f.avg }))} label={(k) => k} />
+        </Panel>
+        <Panel title="Playlists" note="Average views per video.">
+          {d.playlists.length ? <Bars rows={d.playlists.map((p) => ({ key: p.key, stories: p.videos, avg: p.avg }))} label={(k) => k} /> : <p className="panel-note">No playlist videos yet.</p>}
+        </Panel>
+      </div>
+      <div className="web-two">
+        <Panel title="Best day to post" note="Average views by the weekday a video went live (videos 2 to 120 days old).">
+          {d.days.length >= 2 ? <Bars rows={d.days} label={(k) => DAYS[k]} /> : <p className="panel-note">Fills in as more videos are tracked.</p>}
+        </Panel>
+        <Panel title="Best hour to post" note="Average views by the hour (IST) a video went live.">
+          {d.hours.length >= 2 ? <Bars rows={d.hours} label={hourLabel} /> : <p className="panel-note">Fills in as more videos are tracked.</p>}
+        </Panel>
+      </div>
+    </>
+  )
+}

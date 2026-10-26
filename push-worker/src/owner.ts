@@ -4,6 +4,7 @@
 import { deliver, isValidSubscription, subKey, SUB_PREFIX, type Notice, type StoredSub } from './push.ts'
 import { fetchByIds } from './site.ts'
 import type { Env } from './index.ts'
+import { sessionWho } from './accounts.ts'
 
 /* ---------- roles: owner key (STATS_KEY) + revocable editor keys ---------- */
 /** The owner key belongs to RealtyNMore's founder; records show this name. */
@@ -14,6 +15,8 @@ export interface Who {
   role: 'owner' | 'editor'
   name: string
   id?: string
+  /** Set when signed in with a mobile number and password. */
+  phone?: string
 }
 interface Editor {
   id: string
@@ -38,6 +41,7 @@ export function sameKey(a: string, b: string) {
 
 export async function authenticate(key: string, env: Env, ctx: ExecutionContext): Promise<Who | null> {
   if (sameKey(key, env.STATS_KEY ?? '')) return { role: 'owner', name: OWNER_NAME }
+  if (key.startsWith('s_')) return sessionWho(env, key)
   if (key.length < 24 || key.length > 64) return null
   const id = await sha256hex(key)
   const ed = await env.SUBS.get<Editor>(`editor:${id}`, 'json')

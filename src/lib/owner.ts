@@ -25,6 +25,9 @@ export function ownerRole(): { role: Role; name: string } | null {
 }
 
 export function forgetOwner() {
+  // A password login also ends its session on the server.
+  const key = ownerKey()
+  if (key?.startsWith('s_') && PUSH_API) void fetch(`${PUSH_API}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
   try {
     localStorage.removeItem(KEY)
     localStorage.removeItem(ROLE)
@@ -36,9 +39,12 @@ export function forgetOwner() {
 async function call<T>(path: string, init: RequestInit = {}, key = ownerKey()): Promise<T> {
   if (!PUSH_API) throw new Error('App server is not set up.')
   const res = await fetch(`${PUSH_API}/editor/${path}`, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${key ?? ''}` } })
-  if (res.status === 401) throw new Error('Wrong or revoked key.')
-  if (res.status === 403) throw new Error('Only the owner can do this.')
-  if (!res.ok) throw new Error(`Studio data unavailable (${res.status}).`)
+  if (res.status === 401) throw new Error('Your login has ended. Please log in again.')
+  if (!res.ok) {
+    // Show the server's own reason ("Name is required.", "Only the owner can do this." …) when it gives one.
+    const reason = await res.json().then((j: { error?: string }) => j.error, () => null)
+    throw new Error(reason ?? (res.status === 403 ? 'Only the owner can do this.' : `Studio data unavailable (${res.status}).`))
+  }
   return res.json() as Promise<T>
 }
 
@@ -59,6 +65,41 @@ export async function unlock(key: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** True when this device signed in with a mobile number and password (not a key). */
+export const isAccountLogin = () => !!ownerKey()?.startsWith('s_')
+
+async function auth<T>(path: 'login' | 'signup', body: unknown): Promise<T> {
+  if (!PUSH_API) throw new Error('App server is not set up.')
+  let res: Response
+  try {
+    res = await fetch(`${PUSH_API}/auth/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  } catch {
+    throw new Error(navigator.onLine ? 'Could not reach the server. Try again.' : 'You are offline.')
+  }
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string }
+  if (!res.ok) throw new Error(data.error ?? 'Something went wrong. Try again.')
+  return data
+}
+
+function remember(token: string, role: Role, name: string) {
+  localStorage.setItem(KEY, token)
+  localStorage.setItem(ROLE, JSON.stringify({ role, name }))
+}
+
+/** Mobile number + password. */
+export async function passwordLogin(phone: string, password: string): Promise<{ role: Role; name: string }> {
+  const r = await auth<{ token: string; role: Role; name: string }>('login', { phone, password })
+  remember(r.token, r.role, r.name)
+  return r
+}
+
+/** New account. Staff accounts wait for the owner's approval; the owner's (with the setup key) is ready at once. */
+export async function createAccount(a: { name: string; phone: string; password: string; ownerKey?: string }): Promise<{ pending: boolean; name: string }> {
+  const r = await auth<{ pending?: boolean; token?: string; role?: Role; name: string }>('signup', a)
+  if (r.token && r.role) remember(r.token, r.role, r.name)
+  return { pending: !!r.pending, name: r.name }
 }
 
 /** Lets this phone receive owner alerts (website down, morning brief). */

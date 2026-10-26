@@ -24,6 +24,8 @@ export interface Video {
   thumb: string
   url: string
   views?: number
+  /** Thumbs-up count from the feed's star rating (YouTube reports likes there). */
+  likes?: number
   /** Set by scripts/fetch-youtube.ts (the RSS feed itself doesn't say). */
   isShort?: boolean
 }
@@ -47,6 +49,7 @@ export function parseFeed(xml: string): Feed {
     if (!id) return []
     const group = e['media:group'] ?? {}
     const views = Number(group['media:community']?.['media:statistics']?.['@views'])
+    const likes = Number(group['media:community']?.['media:starRating']?.['@count'])
     return [{
       id,
       title: text(e.title),
@@ -56,6 +59,7 @@ export function parseFeed(xml: string): Feed {
       thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       url: `https://www.youtube.com/watch?v=${id}`,
       views: Number.isFinite(views) ? views : undefined,
+      likes: Number.isFinite(likes) ? likes : undefined,
     }]
   })
   return { title: text(feed.title), videos }

@@ -21,3 +21,10 @@ CREATE TABLE IF NOT EXISTS mkt_stock (day TEXT NOT NULL, symbol TEXT NOT NULL, s
 CREATE TABLE IF NOT EXISTS mkt_meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS reel_refs (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT, size INTEGER, week TEXT, kind TEXT, note TEXT, by_name TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS ai_usage (day TEXT NOT NULL, who TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, who));
+CREATE TABLE IF NOT EXISTS accounts (phone TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT, approved_at TEXT, last_login TEXT);
+CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, phone TEXT NOT NULL, created_at TEXT, expires_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS sessions_phone ON sessions (phone);
+CREATE TABLE IF NOT EXISTS auth_fail (k TEXT NOT NULL, hour TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (k, hour));
+CREATE TABLE IF NOT EXISTS yt_videos (id TEXT PRIMARY KEY, title TEXT, published TEXT, playlists TEXT, short INTEGER, views INTEGER NOT NULL DEFAULT 0, likes INTEGER, thumb TEXT, checked_at TEXT);
+CREATE TABLE IF NOT EXISTS yt_views (id TEXT NOT NULL, hour TEXT NOT NULL, views INTEGER NOT NULL, PRIMARY KEY (id, hour));
+CREATE INDEX IF NOT EXISTS yt_views_hour ON yt_views (hour);

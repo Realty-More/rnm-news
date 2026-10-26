@@ -3,6 +3,7 @@
 // The owner sees everyone's day, monthly attendance and a CSV export. Nothing is tracked in the background.
 import { deliver, isValidSubscription, subKey, type StoredSub } from './push.ts'
 import { listEditors, type Who } from './owner.ts'
+import { accountStaff } from './accounts.ts'
 import type { Env } from './index.ts'
 
 export interface TeamSettings {
@@ -158,7 +159,7 @@ export function teamPeople(editors: { id: string; name: string; active: boolean 
 export async function teamDay(env: Env, day: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) day = istDay()
   const [editors, settings, att, rep, cal, pushes] = await Promise.all([
-    listEditors(env),
+    Promise.all([listEditors(env), accountStaff(env)]).then(([keys, accounts]) => [...keys, ...accounts]),
     teamSettings(env),
     env.DB.prepare('SELECT * FROM attendance WHERE day = ?1').bind(day).all<Att>(),
     env.DB.prepare('SELECT * FROM reports WHERE day = ?1').bind(day).all<Rep>(),
@@ -227,7 +228,7 @@ export function summarizeMonth(people: { id: string; name: string }[], att: Att[
 export async function teamMonth(env: Env, month: string) {
   if (!/^\d{4}-\d{2}$/.test(month)) month = istDay().slice(0, 7)
   const [editors, settings, att, reps] = await Promise.all([
-    listEditors(env),
+    Promise.all([listEditors(env), accountStaff(env)]).then(([keys, accounts]) => [...keys, ...accounts]),
     teamSettings(env),
     env.DB.prepare('SELECT * FROM attendance WHERE substr(day,1,7) = ?1').bind(month).all<Att>(),
     env.DB.prepare('SELECT person_id, day FROM reports WHERE substr(day,1,7) = ?1').bind(month).all<{ person_id: string; day: string }>(),

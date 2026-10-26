@@ -1,0 +1,199 @@
+// Studio accounts: mobile number + password (no OTP, so no SMS costs).
+//   Create account: staff requests wait for the owner's approval; the owner's own account is created
+//   once with the owner setup key (STATS_KEY) and is active straight away.
+//   Passwords: PBKDF2-SHA256 over an HMAC with a server-side pepper (AUTH_PEPPER), per-user salt.
+//   Sessions: random tokens ("s_…"), stored only as SHA-256 hashes, valid 180 days, ended on log out.
+//   Forgot password: the owner sets a new one from the Studio.
+import type { Env } from './index.ts'
+import { sameKey, sha256hex, type Who } from './owner.ts'
+
+const ITERATIONS = 20000
+const SESSION_DAYS = 180
+const MAX_FAILS = 8
+const DAY = 86400000
+
+type Status = 'pending' | 'active' | 'rejected'
+interface Account { phone: string; name: string; role: 'owner' | 'editor'; status: Status; salt: string; hash: string; created_at: string; approved_at: string | null; last_login: string | null }
+
+/** Indian mobile number → 10 digits ("+91 98100 79064" → "9810079064"), or null. */
+export function normPhone(v: unknown): string | null {
+  const d = String(v ?? '').replace(/\D/g, '')
+  const n = d.length === 12 && d.startsWith('91') ? d.slice(2) : d.length === 11 && d.startsWith('0') ? d.slice(1) : d
+  return /^[6-9]\d{9}$/.test(n) ? n : null
+}
+
+/** Why a password is not allowed, or null when it is fine. */
+export function passwordProblem(pw: unknown): string | null {
+  if (typeof pw !== 'string' || pw.length < 8) return 'Use at least 8 characters for the password.'
+  if (pw.length > 64) return 'Use at most 64 characters for the password.'
+  if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return 'Use both letters and numbers in the password.'
+  return null
+}
+
+const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
+const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
+const pepperOf = (env: Env) => env.AUTH_PEPPER || env.STATS_KEY
+
+export async function hashPassword(pw: string, pepper: string, salt = crypto.getRandomValues(new Uint8Array(16))): Promise<{ salt: string; hash: string }> {
+  const enc = new TextEncoder()
+  const hk = await crypto.subtle.importKey('raw', enc.encode(pepper), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const peppered = new Uint8Array(await crypto.subtle.sign('HMAC', hk, enc.encode(pw)))
+  const pk = await crypto.subtle.importKey('raw', peppered, 'PBKDF2', false, ['deriveBits'])
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: ITERATIONS }, pk, 256))
+  return { salt: b64(salt), hash: b64(bits) }
+}
+
+async function checkPassword(pw: string, a: Account, pepper: string): Promise<boolean> {
+  const { hash } = await hashPassword(pw, pepper, unb64(a.salt))
+  return sameKey(hash, a.hash)
+}
+
+const hourKey = () => new Date().toISOString().slice(0, 13)
+async function fails(env: Env, k: string): Promise<number> {
+  return (await env.DB.prepare('SELECT n FROM auth_fail WHERE k = ? AND hour = ?').bind(k, hourKey()).first<{ n: number }>())?.n ?? 0
+}
+async function addFail(env: Env, k: string) {
+  await env.DB.prepare('INSERT INTO auth_fail (k, hour, n) VALUES (?, ?, 1) ON CONFLICT(k, hour) DO UPDATE SET n = n + 1').bind(k, hourKey()).run()
+}
+
+async function newSession(env: Env, phone: string): Promise<string> {
+  const token = `s_${b64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
+  const now = Date.now()
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO sessions (token_hash, phone, created_at, expires_at) VALUES (?, ?, ?, ?)').bind(await sha256hex(token), phone, new Date(now).toISOString(), new Date(now + SESSION_DAYS * DAY).toISOString()),
+    env.DB.prepare('UPDATE accounts SET last_login = ? WHERE phone = ?').bind(new Date(now).toISOString(), phone),
+    env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(new Date(now).toISOString()),
+  ])
+  return token
+}
+
+const ipOf = (req: Request) => req.headers.get('CF-Connecting-IP') ?? 'x'
+
+export async function signup(env: Env, req: Request, body: unknown) {
+  const b = (body ?? {}) as { name?: unknown; phone?: unknown; password?: unknown; ownerKey?: unknown }
+  const name = typeof b.name === 'string' ? b.name.replace(/\s+/g, ' ').trim().slice(0, 40) : ''
+  if (name.length < 2) throw new Error('Enter your full name.')
+  const phone = normPhone(b.phone)
+  if (!phone) throw new Error('Enter a valid 10-digit mobile number.')
+  const problem = passwordProblem(b.password)
+  if (problem) throw new Error(problem)
+  const ipKey = `signup:${await sha256hex(ipOf(req))}`
+  if ((await fails(env, ipKey)) >= 12) throw new Error('Too many new accounts from this network. Try again in an hour.')
+  const exists = await env.DB.prepare('SELECT status FROM accounts WHERE phone = ?').bind(phone).first<{ status: Status }>()
+  if (exists && exists.status !== 'rejected') throw new Error('This number already has an account. Log in, or ask the owner to reset your password.')
+  const wantsOwner = typeof b.ownerKey === 'string' && b.ownerKey.trim().length > 0
+  if (wantsOwner && !sameKey(b.ownerKey as string, env.STATS_KEY ?? '')) {
+    await addFail(env, ipKey)
+    throw new Error('That owner setup key is not right.')
+  }
+  const role = wantsOwner ? 'owner' : 'editor'
+  const status: Status = wantsOwner ? 'active' : 'pending'
+  const { salt, hash } = await hashPassword(b.password as string, pepperOf(env))
+  const now = new Date().toISOString()
+  await env.DB.prepare(
+    `INSERT INTO accounts (phone, name, role, status, salt, hash, created_at, approved_at, last_login) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+     ON CONFLICT(phone) DO UPDATE SET name = excluded.name, role = excluded.role, status = excluded.status, salt = excluded.salt, hash = excluded.hash, created_at = excluded.created_at, approved_at = excluded.approved_at`,
+  )
+    .bind(phone, name, role, status, salt, hash, now, wantsOwner ? now : null)
+    .run()
+  await addFail(env, ipKey) // counts sign-ups per network per hour
+  if (!wantsOwner) return { pending: true, name }
+  return { token: await newSession(env, phone), role, name }
+}
+
+export async function login(env: Env, req: Request, body: unknown) {
+  const b = (body ?? {}) as { phone?: unknown; password?: unknown }
+  const phone = normPhone(b.phone)
+  if (!phone || typeof b.password !== 'string' || !b.password) throw new Error('Enter your mobile number and password.')
+  const phoneKey = `login:${phone}`
+  const ipKey = `login-ip:${await sha256hex(ipOf(req))}`
+  if ((await fails(env, phoneKey)) >= MAX_FAILS || (await fails(env, ipKey)) >= MAX_FAILS * 3) throw new Error('Too many wrong tries. Wait an hour, or ask the owner to reset your password.')
+  const a = await env.DB.prepare('SELECT * FROM accounts WHERE phone = ?').bind(phone).first<Account>()
+  if (!a || !(await checkPassword(b.password, a, pepperOf(env)))) {
+    await Promise.all([addFail(env, phoneKey), addFail(env, ipKey)])
+    throw new Error('Wrong mobile number or password.')
+  }
+  if (a.status === 'pending') throw new Error('Your account is waiting for the owner’s approval.')
+  if (a.status !== 'active') throw new Error('This account is not active. Please contact the owner.')
+  return { token: await newSession(env, phone), role: a.role, name: a.name }
+}
+
+export async function logout(env: Env, token: string) {
+  if (token.startsWith('s_')) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256hex(token)).run()
+  return { ok: true }
+}
+
+/** The signed-in person for a session token, or null. */
+export async function sessionWho(env: Env, token: string): Promise<Who | null> {
+  if (!/^s_[\w-]{40,60}$/.test(token)) return null
+  const row = await env.DB.prepare(
+    "SELECT a.phone, a.name, a.role FROM sessions s JOIN accounts a ON a.phone = s.phone WHERE s.token_hash = ? AND s.expires_at > ? AND a.status = 'active'",
+  )
+    .bind(await sha256hex(token), new Date().toISOString())
+    .first<{ phone: string; name: string; role: 'owner' | 'editor' }>()
+  if (!row) return null
+  return row.role === 'owner' ? { role: 'owner', name: row.name, phone: row.phone } : { role: 'editor', name: row.name, id: `ph:${row.phone}`, phone: row.phone }
+}
+
+/** Staff with an active account, in the shape the team lists use. */
+export async function accountStaff(env: Env): Promise<{ id: string; name: string; active: boolean }[]> {
+  const { results } = await env.DB.prepare("SELECT phone, name FROM accounts WHERE role = 'editor' AND status = 'active' ORDER BY name").all<{ phone: string; name: string }>()
+  return results.map((r) => ({ id: `ph:${r.phone}`, name: r.name, active: true }))
+}
+
+/* ---------- owner: requests and accounts ---------- */
+
+export async function listAccounts(env: Env) {
+  const { results } = await env.DB.prepare('SELECT phone, name, role, status, created_at AS created, approved_at AS approved, last_login AS lastLogin FROM accounts ORDER BY status = \'pending\' DESC, name').all()
+  return { accounts: results }
+}
+
+const randomPassword = () => {
+  const abc = 'abcdefghjkmnpqrstuvwxyz'
+  const r = crypto.getRandomValues(new Uint8Array(8))
+  return `${[...r.slice(0, 5)].map((x) => abc[x % abc.length]).join('')}${100 + (r[5] * 256 + r[6]) % 900}`
+}
+
+export async function manageAccount(env: Env, action: string, body: unknown, who: Who) {
+  const phone = normPhone((body as { phone?: unknown })?.phone)
+  if (!phone) throw new Error('Pick an account.')
+  const a = await env.DB.prepare('SELECT role, status FROM accounts WHERE phone = ?').bind(phone).first<{ role: string; status: Status }>()
+  if (!a) throw new Error('Account not found.')
+  if (a.role === 'owner' && action !== 'reset') throw new Error('The owner account can’t be changed here.')
+  if (a.role === 'owner' && who.phone !== phone) throw new Error('Only the owner can reset the owner password.')
+  const endSessions = env.DB.prepare('DELETE FROM sessions WHERE phone = ?').bind(phone)
+  switch (action) {
+    case 'approve':
+      await env.DB.prepare("UPDATE accounts SET status = 'active', approved_at = ? WHERE phone = ?").bind(new Date().toISOString(), phone).run()
+      return { ok: true }
+    case 'reject':
+      await env.DB.batch([env.DB.prepare("UPDATE accounts SET status = 'rejected' WHERE phone = ?").bind(phone), endSessions])
+      return { ok: true }
+    case 'remove':
+      await env.DB.batch([env.DB.prepare('DELETE FROM accounts WHERE phone = ?').bind(phone), endSessions])
+      return { ok: true }
+    case 'reset': {
+      const password = randomPassword()
+      const { salt, hash } = await hashPassword(password, pepperOf(env))
+      await env.DB.batch([env.DB.prepare('UPDATE accounts SET salt = ?, hash = ? WHERE phone = ?').bind(salt, hash, phone), endSessions, env.DB.prepare('DELETE FROM auth_fail WHERE k = ?').bind(`login:${phone}`)])
+      return { password }
+    }
+  }
+  throw new Error('Unknown action.')
+}
+
+/** Signed-in account changes its own password (other devices are logged out). */
+export async function changePassword(env: Env, body: unknown, who: Who, token: string) {
+  if (!who.phone) throw new Error('Log in with your mobile number to change your password.')
+  const b = (body ?? {}) as { current?: unknown; next?: unknown }
+  const a = await env.DB.prepare('SELECT * FROM accounts WHERE phone = ?').bind(who.phone).first<Account>()
+  if (!a || typeof b.current !== 'string' || !(await checkPassword(b.current, a, pepperOf(env)))) throw new Error('Your current password is not right.')
+  const problem = passwordProblem(b.next)
+  if (problem) throw new Error(problem)
+  const { salt, hash } = await hashPassword(b.next as string, pepperOf(env))
+  await env.DB.batch([
+    env.DB.prepare('UPDATE accounts SET salt = ?, hash = ? WHERE phone = ?').bind(salt, hash, who.phone),
+    env.DB.prepare('DELETE FROM sessions WHERE phone = ? AND token_hash != ?').bind(who.phone, await sha256hex(token)),
+  ])
+  return { ok: true }
+}

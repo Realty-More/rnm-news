@@ -1,18 +1,19 @@
 // Owner-only Content Studio: what readers want, what to write next, keywords and SEO fixes.
 // Hidden from readers (no menu link); opened from Settings on the owner's device or #/studio.
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
-import { forgetOwner, ownerKey, ownerRole, refreshRole, studio, unlock } from '../lib/owner.ts'
+import { forgetOwner, isAccountLogin, ownerKey, ownerRole, refreshRole, studio } from '../lib/owner.ts'
+import { AccountsPanel, AuthScreen, ChangePassword } from './AuthTools.tsx'
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
 import { MagazineTab } from './MagazineTools.tsx'
 import { ReelsTab } from './ReelTools.tsx'
 import { AiWriterTab } from './AiTools.tsx'
-import { WebsiteTab } from './WebsiteTools.tsx'
+import { WebsiteTab, YouTubeTab } from './WebsiteTools.tsx'
 import { AddToCalendar, CalendarTab, CaptionsTab, NotifyTab, PerformanceTab, ReportTab, SiteTab, TeamTab } from './StudioTools.tsx'
 import { usePageTitle } from './usePageTitle.ts'
 import { WHATSAPP_CHANNEL, whatsappShareUrl } from '../lib/config.ts'
@@ -72,6 +73,7 @@ const TABS = [
   { key: 'teamday', label: 'Team today', group: 'today', owner: true },
   { key: 'attendance', label: 'Attendance', group: 'today', owner: true },
   { key: 'web', label: 'Website', group: 'audience', owner: true },
+  { key: 'yt', label: 'YouTube', group: 'audience', owner: true },
   { key: 'perf', label: 'App performance', group: 'audience', owner: true },
   { key: 'rivals', label: 'Competitors', group: 'audience' },
   { key: 'report', label: 'Weekly report', group: 'audience', owner: true },
@@ -100,7 +102,7 @@ type Tab = (typeof TABS)[number]['key']
 export function Studio() {
   const [key, setKey] = useState(ownerKey)
   usePageTitle(key ? 'Content Studio' : 'Login')
-  if (!key) return <Unlock onDone={() => setKey(ownerKey())} />
+  if (!key) return <AuthScreen onDone={() => setKey(ownerKey())} />
   return (
     <StudioHome
       onLock={() => {
@@ -108,36 +110,6 @@ export function Studio() {
         setKey(null)
       }}
     />
-  )
-}
-
-function Unlock({ onDone }: { onDone: () => void }) {
-  const [value, setValue] = useState('')
-  const [busy, setBusy] = useState(false)
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    setBusy(true)
-    const ok = await unlock(value)
-    setBusy(false)
-    if (ok) {
-      toast(`Welcome, ${ownerRole()?.name ?? 'back'}`)
-      onDone()
-    } else toast('That login key is not right')
-  }
-  return (
-    <div className="page studio-lock">
-      <div className="lock-card">
-        <Icon name="settings" size={28} />
-        <h1>Login</h1>
-        <p>For the owner, Palash Roy (Founder &amp; Editor), and the RealtyNMore team. Enter your login key; you stay logged in on this device until you log out.</p>
-        <form onSubmit={submit}>
-          <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Login key" aria-label="Login key" />
-          <button className="btn" disabled={busy || value.trim().length < 8}>
-            {busy ? 'Checking…' : 'Log in'}
-          </button>
-        </form>
-      </div>
-    </div>
   )
 }
 
@@ -150,6 +122,7 @@ function greeting(now = new Date()): string {
 function StudioHome({ onLock }: { onLock: () => void }) {
   const [params, setParams] = useSearchParams()
   const [me, setMe] = useState(ownerRole)
+  const [pwOpen, setPwOpen] = useState(false)
   useEffect(() => {
     void refreshRole().then(() => setMe(ownerRole()))
   }, [])
@@ -179,17 +152,25 @@ function StudioHome({ onLock }: { onLock: () => void }) {
             </div>
           </div>
         )}
-        <button
-          className="btn ghost small"
-          onClick={() => {
-            if (!window.confirm('Log out of the Studio on this device?')) return
-            onLock()
-            toast('Logged out')
-          }}
-        >
-          Log out
-        </button>
+        <div className="studio-head-btns">
+          {isAccountLogin() && (
+            <button className="btn ghost small" onClick={() => setPwOpen((o) => !o)} aria-expanded={pwOpen}>
+              Password
+            </button>
+          )}
+          <button
+            className="btn ghost small"
+            onClick={() => {
+              if (!window.confirm('Log out of the Studio on this device?')) return
+              onLock()
+              toast('Logged out')
+            }}
+          >
+            Log out
+          </button>
+        </div>
       </div>
+      {pwOpen && <ChangePassword onClose={() => setPwOpen(false)} />}
       <nav className="studio-nav" aria-label="Studio">
         <div className="studio-groups" role="tablist" aria-label="Sections">
           {GROUPS.filter((g) => visible.some((t) => t.group === g.key)).map((g) => (
@@ -226,11 +207,17 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'site' && <SiteTab />}
       {tab === 'captions' && <CaptionsTab />}
       {tab === 'report' && <ReportTab />}
-      {tab === 'team' && <TeamTab />}
+      {tab === 'team' && (
+        <>
+          <AccountsPanel />
+          <TeamTab />
+        </>
+      )}
       {tab === 'myday' && <MyDayTab />}
       {tab === 'teamday' && <TeamTodayTab />}
       {tab === 'attendance' && <AttendanceTab />}
       {tab === 'web' && <WebsiteTab />}
+      {tab === 'yt' && <YouTubeTab />}
       {tab === 'magazine' && <MagazineTab />}
       {tab === 'reels' && <ReelsTab />}
       {tab === 'ai' && <AiWriterTab />}

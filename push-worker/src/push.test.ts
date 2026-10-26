@@ -442,3 +442,28 @@ describe('team list', () => {
     ])
   })
 })
+
+import { hashPassword, normPhone, passwordProblem } from './accounts.ts'
+
+describe('accounts', () => {
+  it('reads Indian mobile numbers in any common format', () => {
+    expect(normPhone('+91 98100 79064')).toBe('9810079064')
+    expect(normPhone('09810079064')).toBe('9810079064')
+    expect(normPhone('98100-79064')).toBe('9810079064')
+    expect(normPhone('1234567890')).toBeNull()
+    expect(normPhone('98100')).toBeNull()
+  })
+  it('asks for a reasonable password', () => {
+    expect(passwordProblem('short1')).toMatch(/8 characters/)
+    expect(passwordProblem('onlyletters')).toMatch(/letters and numbers/)
+    expect(passwordProblem('Realty2026')).toBeNull()
+  })
+  it('hashes with salt and pepper, and the same inputs give the same hash', async () => {
+    const a = await hashPassword('Realty2026', 'pepper')
+    const b = await hashPassword('Realty2026', 'pepper', Uint8Array.from(atob(a.salt), (c) => c.charCodeAt(0)))
+    const c = await hashPassword('Realty2026', 'other-pepper', Uint8Array.from(atob(a.salt), (c) => c.charCodeAt(0)))
+    expect(b.hash).toBe(a.hash)
+    expect(c.hash).not.toBe(a.hash)
+    expect(a.hash).not.toContain('Realty2026')
+  })
+})

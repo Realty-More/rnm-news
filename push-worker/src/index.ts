@@ -1,6 +1,7 @@
 // R&M News app server (Cloudflare Workers free plan).
 //   POST /subscribe, /unsubscribe     breaking-news alerts (KV)
 //   POST /hit, GET /trending          anonymous usage counts and "Trending in app" (D1)
+//   POST /auth/signup|login|logout    Studio accounts: mobile number + password, owner approves staff
 //   POST /ai/ask                      "Ask R&M": answers from realtynmore.com stories only (Workers AI)
 //   GET  /a/<id>                      share preview page that opens the story in the app
 //   GET  /site/config                 Editor's Pick and announcement banner for the app
@@ -8,7 +9,7 @@
 //   /editor/*                         Content Studio (owner key or an editor key)
 //   GET  /stats?key=…                 private stats page for the owner
 //   cron every 10 minutes             new-story alerts, website uptime check, 9 AM morning brief
-//   cron hourly at :07                website view counts per story (Post Views Counter)
+//   cron hourly at :07                website view counts per story (Post Views Counter) and YouTube views/likes
 //   /editor/mag/*                     private magazine mailing list and quarterly dispatch (team only)
 //   /editor/reels/*                   daily and weekly market-close reel data (NSE official closes) and reference files
 import { checkAndNotify, subKey, subscribe } from './push.ts'
@@ -39,7 +40,9 @@ import {
 } from './owner.ts'
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
 import { ask, write } from './ai.ts'
+import { changePassword, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
+import { collectYouTube, youTubeStats } from './youtube.ts'
 import { collectViews, seoCompare, webTraffic } from './website.ts'
 import { checkIn, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
 
@@ -54,6 +57,8 @@ export interface Env {
   APP_URL: string
   STATS_KEY: string
   AI: Ai
+  /** Secret mixed into password hashes (wrangler secret put AUTH_PEPPER). */
+  AUTH_PEPPER?: string
 }
 
 export { buildNotices, isValidSubscription, matching, newSince } from './push.ts'
@@ -91,7 +96,7 @@ async function cachedJson(url: URL, ctx: ExecutionContext, headers: Record<strin
 }
 
 const TEAM_ONLY = new Set(['/editor/me/checkin', '/editor/me/checkout', '/editor/me/report', '/editor/me/device'])
-const OWNER_ONLY = new Set(['/editor/overview', '/editor/push-log', '/editor/uptime', '/editor/performance', '/editor/web/traffic', '/editor/web/seo', '/editor/push', '/editor/site', '/editor/owner-device'])
+const OWNER_ONLY = new Set(['/editor/yt', '/editor/yt/refresh', '/editor/overview', '/editor/push-log', '/editor/uptime', '/editor/performance', '/editor/web/traffic', '/editor/web/seo', '/editor/push', '/editor/site', '/editor/owner-device'])
 
 /** Content Studio for the owner and editors. Team management is owner-only. */
 async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, headers: Record<string, string>, who: Who): Promise<Response> {
@@ -151,10 +156,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await magazineBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/mag/dispatch':
           return json(await dispatchOf(env, url.searchParams.get('issue') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/yt':
+          return json(await youTubeStats(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/web/traffic':
           return json(await webTraffic(env), 200, headers)
         case '/editor/web/seo':
           return cachedJson(url, ctx, headers, 12 * 60 * 60, () => seoCompare(env))
+        case '/editor/accounts':
+          return who.role === 'owner' ? json(await listAccounts(env), 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
         case '/editor/team/day':
           return who.role === 'owner' ? json(await teamDay(env, url.searchParams.get('date') ?? ''), 200, headers) : ownerOnly()
         case '/editor/team/month':
@@ -192,6 +201,13 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await submitReport(env, who, body), 200, headers)
       case '/editor/me/device':
         return json({ ok: await registerStaffDevice(env, who, body) }, 200, headers)
+      case '/editor/accounts/approve':
+      case '/editor/accounts/reject':
+      case '/editor/accounts/remove':
+      case '/editor/accounts/reset':
+        return who.role === 'owner' ? json(await manageAccount(env, pathname.split('/').pop()!, body, who), 200, headers) : ownerOnly()
+      case '/editor/me/password':
+        return json(await changePassword(env, body, who, req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''), 200, headers)
       case '/editor/ai/write':
         return json(await write(env, body, who), 200, headers)
       case '/editor/reels/ref-remove':
@@ -210,6 +226,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return who.role === 'owner' ? json(await createIssue(env, body), 200, headers) : ownerOnly()
       case '/editor/mag/dispatch':
         return json(await setDispatch(env, body, who), 200, headers)
+      case '/editor/yt/refresh':
+        return json({ result: await collectYouTube(env) }, 200, headers)
       case '/editor/web/refresh': {
         // Owner can pull fresh counts; at most once every 5 minutes.
         if (who.role !== 'owner') return ownerOnly()
@@ -278,6 +296,19 @@ export default {
       await env.SUBS.delete(await subKey(endpoint))
       return json({ ok: true }, 200, headers)
     }
+    if (pathname === '/auth/signup' || pathname === '/auth/login' || pathname === '/auth/logout') {
+      try {
+        const out =
+          pathname === '/auth/signup'
+            ? await signup(env, req, body)
+            : pathname === '/auth/login'
+              ? await login(env, req, body)
+              : await logout(env, req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? '')
+        return json(out, 200, { ...headers, 'Cache-Control': 'no-store' })
+      } catch (err) {
+        return json({ error: (err as Error).message }, 400, headers)
+      }
+    }
     if (pathname === '/ai/ask') {
       try {
         return json(await ask(env, req, body, ctx), 200, headers)
@@ -297,7 +328,7 @@ export default {
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
     // Its own hourly run, so the ~45 site requests don't share the 50-request limit with alerts.
-    if (event.cron === '7 * * * *') return ctx.waitUntil(run('views', () => collectViews(env)))
+    if (event.cron === '7 * * * *') return ctx.waitUntil(Promise.all([run('views', () => collectViews(env)), run('youtube', () => collectYouTube(env))]))
     ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('market', () => autoCapture(env))]))
   },
 } satisfies ExportedHandler<Env>

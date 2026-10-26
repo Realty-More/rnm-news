@@ -21,7 +21,6 @@ import { marketNews, niftyRealty } from './market.ts'
 import {
   authenticate,
   full,
-  isAdminKey,
   setKeyAccess,
   checkSite,
   createEditor,
@@ -246,12 +245,11 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return full(who) ? json({ result: await reportReminders(env, true) }, 200, headers) : ownerOnly()
       case '/editor/team/revoke': {
         const id = String((body as { id?: unknown }).id ?? '')
-        // Full-access keys can only be removed by the owner.
-        if (!full(who) || ((await isAdminKey(env, id)) && who.role !== 'owner')) return ownerOnly()
+        if (!full(who)) return ownerOnly()
         return json({ ok: await revokeEditor(env, id) }, 200, headers)
       }
       case '/editor/team/access': {
-        if (who.role !== 'owner') return json({ error: 'Only the owner can change full access.' }, 403, headers)
+        if (!full(who)) return json({ error: 'Only the owner or full-access staff can change full access.' }, 403, headers)
         const b = body as { id?: unknown; admin?: unknown }
         return json({ ok: await setKeyAccess(env, String(b.id ?? ''), b.admin === true) }, 200, headers)
       }

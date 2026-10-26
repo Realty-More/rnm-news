@@ -7,7 +7,7 @@ import { toast } from '../components/Toast.tsx'
 import { captionsFor } from '../lib/captions.ts'
 import { formatDate, formatDateTime } from '../lib/format.ts'
 import { invalidate, useAsync } from '../lib/hooks.ts'
-import { hasFullAccess, ownerRole, registerOwnerDevice, studio, studioPost } from '../lib/owner.ts'
+import { hasFullAccess, registerOwnerDevice, studio, studioPost } from '../lib/owner.ts'
 import { smartLink } from '../lib/stats.ts'
 import { fetchPost, fetchPosts, type Post } from '../lib/wp.ts'
 
@@ -664,7 +664,7 @@ export function TeamTab() {
   const res = useAsync('studio:team', (s) => studio<{ editors: Editor[] }>('team', undefined, s))
   const [name, setName] = useState('')
   const [newKey, setNewKey] = useState<{ name: string; key: string } | null>(null)
-  const iAmOwner = ownerRole()?.role === 'owner'
+  const canGrant = hasFullAccess()
   if (!hasFullAccess()) return <p className="empty">Only the owner can manage team keys.</p>
   const setAccess = async (e: Editor, admin: boolean) => {
     if (admin && !window.confirm(`Give ${e.name} full access? They will see everything you see: business numbers, traffic, team, attendance and settings.`)) return
@@ -731,16 +731,14 @@ export function TeamTab() {
                   </span>
                 </div>
                 <div className="acct-btns">
-                  {iAmOwner && (
+                  {canGrant && (
                     <button className="mini-btn" onClick={() => setAccess(e, !e.admin)}>
                       {e.admin ? 'Team access' : 'Give full access'}
                     </button>
                   )}
-                  {(iAmOwner || !e.admin) && (
-                    <button className="mini-btn danger" onClick={() => revoke(e.id)}>
-                      Revoke
-                    </button>
-                  )}
+                  <button className="mini-btn danger" onClick={() => revoke(e.id)}>
+                    Revoke
+                  </button>
                 </div>
               </li>
             ))}

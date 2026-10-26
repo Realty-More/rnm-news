@@ -6,7 +6,7 @@ import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDateTime } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
-import { createAccount, ownerRole, passwordLogin, studio, studioPost, unlock } from '../lib/owner.ts'
+import { createAccount, hasFullAccess, ownerRole, passwordLogin, studio, studioPost, unlock } from '../lib/owner.ts'
 import { Panel } from './StudioTools.tsx'
 
 type Mode = 'login' | 'signup' | 'key'
@@ -162,7 +162,7 @@ export function AccountsPanel() {
   const res = useAsync('studio:accounts', (s) => studio<{ accounts: Account[] }>('accounts', undefined, s))
   const [busy, setBusy] = useState<string | null>(null)
   const [newPw, setNewPw] = useState<{ name: string; password: string } | null>(null)
-  const iAmOwner = ownerRole()?.role === 'owner'
+  const canGrant = hasFullAccess()
   const act = async (a: Account, action: 'approve' | 'reject' | 'remove' | 'reset' | 'grant' | 'ungrant') => {
     const ask = {
       reject: `Turn down ${a.name}'s request?`,
@@ -255,12 +255,12 @@ export function AccountsPanel() {
                       New password
                     </button>
                   )}
-                  {iAmOwner && a.status === 'active' && a.role !== 'owner' && (
+                  {canGrant && a.status === 'active' && a.role !== 'owner' && (
                     <button className="btn ghost small" disabled={!!busy} onClick={() => act(a, a.role === 'admin' ? 'ungrant' : 'grant')}>
                       {a.role === 'admin' ? 'Team access' : 'Full access'}
                     </button>
                   )}
-                  {a.role !== 'owner' && (iAmOwner || a.role !== 'admin') && (
+                  {a.role !== 'owner' && (
                     <button className="btn ghost small" disabled={!!busy} onClick={() => act(a, 'remove')} aria-label={`Remove ${a.name}`}>
                       <Icon name="trash" size={15} />
                     </button>

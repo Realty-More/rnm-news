@@ -5,7 +5,7 @@
 //   Sessions: random tokens ("s_…"), stored only as SHA-256 hashes, valid 180 days, ended on log out.
 //   Forgot password: the owner sets a new one from the Studio.
 import type { Env } from './index.ts'
-import { sameKey, sha256hex, type Who } from './owner.ts'
+import { full, sameKey, sha256hex, type Who } from './owner.ts'
 
 const ITERATIONS = 20000
 const SESSION_DAYS = 180
@@ -161,8 +161,8 @@ export async function manageAccount(env: Env, action: string, body: unknown, who
   if (!a) throw new Error('Account not found.')
   if (a.role === 'owner' && action !== 'reset') throw new Error('The owner account can’t be changed here.')
   if (a.role === 'owner' && who.phone !== phone) throw new Error('Only the owner can reset the owner password.')
-  // Only the owner can change a full-access account or hand out full access.
-  if ((a.role === 'admin' || action === 'grant' || action === 'ungrant') && who.role !== 'owner') throw new Error('Only the owner can change full access.')
+  // Full access (owner or admin) can manage everyone except the owner's own account.
+  if (!full(who)) throw new Error('Only the owner or full-access staff can do this.')
   const endSessions = env.DB.prepare('DELETE FROM sessions WHERE phone = ?').bind(phone)
   switch (action) {
     case 'approve':

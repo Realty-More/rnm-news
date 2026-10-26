@@ -12,8 +12,8 @@ export const OWNER_NAME = 'Palash Roy'
 export const OWNER_TITLE = 'Founder & Editor'
 
 /**
- * owner: Palash Roy. admin: "full access" staff the owner trusts with every owner section
- * (only the owner can give or take it away). editor: team member.
+ * owner: Palash Roy. admin: "full access" staff with every owner section, who can also give or
+ * take away full access (but can't change the owner's account). editor: team member.
  */
 export interface Who {
   role: 'owner' | 'admin' | 'editor'
@@ -75,17 +75,13 @@ export async function createEditor(env: Env, name: string): Promise<{ key: strin
   return { key, editor }
 }
 
-/** Owner only: give or take away full access for a login key. */
+/** Owner or full access: give or take away full access for a login key. */
 export async function setKeyAccess(env: Env, id: string, admin: boolean) {
   if (!/^[0-9a-f]{64}$/.test(id)) return false
   const ed = await env.SUBS.get<Editor>(`editor:${id}`, 'json')
   if (!ed) return false
   await env.SUBS.put(`editor:${id}`, JSON.stringify({ ...ed, admin }))
   return true
-}
-
-export async function isAdminKey(env: Env, id: string): Promise<boolean> {
-  return !!(/^[0-9a-f]{64}$/.test(id) && (await env.SUBS.get<Editor>(`editor:${id}`, 'json'))?.admin)
 }
 
 export async function revokeEditor(env: Env, id: string) {

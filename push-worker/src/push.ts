@@ -80,9 +80,9 @@ export interface Notice {
 export function buildNotices(fresh: NewsItem[]): Notice[] {
   if (fresh.length === 0) return []
   if (fresh.length <= MAX_SINGLE) {
-    return fresh.map((p) => ({ title: 'R&M News', body: p.title, url: `#/article/${p.id}`, image: p.image, tag: `post-${p.id}` }))
+    return fresh.map((p) => ({ title: 'Realtynmore', body: p.title, url: `#/article/${p.id}`, image: p.image, tag: `post-${p.id}` }))
   }
-  return [{ title: `R&M News · ${fresh.length} new stories`, body: fresh[0].title, url: '#/news', image: fresh[0].image, tag: 'digest' }]
+  return [{ title: `Realtynmore · ${fresh.length} new stories`, body: fresh[0].title, url: '#/news', image: fresh[0].image, tag: 'digest' }]
 }
 
 /** Sends to every stored subscription under `prefix`; `noticesFor` decides what each device gets. */

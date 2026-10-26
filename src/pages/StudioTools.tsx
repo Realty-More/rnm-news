@@ -227,13 +227,13 @@ interface PushLog {
 export function NotifyTab() {
   const log = useAsync('studio:pushlog', (s) => studio<PushLog>('push-log', undefined, s))
   const stories = useLatestStories()
-  const [title, setTitle] = useState('R&M News')
+  const [title, setTitle] = useState('Realtynmore')
   const [body, setBody] = useState('')
   const [link, setLink] = useState('')
   const [armed, setArmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const useStory = (p: Post) => {
-    setTitle('R&M News')
+    setTitle('Realtynmore')
     setBody(p.title)
     setLink(p.link)
   }
@@ -274,7 +274,7 @@ export function NotifyTab() {
         <div className="push-preview" aria-label="Preview">
           <img src="./icons/icon-192.png" alt="" width={36} height={36} />
           <div>
-            <strong>{title || 'R&M News'}</strong>
+            <strong>{title || 'Realtynmore'}</strong>
             <span>{body || 'Your message'}</span>
           </div>
         </div>
@@ -579,7 +579,7 @@ export function ReportTab() {
       <div className="report-head">
         <div>
           <span className="owner-badge">Weekly report</span>
-          <h2>R&amp;M News app · week ending {today}</h2>
+          <h2>Realtynmore app · week ending {today}</h2>
         </div>
         <button className="btn small no-print" onClick={() => window.print()}>
           <Icon name="download" size={16} /> Print / Save PDF

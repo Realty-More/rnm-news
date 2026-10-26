@@ -136,9 +136,9 @@ export async function sessionWho(env: Env, token: string): Promise<Who | null> {
 }
 
 /** Staff with an active account, in the shape the team lists use. */
-export async function accountStaff(env: Env): Promise<{ id: string; name: string; active: boolean }[]> {
-  const { results } = await env.DB.prepare("SELECT phone, name FROM accounts WHERE role IN ('editor', 'admin') AND status = 'active' ORDER BY name").all<{ phone: string; name: string }>()
-  return results.map((r) => ({ id: `ph:${r.phone}`, name: r.name, active: true }))
+export async function accountStaff(env: Env): Promise<{ id: string; name: string; active: boolean; created: string }[]> {
+  const { results } = await env.DB.prepare("SELECT phone, name, COALESCE(approved_at, created_at) AS since FROM accounts WHERE role IN ('editor', 'admin') AND status = 'active' ORDER BY name").all<{ phone: string; name: string; since: string }>()
+  return results.map((r) => ({ id: `ph:${r.phone}`, name: r.name, active: true, created: r.since }))
 }
 
 /* ---------- owner: requests and accounts ---------- */

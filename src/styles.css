@@ -1,4 +1,4 @@
-/* Realty & More News: black, white, grey and the magazine's yellow-orange. */
+/* Realtynmore: black, white, grey and the magazine's yellow-orange. */
 :root {
   --bg: #ffffff;
   --surface: #f4f4f2;
@@ -4683,6 +4683,152 @@ em.late {
     width: 56px;
     height: 32px;
   }
+}
+
+/* ---------- Tasks and leave ---------- */
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.task-list > li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.task.overdue {
+  box-shadow: inset 3px 0 0 #d9502e;
+  padding-left: 10px;
+}
+.task.done .task-head strong,
+.task.cancelled .task-head strong {
+  text-decoration: line-through;
+  color: var(--mute);
+}
+.task-main {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+.task-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.task-head strong {
+  font-size: 15.5px;
+}
+.task-tag {
+  padding: 1px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  font: 600 11.5px/1.5 var(--cond);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.task-tag.high {
+  background: var(--accent);
+  border-color: transparent;
+  color: #141416;
+}
+.task-tag.late {
+  background: #d9502e;
+  border-color: transparent;
+  color: #fff;
+}
+.task-tag.done {
+  background: #2f9e5b;
+  border-color: transparent;
+  color: #fff;
+}
+.task-details,
+.task-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+.task-note {
+  font-style: italic;
+}
+.task-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+  align-items: flex-end;
+}
+.task-close {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.task-close input,
+.leave-note {
+  flex: 1 1 180px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+}
+.leave-note {
+  width: 160px;
+  flex: none;
+}
+.task-form textarea {
+  height: auto;
+  padding: 10px 12px;
+  font: 500 14.5px/1.4 var(--sans);
+}
+.form-grid label.auth-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.task-due {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--mute);
+}
+.person-tasks {
+  margin: 6px 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.person-tasks-done {
+  display: block;
+  color: #2f9e5b;
+  font-weight: 600;
+}
+.status.leave {
+  background: #3b6fd8;
+  color: #fff;
+}
+.person.on-leave {
+  border-left-color: #3b6fd8;
+  opacity: 1;
+}
+.weekoff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 10px 0 4px;
+  font-size: 13.5px;
 }
 
 /* ---------- Larger screens ---------- */

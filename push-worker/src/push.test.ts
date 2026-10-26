@@ -52,7 +52,7 @@ describe('web push payload', () => {
     const auth = crypto.getRandomValues(new Uint8Array(16))
     const vapid = await vapidKeys()
     const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc123', expirationTime: null, keys: { p256dh: b64u(uaPublic), auth: b64u(auth) } }
-    const notice = { title: 'R&M News', body: 'UP RERA approves 15 projects', url: '#/article/1', tag: 'post-1' }
+    const notice = { title: 'Realtynmore', body: 'UP RERA approves 15 projects', url: '#/article/1', tag: 'post-1' }
 
     const payload = await buildPushPayload({ data: notice, options: { ttl: 60 } }, sub, vapid)
     expect(payload.headers['content-encoding']).toBe('aes128gcm')
@@ -240,7 +240,7 @@ describe('owner tools', async () => {
   it('cleans custom notifications and maps site links into the app', () => {
     const n = cleanNotice({ title: 'Exclusive', body: 'New interview with DLF CEO', url: 'https://realtynmore.com/dlf-ceo-interview/' })
     expect(n).toMatchObject({ title: 'Exclusive', body: 'New interview with DLF CEO', url: '#/read/dlf-ceo-interview' })
-    expect(cleanNotice({ body: 'Hi', url: 'https://evil.example/x' })).toMatchObject({ url: '#/', title: 'R&M News' })
+    expect(cleanNotice({ body: 'Hi', url: 'https://evil.example/x' })).toMatchObject({ url: '#/', title: 'Realtynmore' })
     expect(cleanNotice({ title: 'x' })).toBe('Write the message text.')
   })
 
@@ -465,5 +465,52 @@ describe('accounts', () => {
     expect(b.hash).toBe(a.hash)
     expect(c.hash).not.toBe(a.hash)
     expect(a.hash).not.toContain('Realty2026')
+  })
+})
+
+import { daysBetween, leaveDays, sortTasks, type Task } from './work.ts'
+import { summarizeMonth as summarize, workingDaysIn } from './team.ts'
+
+describe('tasks and leave', () => {
+  const task = (id: number, over: Partial<Task>): Task => ({ id, title: `T${id}`, details: '', assignee_id: 'a', assignee_name: 'A', due: null, priority: 'normal', status: 'open', created_by: 'O', created_at: `2026-10-2${id}T10:00:00Z`, done_at: null, done_note: null, ...over })
+  it('puts overdue first, then high priority, then by due date, done last', () => {
+    const list = sortTasks([task(1, { status: 'done' }), task(2, { due: '2026-10-30' }), task(3, { due: '2026-10-20' }), task(4, { priority: 'high' })], '2026-10-26')
+    expect(list.map((t) => t.id)).toEqual([3, 4, 2, 1])
+  })
+  it('counts leave days without weekly offs, half days as 0.5', () => {
+    expect(daysBetween('2026-10-30', '2026-11-02')).toEqual(['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02'])
+    // 1 Nov 2026 is a Sunday
+    expect(leaveDays({ from_day: '2026-10-30', to_day: '2026-11-02', half: 0 }, [0])).toHaveLength(3)
+    expect(leaveDays({ from_day: '2026-10-30', to_day: '2026-11-02', half: 0 }, [0], '2026-10')).toEqual([
+      { day: '2026-10-30', amount: 1 },
+      { day: '2026-10-31', amount: 1 },
+    ])
+    expect(leaveDays({ from_day: '2026-10-27', to_day: '2026-10-27', half: 1 }, [0])).toEqual([{ day: '2026-10-27', amount: 0.5 }])
+  })
+  it('works out working days, leave and absences for salary', () => {
+    expect(workingDaysIn('2026-10', [0], '2026-10-07')).toEqual(['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-05', '2026-10-06', '2026-10-07'])
+    const s = { startTime: '10:00', graceMin: 15, reminderTime: '18:30', weekOff: [0] }
+    const att = ['2026-10-01', '2026-10-02', '2026-10-05'].map((day) => ({ person_id: 'a', name: 'A', day, check_in: `${day}T04:00:00Z`, check_out: `${day}T12:00:00Z`, mode: 'office', note: null }))
+    const leaves = [
+      { person_id: 'a', kind: 'sick' as const, from_day: '2026-10-03', to_day: '2026-10-03', half: 0 },
+      { person_id: 'a', kind: 'casual' as const, from_day: '2026-10-06', to_day: '2026-10-06', half: 1 },
+    ]
+    const [row] = summarize([{ id: 'a', name: 'A' }], att, [], s, leaves, '2026-10', '2026-10-07')
+    expect(row.workingDays).toBe(6)
+    expect(row.present).toBe(3)
+    expect(row.leave).toBe(1.5)
+    expect(row.leaveByKind).toEqual({ 'Sick leave': 1, 'Casual leave': 0.5 })
+    // 6 Oct: half-day leave, no check-in = 0.5 absent; 7 Oct: nothing = 1 absent
+    expect(row.absent).toBe(1.5)
+    expect(row.days['2026-10-03'].leave).toBe('Sick leave')
+  })
+})
+
+describe('joining date', () => {
+  it('does not count days before someone joined as absent', () => {
+    const s = { startTime: '10:00', graceMin: 15, reminderTime: '18:30', weekOff: [0] }
+    const [row] = summarize([{ id: 'n', name: 'New', since: '2026-10-05' }], [], [], s, [], '2026-10', '2026-10-07')
+    expect(row.workingDays).toBe(3)
+    expect(row.absent).toBe(3)
   })
 })

@@ -8,7 +8,7 @@ self.addEventListener('push', (event) => {
   }
   const scope = self.registration.scope
   event.waitUntil(
-    self.registration.showNotification(data.title || 'R&M News', {
+    self.registration.showNotification(data.title || 'Realtynmore', {
       body: data.body || 'New story on Realty & More',
       icon: scope + 'icons/icon-192.png',
       badge: scope + 'icons/badge-96.png',

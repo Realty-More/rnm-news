@@ -95,10 +95,27 @@ describe('attendance export', async () => {
     const csv = monthCsv({
       month: '2026-02',
       settings: { startTime: '10:00', graceMin: 15 },
-      rows: [{ id: 'a', name: 'Neha "Desk"', present: 1, late: 1, reports: 1, minutes: 510, avgCheckIn: '10:20', days: { '2026-02-03': { in: '10:20', out: '18:50', late: true, report: true } } }],
+      rows: [
+        {
+          id: 'a',
+          name: 'Neha "Desk"',
+          present: 1,
+          late: 1,
+          reports: 1,
+          minutes: 510,
+          avgCheckIn: '10:20',
+          workingDays: 20,
+          leave: 1.5,
+          leaveByKind: { 'Sick leave': 1, 'Casual leave': 0.5 },
+          absent: 2,
+          days: { '2026-02-03': { in: '10:20', out: '18:50', late: true, report: true }, '2026-02-04': { in: null, out: null, late: false, report: false, leave: 'Sick leave' } },
+        },
+      ],
     })
     const [head, row] = csv.split('\r\n')
-    expect(head.split(',').length).toBe(6 + 28)
+    expect(head.split(',').length).toBe(10 + 28)
+    expect(row).toContain('"Sick leave 1; Casual leave 0.5"')
+    expect(row).toContain('"Leave: Sick leave"')
     expect(row).toContain('"Neha ""Desk"""')
     expect(row).toContain('"10:20-18:50 L"')
     expect(row).toContain('"8.5"')

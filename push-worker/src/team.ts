@@ -4,14 +4,17 @@
 import { deliver, isValidSubscription, subKey, type StoredSub } from './push.ts'
 import { listEditors, type Who } from './owner.ts'
 import { accountStaff } from './accounts.ts'
+import { approvedLeavesInMonth, leaveDays, leaveOnDay, LEAVE_KINDS, tasksForDay, type Leave } from './work.ts'
 import type { Env } from './index.ts'
 
 export interface TeamSettings {
   startTime: string // "10:00" IST
   graceMin: number
   reminderTime: string // "18:30" IST, report reminder
+  /** Weekly off days, 0 = Sunday … 6 = Saturday (not counted as working or leave days). */
+  weekOff: number[]
 }
-const DEFAULTS: TeamSettings = { startTime: '10:00', graceMin: 15, reminderTime: '18:30' }
+const DEFAULTS: TeamSettings = { startTime: '10:00', graceMin: 15, reminderTime: '18:30', weekOff: [0] }
 const MODES = ['office', 'remote', 'field'] as const
 type Mode = (typeof MODES)[number]
 
@@ -49,6 +52,7 @@ export async function saveTeamSettings(env: Env, body: unknown) {
     startTime: time(b.startTime, cur.startTime),
     graceMin: Number.isInteger(b.graceMin) && (b.graceMin as number) >= 0 && (b.graceMin as number) <= 120 ? (b.graceMin as number) : cur.graceMin,
     reminderTime: time(b.reminderTime, cur.reminderTime),
+    weekOff: Array.isArray(b.weekOff) ? [...new Set(b.weekOff.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort() : cur.weekOff,
   }
   await env.SUBS.put('team:settings', JSON.stringify(next))
   return { ok: true, settings: next }
@@ -146,8 +150,15 @@ export async function myHistory(env: Env, who: Who) {
  * who has attendance in the period (so past records stay complete). The owner is never listed:
  * Palash Roy runs the company and is not tracked as staff.
  */
-export function teamPeople(editors: { id: string; name: string; active: boolean }[], att: { person_id: string; name: string }[]): { id: string; name: string }[] {
-  const people = editors.filter((e) => e.active).map((e) => ({ id: e.id, name: e.name }))
+/** Everyone who can be given tasks: staff with an active key or account. */
+export async function assignablePeople(env: Env): Promise<{ id: string; name: string }[]> {
+  const [keys, accounts] = await Promise.all([listEditors(env), accountStaff(env)])
+  return teamPeople([...keys, ...accounts], [])
+}
+
+export function teamPeople(editors: { id: string; name: string; active: boolean; created?: string }[], att: { person_id: string; name: string }[]): { id: string; name: string; since?: string }[] {
+  // `since`: the day their login was created, so days before they joined never count as absent.
+  const people: { id: string; name: string; since?: string }[] = editors.filter((e) => e.active).map((e) => ({ id: e.id, name: e.name, ...(e.created ? { since: istDay(Date.parse(e.created)) } : {}) }))
   const known = new Set(people.map((p) => p.id))
   for (const a of att) {
     if (a.person_id === 'owner' || known.has(a.person_id)) continue
@@ -169,6 +180,7 @@ export async function teamDay(env: Env, day: string) {
   const attBy = new Map(att.results.map((a) => [a.person_id, a]))
   const repBy = new Map(rep.results.map((r) => [r.person_id, r]))
   const people = teamPeople(editors, att.results)
+  const [onLeave, tasks] = await Promise.all([leaveOnDay(env, day), tasksForDay(env, day)])
   const rows = people.map((p) => {
     const a = attBy.get(p.id) ?? null
     const r = repBy.get(p.id) ?? null
@@ -187,9 +199,16 @@ export async function teamDay(env: Env, day: string) {
       minutes: workedMinutes(a?.check_in ?? null, a?.check_out ?? null),
       report: r ? { done: r.done, plan: r.plan, blockers: r.blockers, links: r.links, submittedAt: r.submitted_at } : null,
       activity,
+      leave: onLeave.get(p.id) ?? null,
+      tasks: tasks.get(p.id) ?? { done: [], open: 0, overdue: 0 },
     }
   })
-  return { day, settings, people: rows, summary: { total: rows.length, present: rows.filter((r) => r.checkIn).length, late: rows.filter((r) => r.late).length, reports: rows.filter((r) => r.report).length } }
+  return {
+    day,
+    settings,
+    people: rows,
+    summary: { total: rows.length, present: rows.filter((r) => r.checkIn).length, late: rows.filter((r) => r.late).length, reports: rows.filter((r) => r.report).length, onLeave: rows.filter((r) => r.leave).length },
+  }
 }
 
 export interface MonthRow {
@@ -200,11 +219,41 @@ export interface MonthRow {
   reports: number
   minutes: number
   avgCheckIn: string | null
-  days: Record<string, { in: string | null; out: string | null; late: boolean; report: boolean }>
+  /** Working days so far in the month (weekly offs excluded). */
+  workingDays: number
+  /** Approved leave days in the month (half days count 0.5), and by type. */
+  leave: number
+  leaveByKind: Record<string, number>
+  /** Working days with no check-in and no approved leave. */
+  absent: number
+  days: Record<string, { in: string | null; out: string | null; late: boolean; report: boolean; leave?: string }>
+}
+
+/** Working days in a month up to `upTo` (inclusive), skipping weekly offs. */
+export function workingDaysIn(month: string, weekOff: number[], upTo: string): string[] {
+  const [y, m] = month.split('-').map(Number)
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const out: string[] = []
+  for (let d = 1; d <= last; d++) {
+    const day = `${month}-${String(d).padStart(2, '0')}`
+    if (day > upTo) break
+    if (!weekOff.includes(new Date(`${day}T00:00:00Z`).getUTCDay())) out.push(day)
+  }
+  return out
 }
 
 /** Monthly summary per person (pure, for tests). */
-export function summarizeMonth(people: { id: string; name: string }[], att: Att[], reps: { person_id: string; day: string }[], s: TeamSettings): MonthRow[] {
+export function summarizeMonth(
+  people: { id: string; name: string; since?: string }[],
+  att: Att[],
+  reps: { person_id: string; day: string }[],
+  s: TeamSettings,
+  leaves: Pick<Leave, 'person_id' | 'kind' | 'from_day' | 'to_day' | 'half'>[] = [],
+  month = '',
+  upTo = '9999-12-31',
+): MonthRow[] {
+  const weekOff = s.weekOff ?? [0]
+  const working = month ? workingDaysIn(month, weekOff, upTo) : []
   return people.map((p) => {
     const mine = att.filter((a) => a.person_id === p.id && a.check_in)
     const repDays = new Set(reps.filter((r) => r.person_id === p.id).map((r) => r.day))
@@ -212,7 +261,28 @@ export function summarizeMonth(people: { id: string; name: string }[], att: Att[
     const avg = ins.length ? Math.round(ins.reduce((x, y) => x + y, 0) / ins.length) : null
     const days: MonthRow['days'] = {}
     for (const a of mine) days[a.day] = { in: a.check_in ? istClock(a.check_in) : null, out: a.check_out ? istClock(a.check_out) : null, late: isLate(a.check_in, s), report: repDays.has(a.day) }
+    // Approved leave in this month (only up to today counts towards absences; future leave is shown too).
+    const leaveByKind: Record<string, number> = {}
+    const leaveOn = new Map<string, number>()
+    for (const l of leaves.filter((x) => x.person_id === p.id)) {
+      for (const { day, amount } of leaveDays(l, weekOff, month || undefined)) {
+        leaveOn.set(day, (leaveOn.get(day) ?? 0) + amount)
+        const label = LEAVE_KINDS[l.kind] ?? l.kind
+        leaveByKind[label] = (leaveByKind[label] ?? 0) + amount
+        days[day] = { ...(days[day] ?? { in: null, out: null, late: false, report: false }), leave: l.half ? `${label} (half)` : label }
+      }
+    }
+    const presentDays = new Set(mine.map((a) => a.day))
+    // A working day with no check-in is absent, less any approved leave that day (a half day leaves 0.5).
+    // Only days from the first check-in or joining date count (whichever is earlier).
+    const start = [p.since, ...mine.map((a) => a.day)].filter((d): d is string => !!d).sort()[0]
+    const mineWorking = start ? working.filter((d) => d >= start) : working
+    const absent = mineWorking.filter((d) => !presentDays.has(d)).reduce((n, d) => n + Math.max(0, 1 - (leaveOn.get(d) ?? 0)), 0)
     return {
+      workingDays: mineWorking.length,
+      leave: [...leaveOn.values()].reduce((a, b) => a + b, 0),
+      leaveByKind,
+      absent,
       id: p.id,
       name: p.name,
       present: mine.length,
@@ -233,8 +303,14 @@ export async function teamMonth(env: Env, month: string) {
     env.DB.prepare('SELECT * FROM attendance WHERE substr(day,1,7) = ?1').bind(month).all<Att>(),
     env.DB.prepare('SELECT person_id, day FROM reports WHERE substr(day,1,7) = ?1').bind(month).all<{ person_id: string; day: string }>(),
   ])
-  const people = teamPeople(editors, att.results)
-  return { month, settings, rows: summarizeMonth(people, att.results.filter((a) => a.person_id !== 'owner'), reps.results, settings) }
+  const leaves = await approvedLeavesInMonth(env, month)
+  const people = teamPeople(editors, [...att.results, ...leaves.map((l) => ({ person_id: l.person_id, name: l.name }))])
+  const today = istDay()
+  return {
+    month,
+    settings,
+    rows: summarizeMonth(people, att.results.filter((a) => a.person_id !== 'owner'), reps.results, settings, leaves, month, month < today.slice(0, 7) ? '9999-12-31' : today),
+  }
 }
 
 /* ---------- reminders and the morning-brief line ---------- */

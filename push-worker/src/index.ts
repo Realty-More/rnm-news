@@ -1,4 +1,4 @@
-// R&M News app server (Cloudflare Workers free plan).
+// Realtynmore app server (Cloudflare Workers free plan).
 //   POST /subscribe, /unsubscribe     breaking-news alerts (KV)
 //   POST /hit, GET /trending          anonymous usage counts and "Trending in app" (D1)
 //   POST /auth/signup|login|logout    Studio accounts: mobile number + password, owner approves staff
@@ -43,10 +43,11 @@ import {
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
 import { ask, write } from './ai.ts'
 import { changePassword, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
+import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
 import { collectYouTube, youTubeStats } from './youtube.ts'
 import { collectViews, seoCompare, webTraffic } from './website.ts'
-import { checkIn, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
+import { assignablePeople, checkIn, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
 
 export interface Env {
   SUBS: KVNamespace
@@ -97,7 +98,7 @@ async function cachedJson(url: URL, ctx: ExecutionContext, headers: Record<strin
   return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
 }
 
-const TEAM_ONLY = new Set(['/editor/me/checkin', '/editor/me/checkout', '/editor/me/report', '/editor/me/device'])
+const TEAM_ONLY = new Set(['/editor/me/checkin', '/editor/me/checkout', '/editor/me/report', '/editor/me/device', '/editor/me/leave'])
 const OWNER_ONLY = new Set(['/editor/yt', '/editor/yt/refresh', '/editor/overview', '/editor/push-log', '/editor/uptime', '/editor/performance', '/editor/web/traffic', '/editor/web/seo', '/editor/push', '/editor/site', '/editor/owner-device'])
 
 /** Content Studio for the owner and editors. Team management is owner-only. */
@@ -166,6 +167,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return cachedJson(url, ctx, headers, 12 * 60 * 60, () => seoCompare(env))
         case '/editor/accounts':
           return full(who) ? json(await listAccounts(env), 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
+        case '/editor/tasks':
+          return json(await listTasks(env, who, url.searchParams.get('scope') ?? 'mine'), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/people':
+          return full(who) ? json({ people: await assignablePeople(env) }, 200, headers) : ownerOnly()
+        case '/editor/me/leaves':
+          return json(await myLeaves(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/leaves':
+          return full(who) ? json(await allLeaves(env, url.searchParams.get('month') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
         case '/editor/team/day':
           return full(who) ? json(await teamDay(env, url.searchParams.get('date') ?? ''), 200, headers) : ownerOnly()
         case '/editor/team/month':
@@ -212,6 +221,18 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return full(who) ? json(await manageAccount(env, pathname.split('/').pop()!, body, who), 200, headers) : ownerOnly()
       case '/editor/me/password':
         return json(await changePassword(env, body, who, req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''), 200, headers)
+      case '/editor/tasks':
+        return full(who) ? json(await createTask(env, who, body, await assignablePeople(env)), 200, headers) : ownerOnly()
+      case '/editor/tasks/update':
+        return json(await updateTask(env, who, body), 200, headers)
+      case '/editor/tasks/delete':
+        return full(who) ? json(await deleteTask(env, body), 200, headers) : ownerOnly()
+      case '/editor/me/leave':
+        return json(await requestLeave(env, who, body), 200, headers)
+      case '/editor/me/leave/cancel':
+        return json(await cancelLeave(env, who, body), 200, headers)
+      case '/editor/leaves/decide':
+        return full(who) ? json(await decideLeave(env, who, body), 200, headers) : ownerOnly()
       case '/editor/ai/write':
         return json(await write(env, body, who), 200, headers)
       case '/editor/reels/ref-remove':
@@ -277,7 +298,7 @@ export default {
     }
 
     if (req.method === 'GET') {
-      if (pathname === '/') return json({ ok: true, service: 'R&M News app server' }, 200, headers)
+      if (pathname === '/') return json({ ok: true, service: 'Realtynmore app server' }, 200, headers)
       if (pathname === '/vapid') return json({ publicKey: env.VAPID_PUBLIC_KEY }, 200, headers)
       const share = /^\/a\/(\d{1,9})$/.exec(pathname)
       if (share) return sharePage(env, Number(share[1]))

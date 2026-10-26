@@ -121,7 +121,7 @@ export function cleanNotice(body: unknown): Notice | string {
   if (story) url = `#/read/${story[1]}`
   else if (!/^#\/[\w\-/?=&%.]*$/.test(url)) url = '#/'
   const image = typeof b.image === 'string' && /^https:\/\/realtynmore\.com\/wp-content\//.test(b.image) ? b.image : undefined
-  return { title: title || 'R&M News', body: text, url, image, tag: `custom-${Date.now()}` }
+  return { title: title || 'Realtynmore', body: text, url, image, tag: `custom-${Date.now()}` }
 }
 
 const istDate = (ms = Date.now()) => new Date(ms + 5.5 * 3600000).toISOString().slice(0, 10)

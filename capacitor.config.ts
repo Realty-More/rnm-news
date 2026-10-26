@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.realtynmore.news',
-  appName: 'R&M News',
+  appName: 'Realtynmore',
   webDir: 'dist',
   backgroundColor: '#141416',
   plugins: {

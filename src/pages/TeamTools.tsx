@@ -9,6 +9,7 @@ import { useAsync } from '../lib/hooks.ts'
 import { studio, studioPost } from '../lib/owner.ts'
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
+import { MyTasksPanel } from './WorkTools.tsx'
 
 const IST = 'Asia/Kolkata'
 const clock = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-IN', { timeZone: IST, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso)) : '–')
@@ -21,7 +22,7 @@ interface Today {
   name: string
   attendance: { check_in: string | null; check_out: string | null; mode: string | null; note: string | null } | null
   report: { done: string; plan: string; blockers: string; links: string; submitted_at: string } | null
-  settings: { startTime: string; graceMin: number; reminderTime: string }
+  settings: { startTime: string; graceMin: number; reminderTime: string; weekOff?: number[] }
   late: boolean
   minutes: number
 }
@@ -124,6 +125,7 @@ export function MyDayTab() {
         )}
       </section>
 
+      <MyTasksPanel />
       <Panel title={d.report ? 'Today’s report (saved, you can edit)' : 'Today’s work report'} note="Your report goes only to the owner.">
         <form className="form-grid one" onSubmit={sendReport}>
           <label>
@@ -207,8 +209,8 @@ export function MyDayTab() {
 /* ---------- owner: Team today ---------- */
 interface TeamDay {
   day: string
-  settings: { startTime: string; graceMin: number; reminderTime: string }
-  summary: { total: number; present: number; late: number; reports: number }
+  settings: { startTime: string; graceMin: number; reminderTime: string; weekOff?: number[] }
+  summary: { total: number; present: number; late: number; reports: number; onLeave?: number }
   people: {
     id: string
     name: string
@@ -220,6 +222,8 @@ interface TeamDay {
     minutes: number
     report: { done: string; plan: string; blockers: string; links: string; submittedAt: string } | null
     activity: string[]
+    leave?: { kind: string; half: boolean } | null
+    tasks?: { done: string[]; open: number; overdue: number }
   }[]
 }
 export function TeamTodayTab() {
@@ -264,11 +268,21 @@ export function TeamTodayTab() {
             </div>
           </div>
           {d.people.map((p) => (
-            <section key={p.id} className={`person ${p.checkIn ? '' : 'absent'}`}>
+            <section key={p.id} className={`person ${p.checkIn ? '' : 'absent'} ${p.leave && !p.checkIn ? 'on-leave' : ''}`}>
               <div className="person-head">
                 <strong>{p.name}</strong>
-                <span className={`status ${p.checkIn ? (p.checkOut ? 'out' : 'in') : 'none'}`}>{p.checkIn ? (p.checkOut ? 'Checked out' : 'Working') : 'Not checked in'}</span>
+                <span className={`status ${p.checkIn ? (p.checkOut ? 'out' : 'in') : p.leave ? 'leave' : 'none'}`}>
+                  {p.checkIn ? (p.checkOut ? 'Checked out' : 'Working') : p.leave ? `On leave${p.leave.half ? ' (half day)' : ''}` : 'Not checked in'}
+                </span>
               </div>
+              {p.leave && <p className="panel-note">{p.leave.kind}{p.leave.half ? ', half day' : ''}</p>}
+              {p.tasks && (p.tasks.done.length > 0 || p.tasks.open > 0) && (
+                <p className="person-tasks">
+                  <b>Tasks:</b> {p.tasks.done.length} done today · {p.tasks.open} open
+                  {p.tasks.overdue > 0 && <em className="late">{p.tasks.overdue} overdue</em>}
+                  {p.tasks.done.length > 0 && <span className="person-tasks-done">✓ {p.tasks.done.join(' · ')}</span>}
+                </p>
+              )}
               <div className="person-times">
                 <span>
                   In <b>{clock(p.checkIn)}</b> {p.late && <em className="late">Late</em>}
@@ -336,10 +350,12 @@ function TeamSettingsPanel() {
   const [start, setStart] = useState('')
   const [grace, setGrace] = useState('')
   const [remind, setRemind] = useState('')
+  const [off, setOff] = useState<number[] | null>(null)
   if (!s) return null
+  const weekOff = off ?? s.weekOff ?? [0]
   const save = async () => {
     try {
-      await studioPost('team/settings', { startTime: start || s.startTime, graceMin: grace === '' ? s.graceMin : Number(grace), reminderTime: remind || s.reminderTime })
+      await studioPost('team/settings', { startTime: start || s.startTime, graceMin: grace === '' ? s.graceMin : Number(grace), reminderTime: remind || s.reminderTime, weekOff })
       toast('Office timings saved')
       res.reload()
     } catch (e) {
@@ -347,7 +363,7 @@ function TeamSettingsPanel() {
     }
   }
   return (
-    <Panel title="Office timings" note="Used for the Late mark and the report reminder (IST).">
+    <Panel title="Office timings" note="Used for the Late mark, the report reminder (IST) and working days in the monthly attendance.">
       <div className="form-grid">
         <label>
           Office starts
@@ -361,6 +377,14 @@ function TeamSettingsPanel() {
           Report reminder
           <input type="time" defaultValue={s.reminderTime} onChange={(e) => setRemind(e.target.value)} />
         </label>
+      </div>
+      <div className="weekoff" role="group" aria-label="Weekly off days">
+        <span>Weekly off:</span>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
+          <label key={d} className="auth-check">
+            <input type="checkbox" checked={weekOff.includes(i)} onChange={(e) => setOff(e.target.checked ? [...weekOff, i].sort() : weekOff.filter((x) => x !== i))} /> {d}
+          </label>
+        ))}
       </div>
       <div className="action-row">
         <button className="btn small" onClick={save}>
@@ -388,7 +412,20 @@ function TeamSettingsPanel() {
 interface Month {
   month: string
   settings: { startTime: string; graceMin: number }
-  rows: { id: string; name: string; present: number; late: number; reports: number; minutes: number; avgCheckIn: string | null; days: Record<string, { in: string | null; out: string | null; late: boolean; report: boolean }> }[]
+  rows: {
+    id: string
+    name: string
+    present: number
+    late: number
+    reports: number
+    minutes: number
+    avgCheckIn: string | null
+    workingDays?: number
+    leave?: number
+    leaveByKind?: Record<string, number>
+    absent?: number
+    days: Record<string, { in: string | null; out: string | null; late: boolean; report: boolean; leave?: string }>
+  }[]
 }
 const csvCell = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
 
@@ -396,15 +433,26 @@ export function monthCsv(m: Month): string {
   const [y, mo] = m.month.split('-').map(Number)
   const days = new Date(Date.UTC(y, mo, 0)).getUTCDate()
   const dates = Array.from({ length: days }, (_, i) => `${m.month}-${String(i + 1).padStart(2, '0')}`)
-  const head = ['Name', 'Days present', 'Late days', 'Reports', 'Total hours', 'Avg check-in', ...dates.map((d) => d.slice(8))]
+  const head = ['Name', 'Working days', 'Days present', 'Leave days', 'Leave by type', 'Absent days', 'Late days', 'Reports', 'Total hours', 'Avg check-in', ...dates.map((d) => d.slice(8))]
   const lines = m.rows.map((r) => [
     r.name,
+    r.workingDays ?? '',
     r.present,
+    r.leave ?? 0,
+    Object.entries(r.leaveByKind ?? {})
+      .map(([k, v]) => `${k} ${v}`)
+      .join('; '),
+    r.absent ?? '',
     r.late,
     r.reports,
     (r.minutes / 60).toFixed(1),
     r.avgCheckIn ?? '',
-    ...dates.map((d) => (r.days[d] ? `${r.days[d].in ?? ''}-${r.days[d].out ?? ''}${r.days[d].late ? ' L' : ''}` : '')),
+    ...dates.map((d) => {
+      const x = r.days[d]
+      if (!x) return ''
+      if (x.leave && !x.in) return `Leave: ${x.leave}`
+      return `${x.in ?? ''}-${x.out ?? ''}${x.late ? ' L' : ''}${x.leave ? ` + ${x.leave}` : ''}`
+    }),
   ])
   return [head, ...lines].map((row) => row.map(csvCell).join(',')).join('\r\n')
 }
@@ -429,7 +477,7 @@ export function AttendanceTab() {
           <Icon name="download" size={16} /> Download Excel (CSV)
         </button>
       </div>
-      <Panel title="Monthly attendance" note="Self check-in/out by each person. Hours count days with both check-in and check-out.">
+      <Panel title="Monthly attendance" note="For salary: working days exclude weekly offs; absent = working days with no check-in and no approved leave (a half-day leave counts 0.5). Hours count days with both check-in and check-out.">
         {res.error && !res.data ? (
           <ErrorState error={res.error} onRetry={res.reload} />
         ) : !res.data ? (
@@ -442,7 +490,10 @@ export function AttendanceTab() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Working days</th>
                   <th>Present</th>
+                  <th>Leave</th>
+                  <th>Absent</th>
                   <th>Late</th>
                   <th>Reports</th>
                   <th>Hours</th>
@@ -453,7 +504,10 @@ export function AttendanceTab() {
                 {res.data.rows.map((r) => (
                   <tr key={r.id}>
                     <td>{r.name}</td>
+                    <td>{r.workingDays ?? '–'}</td>
                     <td>{r.present}</td>
+                    <td title={Object.entries(r.leaveByKind ?? {}).map(([k, v]) => `${k}: ${v}`).join(', ')}>{r.leave ?? 0}</td>
+                    <td className={r.absent ? 'late-cell' : ''}>{r.absent ?? '–'}</td>
                     <td className={r.late ? 'late-cell' : ''}>{r.late}</td>
                     <td>{r.reports}</td>
                     <td>{(r.minutes / 60).toFixed(1)}</td>

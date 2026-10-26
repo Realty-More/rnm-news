@@ -28,3 +28,7 @@ CREATE TABLE IF NOT EXISTS auth_fail (k TEXT NOT NULL, hour TEXT NOT NULL, n INT
 CREATE TABLE IF NOT EXISTS yt_videos (id TEXT PRIMARY KEY, title TEXT, published TEXT, playlists TEXT, short INTEGER, views INTEGER NOT NULL DEFAULT 0, likes INTEGER, thumb TEXT, checked_at TEXT);
 CREATE TABLE IF NOT EXISTS yt_views (id TEXT NOT NULL, hour TEXT NOT NULL, views INTEGER NOT NULL, PRIMARY KEY (id, hour));
 CREATE INDEX IF NOT EXISTS yt_views_hour ON yt_views (hour);
+CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, details TEXT, assignee_id TEXT NOT NULL, assignee_name TEXT, due TEXT, priority TEXT NOT NULL DEFAULT 'normal', status TEXT NOT NULL DEFAULT 'open', created_by TEXT, created_at TEXT NOT NULL, done_at TEXT, done_note TEXT);
+CREATE INDEX IF NOT EXISTS tasks_assignee ON tasks (assignee_id, status);
+CREATE TABLE IF NOT EXISTS leaves (id INTEGER PRIMARY KEY AUTOINCREMENT, person_id TEXT NOT NULL, name TEXT, kind TEXT NOT NULL, from_day TEXT NOT NULL, to_day TEXT NOT NULL, half INTEGER NOT NULL DEFAULT 0, reason TEXT, status TEXT NOT NULL DEFAULT 'pending', decided_by TEXT, decided_at TEXT, decision_note TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS leaves_person ON leaves (person_id, from_day);

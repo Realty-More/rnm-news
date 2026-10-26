@@ -24,8 +24,8 @@ export default defineConfig({
       injectRegister: false,
       manifest: {
         id: './',
-        name: 'Realty & More News',
-        short_name: 'R&M News',
+        name: 'Realtynmore',
+        short_name: 'Realtynmore',
         description: 'Indian real estate news, interviews, videos and podcasts from RealtyNMore.',
         lang: 'en-IN',
         start_url: './',

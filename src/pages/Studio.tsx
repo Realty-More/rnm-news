@@ -11,6 +11,7 @@ import { forgetOwner, isAccountLogin, ownerKey, ownerRole, refreshRole, studio }
 import { AccountsPanel, AuthScreen, ChangePassword } from './AuthTools.tsx'
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
 import { MagazineTab } from './MagazineTools.tsx'
+import { LeaveTab, TasksTab } from './WorkTools.tsx'
 import { ReelsTab } from './ReelTools.tsx'
 import { AiWriterTab } from './AiTools.tsx'
 import { WebsiteTab, YouTubeTab } from './WebsiteTools.tsx'
@@ -72,6 +73,8 @@ const TABS = [
   { key: 'myday', label: 'My day', group: 'today', staff: true },
   { key: 'teamday', label: 'Team today', group: 'today', owner: true },
   { key: 'attendance', label: 'Attendance', group: 'today', owner: true },
+  { key: 'tasks', label: 'Tasks', group: 'today' },
+  { key: 'leave', label: 'Leave', group: 'today' },
   { key: 'web', label: 'Website', group: 'audience', owner: true },
   { key: 'yt', label: 'YouTube', group: 'audience', owner: true },
   { key: 'perf', label: 'App performance', group: 'audience', owner: true },
@@ -217,6 +220,8 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'myday' && <MyDayTab />}
       {tab === 'teamday' && <TeamTodayTab />}
       {tab === 'attendance' && <AttendanceTab />}
+      {tab === 'tasks' && <TasksTab />}
+      {tab === 'leave' && <LeaveTab />}
       {tab === 'web' && <WebsiteTab />}
       {tab === 'yt' && <YouTubeTab />}
       {tab === 'magazine' && <MagazineTab />}
@@ -502,14 +507,14 @@ function WhatsAppTab() {
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
 
   const today = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())
-  const lines: string[] = [`🏠 *R&M News | ${today}*`, '']
+  const lines: string[] = [`🏠 *Realtynmore | ${today}*`, '']
   posts
     .filter((p) => chosen.includes(p.id))
     .forEach((p, i) => lines.push(`${i + 1}. *${p.title}*`, `👉 ${smartLink(p)}`, ''))
   ;(videos.data?.videos ?? [])
     .filter((v) => pickedVideos.includes(v.id))
     .forEach((v) => lines.push(`▶️ *${v.title}*`, v.url, ''))
-  lines.push('📲 Read more in the R&M News app: https://realty-more.github.io/rnm-news/')
+  lines.push('📲 Read more in the Realtynmore app: https://realty-more.github.io/rnm-news/')
   if (WHATSAPP_CHANNEL) lines.push(`🔔 Follow our WhatsApp Channel: ${WHATSAPP_CHANNEL}`)
   const generated = lines.join('\n')
   const message = edited ?? generated

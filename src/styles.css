@@ -3974,6 +3974,19 @@ em.late {
   font: 500 14.5px/1.4 var(--sans);
 }
 
+.stock-groups {
+  margin-bottom: 6px;
+}
+.stock-groups .chip small {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.6;
+}
+.stock-count {
+  font-size: 12.5px;
+  color: var(--mute);
+}
+
 /* ---------- Larger screens ---------- */
 @media (min-width: 640px) {
   :root {

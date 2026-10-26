@@ -1,9 +1,10 @@
 // Realty markets: BSE Realty index, realty stocks, top gainers/losers (TradingView widgets) and the news
 // that names each company. We show prices and headlines only; we don't explain moves or give advice.
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
-import { INDICES, MORE_REALTY, NSE_LINKS, REALTY_INDEX, TvWidget, useNiftyRealty, useTvTheme } from '../components/TvWidget.tsx'
+import { INDICES, NSE_LINKS, REALTY_GROUPS, REALTY_INDEX, TvWidget, useNiftyRealty, useTvTheme } from '../components/TvWidget.tsx'
 import { ago, useT } from '../lib/i18n.ts'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
@@ -39,7 +40,9 @@ export function Markets() {
   const theme = useTvTheme()
   const status = marketStatus()
   const nifty = useNiftyRealty()
-  const stockRows = nifty.length + MORE_REALTY.length
+  const groups = [{ key: 'nifty', label: 'Nifty Realty', note: 'The 10 companies in NSE’s Nifty Realty index (prices from their BSE listings).', stocks: nifty }, ...REALTY_GROUPS]
+  const [groupKey, setGroupKey] = useState('nifty')
+  const group = groups.find((g) => g.key === groupKey) ?? groups[0]
   const news = useAsync(PUSH_API ? 'market:news' : null, async (signal) => {
     const res = await fetch(`${PUSH_API}/market/news`, { signal })
     if (!res.ok) throw new Error('Market news is not available right now.')
@@ -124,18 +127,24 @@ export function Markets() {
       <section className="band" aria-labelledby="stocks-h">
         <div className="section-head">
           <h2 id="stocks-h">{t('markets.stocks')}</h2>
+          <span className="see-all stock-count">{groups.reduce((n, g) => n + g.stocks.length, 0)} stocks</span>
         </div>
+        <div className="chips stock-groups" role="tablist" aria-label="Stock groups">
+          {groups.map((g) => (
+            <button key={g.key} role="tab" aria-selected={group.key === g.key} className={`chip ${group.key === g.key ? 'active' : ''}`} onClick={() => setGroupKey(g.key)}>
+              {g.label} <small>{g.stocks.length}</small>
+            </button>
+          ))}
+        </div>
+        <p className="page-sub movers-note">{group.note}</p>
         <div className="tv-card">
           <TvWidget
             kind="market-quotes"
-            height={stockRows * 40 + 170}
+            height={group.stocks.length * 40 + 130}
             config={{
               width: '100%',
-              height: stockRows * 40 + 170,
-              symbolsGroups: [
-                { name: `Nifty Realty (${nifty.length})`, symbols: nifty.map((s) => ({ name: s.symbol, displayName: s.name })) },
-                { name: 'More realty', symbols: MORE_REALTY.map((s) => ({ name: s.symbol, displayName: s.name })) },
-              ],
+              height: group.stocks.length * 40 + 130,
+              symbolsGroups: [{ name: group.label, symbols: group.stocks.map((s) => ({ name: s.symbol, displayName: s.name })) }],
               showSymbolLogo: true,
               colorTheme: theme,
               isTransparent: true,

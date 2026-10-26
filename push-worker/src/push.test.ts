@@ -375,3 +375,38 @@ describe('magazine list', () => {
     expect(quarterOf(new Date('2026-12-31T20:00:00Z'))).toEqual({ id: '2027-Q1', title: 'Jan–Mar 2027' })
   })
 })
+
+import { nseStamp, parseBhavcopy, parseIndexFile, weekStart } from './reels.ts'
+
+describe('market close files', () => {
+  it('reads NSE index closes', () => {
+    const csv = 'Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,Closing Index Value,Points Change,Change(%),Volume\n' +
+      'Nifty 50,23-10-2026,22742.2,22787.25,22372,22600.0,-87.65,-.39,364190826\n' +
+      'Nifty Realty,23-10-2026,802.15,802.2,770.95,784.35,-19.1,-2.38,1\n' +
+      'NIFTY Smallcap 100,23-10-2026,1,2,1,17739.45,-1,-1.2,1\n' +
+      'Nifty IT,23-10-2026,1,1,1,1,0,0,1\n'
+    expect(parseIndexFile(csv)).toEqual([
+      { name: 'Nifty 50', open: 22742.2, high: 22787.25, low: 22372, close: 22600, pts: -87.65, pct: -0.39 },
+      { name: 'Nifty Realty', open: 802.15, high: 802.2, low: 770.95, close: 784.35, pts: -19.1, pct: -2.38 },
+      { name: 'Nifty Smallcap 100', open: 1, high: 2, low: 1, close: 17739.45, pts: -1, pct: -1.2 },
+    ])
+  })
+  it('reads closes from the bhavcopy, preferring EQ', () => {
+    const csv = 'SYMBOL, SERIES, DATE1, PREV_CLOSE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, LAST_PRICE, CLOSE_PRICE, AVG_PRICE\n' +
+      'DLF, EQ, 23-Oct-2026, 664.60, 661.85, 664.10, 647.75, 653.55, 657.00, 655\n' +
+      'DLF, N1, 23-Oct-2026, 1, 1, 1, 1, 1, 1, 1\n' +
+      'LOTUSDEV, BE, 23-Oct-2026, 246.25, 240, 241, 224, 225, 225.50, 230\n' +
+      'TCS, EQ, 23-Oct-2026, 1, 1, 1, 1, 1, 1, 1\n'
+    const rows = parseBhavcopy(csv, new Set(['DLF', 'LOTUSDEV']))
+    expect(rows).toEqual([
+      { symbol: 'DLF', series: 'EQ', prev: 664.6, open: 661.85, high: 664.1, low: 647.75, close: 657 },
+      { symbol: 'LOTUSDEV', series: 'BE', prev: 246.25, open: 240, high: 241, low: 224, close: 225.5 },
+    ])
+  })
+  it('names files and weeks', () => {
+    expect(nseStamp('2026-10-23')).toBe('23102026')
+    expect(weekStart('2026-10-23')).toBe('2026-10-19')
+    expect(weekStart('2026-10-19')).toBe('2026-10-19')
+    expect(weekStart('2026-10-25')).toBe('2026-10-19')
+  })
+})

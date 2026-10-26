@@ -9,6 +9,7 @@
 //   cron every 10 minutes             new-story alerts, website uptime check, 9 AM morning brief
 //   cron hourly at :07                website view counts per story (Post Views Counter)
 //   /editor/mag/*                     private magazine mailing list and quarterly dispatch (team only)
+//   /editor/reels/*                   daily and weekly market-close reel data (NSE official closes) and reference files
 import { checkAndNotify, subKey, subscribe } from './push.ts'
 import { sharePage } from './share.ts'
 import { parseHit, recordHit, statsPage, trending } from './stats.ts'
@@ -36,6 +37,7 @@ import {
   type Who,
 } from './owner.ts'
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
+import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
 import { collectViews, seoCompare, webTraffic } from './website.ts'
 import { checkIn, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
 
@@ -85,10 +87,14 @@ async function cachedJson(url: URL, ctx: ExecutionContext, headers: Record<strin
   return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
 }
 
+const OWNER_ONLY = new Set(['/editor/overview', '/editor/push-log', '/editor/uptime', '/editor/performance', '/editor/web/traffic', '/editor/web/seo', '/editor/push', '/editor/site', '/editor/owner-device'])
+
 /** Content Studio for the owner and editors. Team management is owner-only. */
 async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, headers: Record<string, string>, who: Who): Promise<Response> {
   const { pathname } = url
   const ownerOnly = () => json({ error: 'Only the owner can do this.' }, 403, headers)
+  // Business numbers, traffic, notifications and site settings are for the owner (Palash Roy) only.
+  if (who.role !== 'owner' && OWNER_ONLY.has(pathname) && !(req.method === 'GET' && pathname === '/editor/site')) return ownerOnly()
   try {
     if (req.method === 'GET') {
       switch (pathname) {
@@ -127,6 +133,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await myToday(env, who), 200, headers)
         case '/editor/me/history':
           return json(await myHistory(env, who), 200, headers)
+        case '/editor/reels/daily':
+          return json(await dailyData(env, url.searchParams.get('day') ?? undefined), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/reels/weekly':
+          return json(await weeklyData(env, url.searchParams.get('day') ?? undefined), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/reels/refs':
+          return json(await listRefs(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/reels/ref':
+          return downloadRef(env, url.searchParams.get('id') ?? '', headers)
         case '/editor/mag/book':
           return json(await magazineBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/mag/dispatch':
@@ -143,6 +157,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       return json({ error: 'not found' }, 404, headers)
     }
 
+    // File uploads send the raw file, not JSON.
+    if (pathname === '/editor/reels/ref-upload') return json(await uploadRef(env, req, url, who), 200, headers)
     const body = await readJson(req)
     switch (pathname) {
       case '/editor/push':
@@ -170,6 +186,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await submitReport(env, who, body), 200, headers)
       case '/editor/me/device':
         return json({ ok: await registerStaffDevice(env, who, body) }, 200, headers)
+      case '/editor/reels/ref-remove':
+        return who.role === 'owner' ? json(await removeRef(env, String((body as { id?: unknown }).id ?? '')), 200, headers) : ownerOnly()
+      case '/editor/reels/capture': {
+        if (who.role !== 'owner') return ownerOnly()
+        const day = String((body as { day?: unknown }).day ?? '')
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: 'Pick a date.' }, 400, headers)
+        return json({ result: await captureDay(env, day) }, 200, headers)
+      }
       case '/editor/mag/contact':
         return json(await saveContact(env, body, who), 200, headers)
       case '/editor/mag/contact/remove':
@@ -259,6 +283,6 @@ export default {
     const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
     // Its own hourly run, so the ~45 site requests don't share the 50-request limit with alerts.
     if (event.cron === '7 * * * *') return ctx.waitUntil(run('views', () => collectViews(env)))
-    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env))]))
+    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('market', () => autoCapture(env))]))
   },
 } satisfies ExportedHandler<Env>

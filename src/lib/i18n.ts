@@ -4,6 +4,11 @@ import { useCallback } from 'react'
 import { readPrefs, usePrefs } from './prefs.ts'
 
 const hi = {
+  'menu.team': 'टीम',
+  'menu.login': 'टीम लॉग इन',
+  'menu.logout': 'लॉग आउट',
+  'menu.logoutAsk': 'इस फ़ोन पर स्टूडियो से लॉग आउट करें?',
+  'menu.loggedOut': 'लॉग आउट हो गया',
   'article.keyPoints': 'मुख्य बातें',
   'article.keyPointsNote': 'ये लाइनें इसी ख़बर से ली गई हैं।',
   'brief.title': '60 सेकंड ब्रीफ़िंग',
@@ -146,6 +151,11 @@ const hi = {
 export type TKey = keyof typeof hi
 
 const en: Record<TKey, string> = {
+  'menu.team': 'Team',
+  'menu.login': 'Team login',
+  'menu.logout': 'Log out',
+  'menu.logoutAsk': 'Log out of the Studio on this device?',
+  'menu.loggedOut': 'Logged out',
   'article.keyPoints': 'Key points',
   'article.keyPointsNote': 'Lines taken from this story.',
   'brief.title': '60-second briefing',

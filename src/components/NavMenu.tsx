@@ -1,12 +1,14 @@
 // App navigation pieces: the slide-in menu, the section rail under the header,
 // and the header that tucks away while reading (Apple News / Google News style).
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { CURATED_CATEGORIES } from '../lib/wp.ts'
 import { CITIES, setTheme, usePrefs, useTheme, type ThemePref } from '../lib/prefs.ts'
 import { useT, type TKey } from '../lib/i18n.ts'
 import { Icon, type IconName } from './Icon.tsx'
 import { SocialLinks } from './SiteFooter.tsx'
+import { toast } from './Toast.tsx'
+import { forgetOwner, ownerKey, ownerRole } from '../lib/owner.ts'
 
 const QUICK: { to: string; label: TKey; icon: IconName }[] = [
   { to: '/news', label: 'nav.news', icon: 'news' },
@@ -123,11 +125,65 @@ export function NavMenu({ open, onClose }: { open: boolean; onClose: () => void 
           </li>
         </ul>
 
+        <TeamLogin open={open} onClose={onClose} />
+
         <h2 className="nav-h">{t('home.followUs')}</h2>
         <SocialLinks />
         <p className="nav-foot">Realty &amp; More · realtynmore.com</p>
       </div>
     </div>
+  )
+}
+
+/** Log in / log out for the owner and team (readers never need it). */
+function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // Read on every open, so it reflects a login or logout made elsewhere.
+  const [who, setWho] = useState(() => (ownerKey() ? ownerRole() : null))
+  useEffect(() => {
+    if (open) setWho(ownerKey() ? ownerRole() : null)
+  }, [open])
+  const logout = () => {
+    if (!window.confirm(t('menu.logoutAsk'))) return
+    forgetOwner()
+    setWho(null)
+    toast(t('menu.loggedOut'))
+    onClose()
+    if (pathname.startsWith('/studio')) navigate('/')
+  }
+  return (
+    <>
+      <h2 className="nav-h">{t('menu.team')}</h2>
+      {who ? (
+        <div className="nav-login">
+          <Link to="/studio" onClick={onClose} className="nav-login-who">
+            <span className="nav-login-avatar" aria-hidden="true">
+              {who.name.slice(0, 1).toUpperCase()}
+            </span>
+            <span>
+              <strong>{who.name}</strong>
+              <small>{who.role === 'owner' ? 'Founder & Editor · Content Studio' : `${t('menu.team')} · Content Studio`}</small>
+            </span>
+          </Link>
+          <button className="btn ghost small" onClick={logout}>
+            {t('menu.logout')}
+          </button>
+        </div>
+      ) : (
+        <ul className="nav-list">
+          <li>
+            <NavLink to="/studio" onClick={onClose}>
+              <span className="nav-li-icon">
+                <Icon name="settings" size={18} /> {t('menu.login')}
+              </span>
+              <Icon name="chevron" size={16} />
+            </NavLink>
+          </li>
+        </ul>
+      )}
+    </>
   )
 }
 

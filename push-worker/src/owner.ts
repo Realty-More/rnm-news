@@ -6,6 +6,10 @@ import { fetchByIds } from './site.ts'
 import type { Env } from './index.ts'
 
 /* ---------- roles: owner key (STATS_KEY) + revocable editor keys ---------- */
+/** The owner key belongs to RealtyNMore's founder; records show this name. */
+export const OWNER_NAME = 'Palash Roy'
+export const OWNER_TITLE = 'Founder & Editor'
+
 export interface Who {
   role: 'owner' | 'editor'
   name: string
@@ -33,7 +37,7 @@ export function sameKey(a: string, b: string) {
 }
 
 export async function authenticate(key: string, env: Env, ctx: ExecutionContext): Promise<Who | null> {
-  if (sameKey(key, env.STATS_KEY ?? '')) return { role: 'owner', name: 'Owner' }
+  if (sameKey(key, env.STATS_KEY ?? '')) return { role: 'owner', name: OWNER_NAME }
   if (key.length < 24 || key.length > 64) return null
   const id = await sha256hex(key)
   const ed = await env.SUBS.get<Editor>(`editor:${id}`, 'json')

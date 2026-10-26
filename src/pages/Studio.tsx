@@ -10,6 +10,7 @@ import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, ownerKey, ownerRole, refreshRole, studio, unlock } from '../lib/owner.ts'
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
 import { MagazineTab } from './MagazineTools.tsx'
+import { ReelsTab } from './ReelTools.tsx'
 import { WebsiteTab } from './WebsiteTools.tsx'
 import { AddToCalendar, CalendarTab, CaptionsTab, NotifyTab, PerformanceTab, ReportTab, SiteTab, TeamTab } from './StudioTools.tsx'
 import { usePageTitle } from './usePageTitle.ts'
@@ -65,24 +66,25 @@ interface Seo {
 
 // Grouped like a pro dashboard: pick a section, then a tool inside it.
 const TABS = [
-  { key: 'overview', label: 'Overview', group: 'today' },
+  { key: 'overview', label: 'Overview', group: 'today', owner: true },
   { key: 'myday', label: 'My day', group: 'today' },
-  { key: 'teamday', label: 'Team today', group: 'today' },
-  { key: 'attendance', label: 'Attendance', group: 'today' },
-  { key: 'web', label: 'Website', group: 'audience' },
-  { key: 'perf', label: 'App performance', group: 'audience' },
+  { key: 'teamday', label: 'Team today', group: 'today', owner: true },
+  { key: 'attendance', label: 'Attendance', group: 'today', owner: true },
+  { key: 'web', label: 'Website', group: 'audience', owner: true },
+  { key: 'perf', label: 'App performance', group: 'audience', owner: true },
   { key: 'rivals', label: 'Competitors', group: 'audience' },
-  { key: 'report', label: 'Weekly report', group: 'audience' },
+  { key: 'report', label: 'Weekly report', group: 'audience', owner: true },
   { key: 'ideas', label: 'What to write', group: 'content' },
   { key: 'keywords', label: 'Keywords', group: 'content' },
   { key: 'seo', label: 'SEO check', group: 'content' },
   { key: 'calendar', label: 'Calendar', group: 'content' },
-  { key: 'notify', label: 'Notify readers', group: 'publish' },
+  { key: 'notify', label: 'Notify readers', group: 'publish', owner: true },
   { key: 'whatsapp', label: 'WhatsApp post', group: 'publish' },
   { key: 'captions', label: 'Social captions', group: 'publish' },
-  { key: 'site', label: 'Site & alerts', group: 'publish' },
+  { key: 'site', label: 'Site & alerts', group: 'publish', owner: true },
+  { key: 'reels', label: 'Reel scripts', group: 'publish' },
   { key: 'magazine', label: 'Magazine list', group: 'publish' },
-  { key: 'team', label: 'Team keys', group: 'team' },
+  { key: 'team', label: 'Team keys', group: 'team', owner: true },
 ] as const
 const GROUPS = [
   { key: 'today', label: 'Today' },
@@ -94,8 +96,8 @@ const GROUPS = [
 type Tab = (typeof TABS)[number]['key']
 
 export function Studio() {
-  usePageTitle('Content Studio')
   const [key, setKey] = useState(ownerKey)
+  usePageTitle(key ? 'Content Studio' : 'Team login')
   if (!key) return <Unlock onDone={() => setKey(ownerKey())} />
   return (
     <StudioHome
@@ -115,19 +117,21 @@ function Unlock({ onDone }: { onDone: () => void }) {
     setBusy(true)
     const ok = await unlock(value)
     setBusy(false)
-    if (ok) onDone()
-    else toast('That key is not right')
+    if (ok) {
+      toast(`Welcome, ${ownerRole()?.name ?? 'back'}`)
+      onDone()
+    } else toast('That login key is not right')
   }
   return (
     <div className="page studio-lock">
       <div className="lock-card">
         <Icon name="settings" size={28} />
-        <h1>Content Studio</h1>
-        <p>For the RealtyNMore owner and team. Enter your key once on this device.</p>
+        <h1>Team login</h1>
+        <p>For Palash Roy (Founder &amp; Editor) and the RealtyNMore team. Enter the login key you were given; you stay logged in on this device until you log out.</p>
         <form onSubmit={submit}>
-          <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Owner or team key" aria-label="Owner or team key" />
+          <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Login key" aria-label="Login key" />
           <button className="btn" disabled={busy || value.trim().length < 8}>
-            {busy ? 'Checking…' : 'Unlock'}
+            {busy ? 'Checking…' : 'Log in'}
           </button>
         </form>
       </div>
@@ -141,8 +145,8 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   useEffect(() => {
     void refreshRole().then(() => setMe(ownerRole()))
   }, [])
-  const OWNER_TABS = ['team', 'teamday', 'attendance']
-  const visible = TABS.filter((t) => !OWNER_TABS.includes(t.key) || me?.role === 'owner')
+  // Owner tools (business numbers, traffic, team, notifications) only for the owner's login.
+  const visible = TABS.filter((t) => !('owner' in t) || me?.role === 'owner')
   // Employees land on their own day; the owner on the overview.
   const tab = (visible.find((t) => t.key === params.get('tab'))?.key ?? (me?.role === 'editor' ? 'myday' : 'overview')) as Tab
   const group = TABS.find((t) => t.key === tab)!.group
@@ -150,12 +154,19 @@ function StudioHome({ onLock }: { onLock: () => void }) {
     <div className="page studio">
       <div className="page-head studio-head">
         <div>
-          <span className="owner-badge">{me?.role === 'editor' ? `Editor · ${me.name}` : 'Owner'}</span>
+          <span className="owner-badge">{me?.role === 'editor' ? `Team · ${me.name}` : `${me?.name && me.name !== 'Owner' ? me.name : 'Palash Roy'} · Founder & Editor`}</span>
           <h1>Content Studio</h1>
           <p className="page-sub">Real data from the app, realtynmore.com, Google and other news sites</p>
         </div>
-        <button className="btn ghost small" onClick={onLock}>
-          Lock
+        <button
+          className="btn ghost small"
+          onClick={() => {
+            if (!window.confirm('Log out of the Studio on this device?')) return
+            onLock()
+            toast('Logged out')
+          }}
+        >
+          Log out
         </button>
       </div>
       <nav className="studio-nav" aria-label="Studio">
@@ -200,6 +211,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'attendance' && <AttendanceTab />}
       {tab === 'web' && <WebsiteTab />}
       {tab === 'magazine' && <MagazineTab />}
+      {tab === 'reels' && <ReelsTab />}
     </div>
   )
 }

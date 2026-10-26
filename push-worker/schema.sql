@@ -16,3 +16,7 @@ CREATE INDEX IF NOT EXISTS webviews_hour ON webviews (hour);
 CREATE TABLE IF NOT EXISTS contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, designation TEXT, company TEXT, address TEXT, city TEXT, pin TEXT, phone TEXT, email TEXT, remark TEXT, active INTEGER NOT NULL DEFAULT 1, created_at TEXT, updated_at TEXT, updated_by TEXT);
 CREATE TABLE IF NOT EXISTS mag_issues (id TEXT PRIMARY KEY, title TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS mag_dispatch (issue_id TEXT NOT NULL, contact_id INTEGER NOT NULL, status TEXT NOT NULL, courier TEXT, tracking TEXT, by_name TEXT, updated_at TEXT, PRIMARY KEY (issue_id, contact_id));
+CREATE TABLE IF NOT EXISTS mkt_index (day TEXT NOT NULL, name TEXT NOT NULL, open REAL, high REAL, low REAL, close REAL NOT NULL, pts REAL, pct REAL, PRIMARY KEY (day, name));
+CREATE TABLE IF NOT EXISTS mkt_stock (day TEXT NOT NULL, symbol TEXT NOT NULL, series TEXT, prev REAL, open REAL, high REAL, low REAL, close REAL NOT NULL, PRIMARY KEY (day, symbol));
+CREATE TABLE IF NOT EXISTS mkt_meta (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS reel_refs (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT, size INTEGER, week TEXT, kind TEXT, note TEXT, by_name TEXT, at TEXT);

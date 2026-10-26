@@ -139,6 +139,22 @@ export async function myHistory(env: Env, who: Who) {
 }
 
 /* ---------- owner: team day, monthly attendance ---------- */
+
+/**
+ * The people on the team: everyone with an active key, plus anyone whose key was later removed but
+ * who has attendance in the period (so past records stay complete). The owner is never listed:
+ * Palash Roy runs the company and is not tracked as staff.
+ */
+export function teamPeople(editors: { id: string; name: string; active: boolean }[], att: { person_id: string; name: string }[]): { id: string; name: string }[] {
+  const people = editors.filter((e) => e.active).map((e) => ({ id: e.id, name: e.name }))
+  const known = new Set(people.map((p) => p.id))
+  for (const a of att) {
+    if (a.person_id === 'owner' || known.has(a.person_id)) continue
+    known.add(a.person_id)
+    people.push({ id: a.person_id, name: a.name })
+  }
+  return people
+}
 export async function teamDay(env: Env, day: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) day = istDay()
   const [editors, settings, att, rep, cal, pushes] = await Promise.all([
@@ -151,7 +167,7 @@ export async function teamDay(env: Env, day: string) {
   ])
   const attBy = new Map(att.results.map((a) => [a.person_id, a]))
   const repBy = new Map(rep.results.map((r) => [r.person_id, r]))
-  const people = [...editors.filter((e) => e.active).map((e) => ({ id: e.id, name: e.name })), ...(attBy.has('owner') || repBy.has('owner') ? [{ id: 'owner', name: 'Owner' }] : [])]
+  const people = teamPeople(editors, att.results)
   const rows = people.map((p) => {
     const a = attBy.get(p.id) ?? null
     const r = repBy.get(p.id) ?? null
@@ -216,9 +232,8 @@ export async function teamMonth(env: Env, month: string) {
     env.DB.prepare('SELECT * FROM attendance WHERE substr(day,1,7) = ?1').bind(month).all<Att>(),
     env.DB.prepare('SELECT person_id, day FROM reports WHERE substr(day,1,7) = ?1').bind(month).all<{ person_id: string; day: string }>(),
   ])
-  const people = editors.filter((e) => e.active).map((e) => ({ id: e.id, name: e.name }))
-  if (att.results.some((a) => a.person_id === 'owner')) people.push({ id: 'owner', name: 'Owner' })
-  return { month, settings, rows: summarizeMonth(people, att.results, reps.results, settings) }
+  const people = teamPeople(editors, att.results)
+  return { month, settings, rows: summarizeMonth(people, att.results.filter((a) => a.person_id !== 'owner'), reps.results, settings) }
 }
 
 /* ---------- reminders and the morning-brief line ---------- */

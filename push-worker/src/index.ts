@@ -90,6 +90,7 @@ async function cachedJson(url: URL, ctx: ExecutionContext, headers: Record<strin
   return new Response(res.body, { headers: { ...Object.fromEntries(res.headers), ...headers } })
 }
 
+const TEAM_ONLY = new Set(['/editor/me/checkin', '/editor/me/checkout', '/editor/me/report', '/editor/me/device'])
 const OWNER_ONLY = new Set(['/editor/overview', '/editor/push-log', '/editor/uptime', '/editor/performance', '/editor/web/traffic', '/editor/web/seo', '/editor/push', '/editor/site', '/editor/owner-device'])
 
 /** Content Studio for the owner and editors. Team management is owner-only. */
@@ -98,6 +99,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
   const ownerOnly = () => json({ error: 'Only the owner can do this.' }, 403, headers)
   // Business numbers, traffic, notifications and site settings are for the owner (Palash Roy) only.
   if (who.role !== 'owner' && OWNER_ONLY.has(pathname) && !(req.method === 'GET' && pathname === '/editor/site')) return ownerOnly()
+  // Check-in, daily report and report reminders are for team members; the owner is not tracked as staff.
+  if (who.role === 'owner' && TEAM_ONLY.has(pathname)) return json({ error: 'Attendance and daily reports are for team members.' }, 403, headers)
   try {
     if (req.method === 'GET') {
       switch (pathname) {

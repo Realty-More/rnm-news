@@ -422,3 +422,23 @@ describe('Ask R&M', () => {
     expect(cleanAnswer('<think>hmm</think>DLF bought land [1]. Prices rose [7].', 3)).toEqual({ text: 'DLF bought land [1]. Prices rose .', cited: [1] })
   })
 })
+
+import { teamPeople } from './team.ts'
+
+describe('team list', () => {
+  it('lists staff only, never the owner, and keeps people whose key was removed', () => {
+    const editors = [
+      { id: 'k1', name: 'Kaushik', active: true },
+      { id: 'k2', name: 'Old key', active: false },
+    ]
+    const att = [
+      { person_id: 'owner', name: 'Palash Roy' },
+      { person_id: 'k1', name: 'Kaushik' },
+      { person_id: 'v9', name: 'Vimal' },
+    ]
+    expect(teamPeople(editors, att)).toEqual([
+      { id: 'k1', name: 'Kaushik' },
+      { id: 'v9', name: 'Vimal' },
+    ])
+  })
+})

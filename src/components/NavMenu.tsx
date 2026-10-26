@@ -155,7 +155,7 @@ function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
   }
   return (
     <>
-      <h2 className="nav-h">{t('menu.team')}</h2>
+      <h2 className="nav-h">{who?.role === 'owner' ? t('menu.owner') : t('menu.team')}</h2>
       {who ? (
         <div className="nav-login">
           <Link to="/studio" onClick={onClose} className="nav-login-who">

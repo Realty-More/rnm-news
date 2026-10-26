@@ -68,7 +68,7 @@ interface Seo {
 // Grouped like a pro dashboard: pick a section, then a tool inside it.
 const TABS = [
   { key: 'overview', label: 'Overview', group: 'today', owner: true },
-  { key: 'myday', label: 'My day', group: 'today' },
+  { key: 'myday', label: 'My day', group: 'today', staff: true },
   { key: 'teamday', label: 'Team today', group: 'today', owner: true },
   { key: 'attendance', label: 'Attendance', group: 'today', owner: true },
   { key: 'web', label: 'Website', group: 'audience', owner: true },
@@ -86,20 +86,20 @@ const TABS = [
   { key: 'site', label: 'Site & alerts', group: 'publish', owner: true },
   { key: 'reels', label: 'Reel scripts', group: 'publish' },
   { key: 'magazine', label: 'Magazine list', group: 'publish' },
-  { key: 'team', label: 'Team keys', group: 'team', owner: true },
+  { key: 'team', label: 'Team & keys', group: 'team', owner: true },
 ] as const
 const GROUPS = [
   { key: 'today', label: 'Today' },
   { key: 'audience', label: 'Audience' },
   { key: 'content', label: 'Content' },
   { key: 'publish', label: 'Publish' },
-  { key: 'team', label: 'Team' },
+  { key: 'team', label: 'Manage' },
 ] as const
 type Tab = (typeof TABS)[number]['key']
 
 export function Studio() {
   const [key, setKey] = useState(ownerKey)
-  usePageTitle(key ? 'Content Studio' : 'Team login')
+  usePageTitle(key ? 'Content Studio' : 'Login')
   if (!key) return <Unlock onDone={() => setKey(ownerKey())} />
   return (
     <StudioHome
@@ -128,8 +128,8 @@ function Unlock({ onDone }: { onDone: () => void }) {
     <div className="page studio-lock">
       <div className="lock-card">
         <Icon name="settings" size={28} />
-        <h1>Team login</h1>
-        <p>For Palash Roy (Founder &amp; Editor) and the RealtyNMore team. Enter the login key you were given; you stay logged in on this device until you log out.</p>
+        <h1>Login</h1>
+        <p>For the owner, Palash Roy (Founder &amp; Editor), and the RealtyNMore team. Enter your login key; you stay logged in on this device until you log out.</p>
         <form onSubmit={submit}>
           <input type="password" autoComplete="off" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Login key" aria-label="Login key" />
           <button className="btn" disabled={busy || value.trim().length < 8}>
@@ -153,8 +153,10 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   useEffect(() => {
     void refreshRole().then(() => setMe(ownerRole()))
   }, [])
-  // Owner tools (business numbers, traffic, team, notifications) only for the owner's login.
-  const visible = TABS.filter((t) => !('owner' in t) || me?.role === 'owner')
+  // Owner tools (business numbers, traffic, team, notifications) only for the owner's login;
+  // staff tools (check-in and daily report) only for team logins. Palash Roy is not tracked as staff.
+  const isOwner = me?.role !== 'editor'
+  const visible = TABS.filter((t) => (isOwner ? !('staff' in t) : !('owner' in t)))
   // Employees land on their own day; the owner on the overview.
   const tab = (visible.find((t) => t.key === params.get('tab'))?.key ?? (me?.role === 'editor' ? 'myday' : 'overview')) as Tab
   const group = TABS.find((t) => t.key === tab)!.group

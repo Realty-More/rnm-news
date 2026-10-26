@@ -682,7 +682,7 @@ export function TeamTab() {
   }
   return (
     <>
-      <Panel title="Give a team member access" note="Editors can use every Studio tool except this Team tab. You can revoke a key anytime; your owner key never needs to be shared.">
+      <Panel title="Add a team member" note="Give each employee their own login key. Team logins get the writing, publishing, reel-script and magazine tools plus their own My day (check-in and daily report). Owner sections (overview, website traffic, performance, team, attendance, notifications, site settings) stay with your login only. You can remove a key anytime; never share your owner key.">
         <form className="cal-form" onSubmit={create}>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, e.g. Neha (desk)" aria-label="Team member name" />
           <button className="btn small" disabled={!name.trim()}>

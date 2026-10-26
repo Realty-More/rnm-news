@@ -159,9 +159,13 @@ function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
       {who ? (
         <div className="nav-login">
           <Link to="/studio" onClick={onClose} className="nav-login-who">
-            <span className="nav-login-avatar" aria-hidden="true">
-              {who.name.slice(0, 1).toUpperCase()}
-            </span>
+            {who.role === 'owner' ? (
+              <img className="nav-login-avatar photo" src="./brand/palash.jpg" alt="" width={36} height={36} />
+            ) : (
+              <span className="nav-login-avatar" aria-hidden="true">
+                {who.name.slice(0, 1).toUpperCase()}
+              </span>
+            )}
             <span>
               <strong>{who.name}</strong>
               <small>{who.role === 'owner' ? 'Founder & Editor · Content Studio' : `${t('menu.team')} · Content Studio`}</small>

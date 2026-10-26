@@ -4460,6 +4460,29 @@ em.late {
   }
 }
 
+.owner-hello {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.owner-hello img {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--accent);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.25);
+}
+.owner-hello h1 {
+  font-size: clamp(22px, 5.6vw, 32px);
+}
+.nav-login-avatar.photo {
+  object-fit: cover;
+  border: 2px solid var(--accent);
+}
+
 /* ---------- Larger screens ---------- */
 @media (min-width: 640px) {
   :root {

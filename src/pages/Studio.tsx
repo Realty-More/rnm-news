@@ -141,6 +141,12 @@ function Unlock({ onDone }: { onDone: () => void }) {
   )
 }
 
+/** "Good morning" etc. in India time. */
+function greeting(now = new Date()): string {
+  const h = Number(new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }).format(now)) % 24
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+}
+
 function StudioHome({ onLock }: { onLock: () => void }) {
   const [params, setParams] = useSearchParams()
   const [me, setMe] = useState(ownerRole)
@@ -155,11 +161,22 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   return (
     <div className="page studio">
       <div className="page-head studio-head">
-        <div>
-          <span className="owner-badge">{me?.role === 'editor' ? `Team · ${me.name}` : `${me?.name && me.name !== 'Owner' ? me.name : 'Palash Roy'} · Founder & Editor`}</span>
-          <h1>Content Studio</h1>
-          <p className="page-sub">Real data from the app, realtynmore.com, Google and other news sites</p>
-        </div>
+        {me?.role === 'editor' ? (
+          <div>
+            <span className="owner-badge">Team · {me.name}</span>
+            <h1>Content Studio</h1>
+            <p className="page-sub">Real data from the app, realtynmore.com, Google and other news sites</p>
+          </div>
+        ) : (
+          <div className="owner-hello">
+            <img src="./brand/palash.jpg" alt="Palash Roy" width={64} height={64} />
+            <div>
+              <span className="owner-badge">Founder &amp; Editor</span>
+              <h1>{greeting()}, Palash Roy</h1>
+              <p className="page-sub">Content Studio · real data from the app, realtynmore.com, NSE and other news sites</p>
+            </div>
+          </div>
+        )}
         <button
           className="btn ghost small"
           onClick={() => {

@@ -28,7 +28,7 @@ export function Shorts() {
       },
       { root: list, threshold: 0.6 },
     )
-    list.querySelectorAll('.short').forEach((el) => io.observe(el))
+    list.querySelectorAll('.short-slide').forEach((el) => io.observe(el))
     return () => io.disconnect()
   }, [res.data])
 
@@ -55,7 +55,7 @@ export function Shorts() {
         <Icon name="back" />
       </Link>
       {(res.data ?? []).map((v, i) => (
-        <section key={v.id} className="short" data-index={i} aria-label={v.title}>
+        <section key={v.id} className="short-slide" data-index={i} aria-label={v.title}>
           {online && started && i === active ? (
             <iframe
               src={`https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&playsinline=1&loop=1&playlist=${v.id}&rel=0`}
@@ -75,7 +75,7 @@ export function Shorts() {
           <ShortInfo video={v} />
         </section>
       ))}
-      {!res.data && <div className="short sk" />}
+      {!res.data && <div className="short-slide sk" />}
     </div>
   )
 }

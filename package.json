@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "feeds": "node scripts/fetch-youtube.ts",
+    "feeds": "node scripts/fetch-youtube.ts && node scripts/fetch-news.ts",
     "build": "npm run feeds && tsc -p . && vite build",
     "preview": "vite preview",
     "test": "vitest run",

@@ -8,6 +8,7 @@ import { EmptyState, ErrorState } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDateTime, readingMinutes } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
+import { keyPoints } from '../lib/keypoints.ts'
 import { recordRead } from '../lib/history.ts'
 import { smartLink, trackOpen, trackShare } from '../lib/stats.ts'
 import { whatsappShareUrl } from '../lib/config.ts'
@@ -114,7 +115,10 @@ export function Article() {
       )}
 
       {html ? (
-        <div className="prose" ref={proseRef} onClick={onContentClick} dangerouslySetInnerHTML={{ __html: html }} />
+        <>
+          <KeyPoints html={html} />
+          <div className="prose" ref={proseRef} onClick={onContentClick} dangerouslySetInnerHTML={{ __html: html }} />
+        </>
       ) : res.loading ? (
         <div className="prose-loading">
           {[1, 2, 3, 4, 5].map((i) => (
@@ -308,5 +312,25 @@ function Related({ post }: { post: Post }) {
         ))}
       </div>
     </section>
+  )
+}
+
+/** Axios-style summary box: the story's own key sentences, so a reader gets it in 20 seconds. */
+function KeyPoints({ html }: { html: string }) {
+  const t = useT()
+  const points = useMemo(() => keyPoints(html), [html])
+  if (!points.length) return null
+  return (
+    <aside className="key-points" aria-labelledby="kp-h">
+      <h2 id="kp-h">
+        <Icon name="sparkle" size={16} /> {t('article.keyPoints')}
+      </h2>
+      <ul>
+        {points.map((p) => (
+          <li key={p}>{p}</li>
+        ))}
+      </ul>
+      <p className="kp-note">{t('article.keyPointsNote')}</p>
+    </aside>
   )
 }

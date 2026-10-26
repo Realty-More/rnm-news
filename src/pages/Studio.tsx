@@ -9,6 +9,8 @@ import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, ownerKey, ownerRole, refreshRole, studio, unlock } from '../lib/owner.ts'
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
+import { MagazineTab } from './MagazineTools.tsx'
+import { WebsiteTab } from './WebsiteTools.tsx'
 import { AddToCalendar, CalendarTab, CaptionsTab, NotifyTab, PerformanceTab, ReportTab, SiteTab, TeamTab } from './StudioTools.tsx'
 import { usePageTitle } from './usePageTitle.ts'
 import { WHATSAPP_CHANNEL, whatsappShareUrl } from '../lib/config.ts'
@@ -61,22 +63,32 @@ interface Seo {
   posts: { id: number; title: string; link: string; issues: string[]; score: number }[]
 }
 
+// Grouped like a pro dashboard: pick a section, then a tool inside it.
 const TABS = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'myday', label: 'My day' },
-  { key: 'teamday', label: 'Team today' },
-  { key: 'attendance', label: 'Attendance' },
-  { key: 'ideas', label: 'What to write' },
-  { key: 'rivals', label: 'Competitors' },
-  { key: 'perf', label: 'Performance' },
-  { key: 'calendar', label: 'Calendar' },
-  { key: 'notify', label: 'Notify readers' },
-  { key: 'site', label: 'Site & alerts' },
-  { key: 'whatsapp', label: 'WhatsApp post' },
-  { key: 'captions', label: 'Social captions' },
-  { key: 'keywords', label: 'Keywords' },
-  { key: 'seo', label: 'SEO check' },
-  { key: 'report', label: 'Weekly report' },
+  { key: 'overview', label: 'Overview', group: 'today' },
+  { key: 'myday', label: 'My day', group: 'today' },
+  { key: 'teamday', label: 'Team today', group: 'today' },
+  { key: 'attendance', label: 'Attendance', group: 'today' },
+  { key: 'web', label: 'Website', group: 'audience' },
+  { key: 'perf', label: 'App performance', group: 'audience' },
+  { key: 'rivals', label: 'Competitors', group: 'audience' },
+  { key: 'report', label: 'Weekly report', group: 'audience' },
+  { key: 'ideas', label: 'What to write', group: 'content' },
+  { key: 'keywords', label: 'Keywords', group: 'content' },
+  { key: 'seo', label: 'SEO check', group: 'content' },
+  { key: 'calendar', label: 'Calendar', group: 'content' },
+  { key: 'notify', label: 'Notify readers', group: 'publish' },
+  { key: 'whatsapp', label: 'WhatsApp post', group: 'publish' },
+  { key: 'captions', label: 'Social captions', group: 'publish' },
+  { key: 'site', label: 'Site & alerts', group: 'publish' },
+  { key: 'magazine', label: 'Magazine list', group: 'publish' },
+  { key: 'team', label: 'Team keys', group: 'team' },
+] as const
+const GROUPS = [
+  { key: 'today', label: 'Today' },
+  { key: 'audience', label: 'Audience' },
+  { key: 'content', label: 'Content' },
+  { key: 'publish', label: 'Publish' },
   { key: 'team', label: 'Team' },
 ] as const
 type Tab = (typeof TABS)[number]['key']
@@ -133,6 +145,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   const visible = TABS.filter((t) => !OWNER_TABS.includes(t.key) || me?.role === 'owner')
   // Employees land on their own day; the owner on the overview.
   const tab = (visible.find((t) => t.key === params.get('tab'))?.key ?? (me?.role === 'editor' ? 'myday' : 'overview')) as Tab
+  const group = TABS.find((t) => t.key === tab)!.group
   return (
     <div className="page studio">
       <div className="page-head studio-head">
@@ -145,13 +158,30 @@ function StudioHome({ onLock }: { onLock: () => void }) {
           Lock
         </button>
       </div>
-      <div className="chips" role="tablist" aria-label="Studio">
-        {visible.map((t) => (
-          <button key={t.key} role="tab" aria-selected={tab === t.key} className={`chip ${tab === t.key ? 'active' : ''}`} onClick={() => setParams({ tab: t.key }, { replace: true })}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <nav className="studio-nav" aria-label="Studio">
+        <div className="studio-groups" role="tablist" aria-label="Sections">
+          {GROUPS.filter((g) => visible.some((t) => t.group === g.key)).map((g) => (
+            <button
+              key={g.key}
+              role="tab"
+              aria-selected={group === g.key}
+              className={group === g.key ? 'on' : ''}
+              onClick={() => setParams({ tab: visible.find((t) => t.group === g.key)!.key }, { replace: true })}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+        <div className="chips studio-tools" role="tablist" aria-label="Tools">
+          {visible
+            .filter((t) => t.group === group)
+            .map((t) => (
+              <button key={t.key} role="tab" aria-selected={tab === t.key} className={`chip ${tab === t.key ? 'active' : ''}`} onClick={() => setParams({ tab: t.key }, { replace: true })}>
+                {t.label}
+              </button>
+            ))}
+        </div>
+      </nav>
       {tab === 'overview' && <OverviewTab />}
       {tab === 'ideas' && <IdeasTab />}
       {tab === 'rivals' && <RivalsTab />}
@@ -168,6 +198,8 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'myday' && <MyDayTab />}
       {tab === 'teamday' && <TeamTodayTab />}
       {tab === 'attendance' && <AttendanceTab />}
+      {tab === 'web' && <WebsiteTab />}
+      {tab === 'magazine' && <MagazineTab />}
     </div>
   )
 }

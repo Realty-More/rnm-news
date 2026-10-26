@@ -316,3 +316,62 @@ describe('team attendance', async () => {
     expect(cleanReport({ done: 'Wrote 3 RERA stories', plan: 'Interview edit' })).toMatchObject({ done: 'Wrote 3 RERA stories', plan: 'Interview edit', blockers: '' })
   })
 })
+
+import { averageBy, pageChecks, sectionOf } from './website.ts'
+
+describe('website stats', () => {
+  it('picks the most specific section', () => {
+    expect(sectionOf([1, 439])).toBe('RERA')
+    expect(sectionOf([1])).toBe('News')
+    expect(sectionOf([99999])).toBe('Other')
+  })
+  it('averages views per group and drops tiny groups', () => {
+    const rows = [
+      { views: 100, s: 'RERA' },
+      { views: 300, s: 'RERA' },
+      { views: 50, s: 'News' },
+      { views: 70, s: 'News' },
+      { views: 999, s: 'Events' },
+    ]
+    expect(averageBy(rows, (r: { s: string }) => r.s, 2)).toEqual([
+      { key: 'RERA', stories: 2, avg: 200 },
+      { key: 'News', stories: 2, avg: 60 },
+    ])
+  })
+  it('checks a news page', () => {
+    const good = `<html lang="en"><head><title>Godrej Properties launches Rs 500 crore Gurugram project</title>
+      <meta name="description" content="Godrej Properties has launched a residential project in Sector 89, Gurugram, with a revenue potential of Rs 500 crore.">
+      <meta name="viewport" content="width=device-width"><link rel="canonical" href="https://x.com/a">
+      <meta property="og:title" content="t"><meta property="og:image" content="i"><meta name="twitter:card" content="summary">
+      <script type="application/ld+json">{"@type":"NewsArticle","datePublished":"2026-10-26","author":{"name":"Desk"}}</script>
+      </head><body><h1>Godrej</h1></body></html>`
+    const checks = pageChecks(good)
+    expect(checks.filter((c) => !c.pass).map((c) => c.key)).toEqual([])
+    const bad = pageChecks('<html><head><meta name="robots" content="noindex"></head><body><h1>a</h1><h1>b</h1></body></html>')
+    expect(bad.find((c) => c.key === 'index')!.pass).toBe(false)
+    expect(bad.find((c) => c.key === 'h1')!.pass).toBe(false)
+    expect(bad.find((c) => c.key === 'schema')!.pass).toBe(false)
+  })
+})
+
+import { cityOf, cleanContact, pinOf, quarterOf } from './magazine.ts'
+
+describe('magazine list', () => {
+  it('reads city and PIN from an address', () => {
+    expect(cityOf('2201A, Global Foyer, Golf Course Road, Sector-43, Gurgaon, Haryana')).toBe('Gurugram')
+    expect(cityOf('Plot 5, Knowledge Park, Greater Noida')).toBe('Greater Noida')
+    expect(cityOf('Somewhere else')).toBeNull()
+    expect(pinOf('Sector 47, Gurugram-122001')).toBe('122001')
+    expect(pinOf('Film City, Noida, Uttar Pradesh - 201 301')).toBe('201301')
+    expect(pinOf('Tower B, +91 98100 79064')).toBeNull()
+  })
+  it('cleans a contact and needs a name', () => {
+    const c = cleanContact({ name: '  Ms.  Asha Singh ', address: 'Sohna Road, Sector 47, Gurugram-122001', phone: 9953823862 })
+    expect(c).toMatchObject({ id: null, name: 'Ms. Asha Singh', city: 'Gurugram', pin: '122001', phone: '9953823862' })
+    expect(() => cleanContact({ name: ' ' })).toThrow('Name is required.')
+  })
+  it('names the quarter in IST', () => {
+    expect(quarterOf(new Date('2026-10-26T10:00:00Z'))).toEqual({ id: '2026-Q4', title: 'Oct–Dec 2026' })
+    expect(quarterOf(new Date('2026-12-31T20:00:00Z'))).toEqual({ id: '2027-Q1', title: 'Jan–Mar 2027' })
+  })
+})

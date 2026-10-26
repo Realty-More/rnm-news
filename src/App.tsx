@@ -9,6 +9,7 @@ import { NotFound } from './pages/NotFound.tsx'
 // Screens other than Home load on demand, so the first screen opens faster.
 const Categories = lazy(() => import('./pages/Categories.tsx').then((m) => ({ default: m.Categories })))
 const CategoryPage = lazy(() => import('./pages/Categories.tsx').then((m) => ({ default: m.CategoryPage })))
+const Briefing = lazy(() => import('./pages/Briefing.tsx').then((m) => ({ default: m.Briefing })))
 const Search = lazy(() => import('./pages/Search.tsx').then((m) => ({ default: m.Search })))
 const Article = lazy(() => import('./pages/Article.tsx').then((m) => ({ default: m.Article })))
 const Videos = lazy(() => import('./pages/Videos.tsx').then((m) => ({ default: m.Videos })))
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="news" element={<News />} />
         <Route path="categories" element={<Suspense fallback={fallback}><Categories /></Suspense>} />
         <Route path="category/:slug" element={<Suspense fallback={fallback}><CategoryPage /></Suspense>} />
+        <Route path="briefing" element={<Suspense fallback={fallback}><Briefing /></Suspense>} />
         <Route path="search" element={<Suspense fallback={fallback}><Search /></Suspense>} />
         <Route path="article/:id" element={<Suspense fallback={fallback}><Article /></Suspense>} />
         <Route path="read/:slug" element={<Suspense fallback={fallback}><Article /></Suspense>} />

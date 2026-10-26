@@ -5,6 +5,7 @@ import { XMLParser } from 'fast-xml-parser'
 import { decode, fetchByIds } from './site.ts'
 import { subscriberCount } from './push.ts'
 import type { Env } from './index.ts'
+import { gently, pageChecks } from './website.ts'
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; RM-News-Studio/1.0)' }
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@' })
@@ -231,15 +232,11 @@ export async function seoAudit(env: Env) {
   const res = await fetch(`${env.SITE_API}/posts?per_page=15&_fields=id,slug,link,title,content,featured_media,categories,tags`, { headers: UA })
   if (!res.ok) throw new Error(`site returned ${res.status}`)
   const posts = (await res.json()) as { id: number; slug: string; link: string; title: { rendered: string }; content: { rendered: string }; featured_media: number; categories: number[]; tags: number[] }[]
+  // A few pages at a time: the site's hosting errors under bursts.
+  const pages = await gently(posts.map((p) => () => fetch(p.link, { headers: UA }).then((r) => (r.ok ? r.text() : null)).catch(() => null)), 3, 5)
   const audited = await Promise.all(
-    posts.map(async (p) => {
-      let html = ''
-      try {
-        const page = await fetch(p.link, { headers: UA })
-        html = page.ok ? (await page.text()).slice(0, 60000) : ''
-      } catch {
-        /* keep going without page meta */
-      }
+    posts.map(async (p, i) => {
+      const html = (pages[i] ?? '').slice(0, 400000)
       const title = decode(p.title.rendered)
       const issues = seoIssues({
         title,
@@ -251,6 +248,8 @@ export async function seoAudit(env: Env) {
         categories: p.categories,
         tags: p.tags,
       })
+      // Page-level checks (schema, canonical, previews…); title and description are covered above.
+      if (html) issues.push(...pageChecks(html).filter((c) => !c.pass && c.key !== 'title' && c.key !== 'desc').map((c) => c.fix))
       return { id: p.id, title, link: p.link, issues, score: Math.max(0, 100 - issues.length * 12) }
     }),
   )

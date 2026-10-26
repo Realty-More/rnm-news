@@ -8,6 +8,7 @@ import { useAsync, type AsyncState } from '../lib/hooks.ts'
 import { loadFeed } from '../lib/videos.ts'
 import { FEEDS, type FeedKey, type Video } from '../lib/youtubeFeed.ts'
 import { usePageTitle } from './usePageTitle.ts'
+import { WatchTabs } from '../components/NavMenu.tsx'
 
 const SHELVES: FeedKey[] = ['latest', 'podium', 'webseries', 'anniversary']
 
@@ -26,6 +27,7 @@ export function Videos() {
 
   return (
     <div className="page">
+      <WatchTabs />
       <div className="page-head">
         <h1>{t('videos.title')}</h1>
         <p className="page-sub">{t('videos.sub')}</p>

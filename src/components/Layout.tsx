@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Capacitor } from '@capacitor/core'
 import { useOnline } from '../lib/hooks.ts'
 import { refreshOffline } from '../lib/offline.ts'
-import { effectiveTheme, setTheme, usePrefs, useTheme } from '../lib/prefs.ts'
+import { usePrefs } from '../lib/prefs.ts'
 import { syncPushFilters } from '../lib/push.ts'
 import { trackScreen } from '../lib/stats.ts'
 import { Icon, type IconName } from './Icon.tsx'
@@ -13,16 +13,30 @@ import { Ticker } from './Ticker.tsx'
 import { AnnouncementBanner } from './SiteExtras.tsx'
 import { SiteFooter } from './SiteFooter.tsx'
 import { useT, type TKey } from '../lib/i18n.ts'
+import { NavMenu, SectionRail, useHideOnScroll } from './NavMenu.tsx'
 
-const TABS: { to: string; label: TKey; icon: IconName; mobile: boolean }[] = [
-  { to: '/', label: 'nav.home', icon: 'home', mobile: true },
-  { to: '/news', label: 'nav.news', icon: 'news', mobile: true },
-  { to: '/categories', label: 'nav.categories', icon: 'grid', mobile: false },
-  { to: '/videos', label: 'nav.videos', icon: 'play', mobile: true },
-  { to: '/podcasts', label: 'nav.podcasts', icon: 'mic', mobile: true },
-  { to: '/markets', label: 'nav.markets', icon: 'chart', mobile: false },
-  { to: '/saved', label: 'nav.saved', icon: 'bookmark', mobile: true },
+// Desktop header links.
+const TABS: { to: string; label: TKey }[] = [
+  { to: '/', label: 'nav.home' },
+  { to: '/news', label: 'nav.news' },
+  { to: '/categories', label: 'nav.categories' },
+  { to: '/markets', label: 'nav.markets' },
+  { to: '/videos', label: 'nav.videos' },
+  { to: '/podcasts', label: 'nav.podcasts' },
+  { to: '/saved', label: 'nav.saved' },
 ]
+
+// Phone tab bar: five destinations, like Apple News and Bloomberg. "Watch" covers videos, Shorts and podcasts.
+const MOBILE_TABS: { to: string; label: TKey; icon: IconName; match: (p: string) => boolean }[] = [
+  { to: '/', label: 'nav.home', icon: 'home', match: (p) => p === '/' },
+  { to: '/news', label: 'nav.news', icon: 'news', match: (p) => p === '/news' || p.startsWith('/category') || p === '/categories' },
+  { to: '/markets', label: 'nav.markets', icon: 'chart', match: (p) => p === '/markets' },
+  { to: '/videos', label: 'nav.watch', icon: 'play', match: (p) => p === '/videos' || p === '/shorts' || p === '/podcasts' },
+  { to: '/saved', label: 'nav.saved', icon: 'bookmark', match: (p) => p === '/saved' },
+]
+
+/** Screens that get the section rail under the header. */
+const browsing = (p: string) => p === '/' || p === '/news' || p === '/markets' || p.startsWith('/category/')
 
 interface InstallEvent extends Event {
   prompt: () => Promise<void>
@@ -124,19 +138,25 @@ function UpdatePrompt() {
 }
 
 export function Layout() {
-  const [themePref] = useTheme()
-  const theme = effectiveTheme(themePref)
-  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark')
   const online = useOnline()
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const isArticle = pathname.startsWith('/article') || pathname.startsWith('/read')
   const [prefs] = usePrefs()
   const t = useT()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = useCallback(() => setMenuOpen(false), [])
+  const chromeHidden = useHideOnScroll(!menuOpen && !pathname.startsWith('/studio'))
 
   useEffect(() => {
     trackScreen(pathname)
+    setMenuOpen(false)
   }, [pathname])
+
+  // Tapping the tab you're already on goes back to the top, as in native apps.
+  const onTab = (active: boolean) => {
+    if (active) window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   // Keep topic-filtered alerts in step with My Feed.
   const feedKey = JSON.stringify([prefs.notifyMode, prefs.topics, prefs.cities])
@@ -165,7 +185,7 @@ export function Layout() {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <header className="topbar">
+      <header className={`topbar ${chromeHidden ? 'tucked' : ''}`}>
         <div className="topbar-inner">
           {isArticle ? (
             <button className="icon-btn" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} aria-label="Back">
@@ -187,21 +207,14 @@ export function Layout() {
             <NavLink to="/search" className="icon-btn" aria-label="Search">
               <Icon name="search" />
             </NavLink>
-            <NavLink to="/markets" className="icon-btn mobile-only" aria-label="Markets">
-              <Icon name="chart" />
-            </NavLink>
-            <NavLink to="/categories" className="icon-btn mobile-only" aria-label="Categories">
-              <Icon name="grid" />
-            </NavLink>
-            <button className="icon-btn" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
-              <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
+            <button className="icon-btn" onClick={() => setMenuOpen(true)} aria-label={t('nav.menu')} aria-expanded={menuOpen}>
+              <Icon name="menu" />
             </button>
-            <NavLink to="/settings" className="icon-btn" aria-label="Settings">
-              <Icon name="settings" />
-            </NavLink>
           </div>
         </div>
+        {browsing(pathname) && <SectionRail />}
       </header>
+      <NavMenu open={menuOpen} onClose={closeMenu} />
 
       {!isArticle && !pathname.startsWith('/studio') && <Ticker />}
       {!pathname.startsWith('/studio') && <AnnouncementBanner />}
@@ -220,12 +233,17 @@ export function Layout() {
       <SiteFooter />
 
       <nav className={`tabbar ${isArticle ? 'reading' : ''}`} aria-label="Main">
-        {TABS.filter((tab) => tab.mobile).map((tab) => (
-          <NavLink key={tab.to} to={tab.to} end={tab.to === '/'} className="tab">
-            <Icon name={tab.icon} />
-            <span>{t(tab.label)}</span>
-          </NavLink>
-        ))}
+        {MOBILE_TABS.map((tab) => {
+          const active = tab.match(pathname)
+          return (
+            <Link key={tab.to} to={tab.to} className={`tab ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} onClick={() => onTab(active)}>
+              <span className="tab-icon">
+                <Icon name={tab.icon} />
+              </span>
+              <span>{t(tab.label)}</span>
+            </Link>
+          )
+        })}
       </nav>
       <UpdatePrompt />
       <Toaster />

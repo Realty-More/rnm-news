@@ -16,7 +16,7 @@ import { continueReading, onHistoryChange, readHistory, type HistoryItem } from 
 import { invalidate, useAsync } from '../lib/hooks.ts'
 import { usePrefs } from '../lib/prefs.ts'
 import { loadFeed } from '../lib/videos.ts'
-import { fetchPosts, CURATED_CATEGORIES } from '../lib/wp.ts'
+import { fetchPosts, fetchSnapshot, CURATED_CATEGORIES } from '../lib/wp.ts'
 import type { Video } from '../lib/youtubeFeed.ts'
 import { fetchTrending } from '../lib/stats.ts'
 import { usePageTitle } from './usePageTitle.ts'
@@ -31,7 +31,10 @@ export function Home() {
   usePageTitle(null)
   const [prefs, update] = usePrefs()
   const t = useT()
-  const latest = useAsync('home:latest', (s) => fetchPosts({ perPage: 9 }, s))
+  // Last copy on this device first, then the build-time snapshot, then live: no blank first screen.
+  const live = useAsync('home:latest', (s) => fetchPosts({ perPage: 9 }, s), { persist: true })
+  const snap = useAsync(live.data ? null : 'home:snapshot', (s) => fetchSnapshot(s))
+  const latest = { ...live, data: live.data ?? snap.data }
   const [playing, setPlaying] = useState<Video | null>(null)
   const [epoch, setEpoch] = useState(0)
   const fresh = useNewStories(latest.data?.posts[0]?.id)
@@ -40,9 +43,9 @@ export function Home() {
     invalidate('home:')
     invalidate('yt:latest')
     setEpoch((e) => e + 1)
-    latest.reload()
+    live.reload()
     window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [latest])
+  }, [live])
 
   const topicIds = CURATED_CATEGORIES.filter((c) => prefs.topics.includes(c.slug)).map((c) => c.id)
   const sections = HOME_SECTIONS.filter((s) => !prefs.topics.includes(s))
@@ -63,13 +66,26 @@ export function Home() {
           <h1 className="masthead-title">{t('home.title')}</h1>
         </div>
 
+        <Link to="/briefing" className="brief-entry">
+          <span className="brief-entry-icon">
+            <Icon name="headphones" size={20} />
+          </span>
+          <span className="brief-entry-text">
+            <strong>{t('brief.title')}</strong>
+            <span>{t('brief.sub')}</span>
+          </span>
+          <span className="brief-entry-cta">
+            {t('brief.cta')} <Icon name="chevron" size={15} />
+          </span>
+        </Link>
+
         <EditorsPick />
 
         <ContinueReading />
         {prefs.onboarded && <NotifyPrompt />}
 
         {latest.error && !latest.data ? (
-          <ErrorState error={latest.error} onRetry={latest.reload} />
+          <ErrorState error={latest.error} onRetry={live.reload} />
         ) : !latest.data ? (
           <SkeletonList hero count={4} />
         ) : (

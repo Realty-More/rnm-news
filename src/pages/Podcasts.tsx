@@ -6,6 +6,7 @@ import { loadPodcasts } from '../lib/videos.ts'
 import { FEEDS, type Video } from '../lib/youtubeFeed.ts'
 import { VideoGrid } from './Videos.tsx'
 import { usePageTitle } from './usePageTitle.ts'
+import { WatchTabs } from '../components/NavMenu.tsx'
 
 export function Podcasts() {
   usePageTitle('Podcasts')
@@ -15,6 +16,7 @@ export function Podcasts() {
 
   return (
     <div className="page">
+      <WatchTabs />
       <div className="page-head">
         <h1>{t('podcasts.title')}</h1>
         <p className="page-sub">{t('podcasts.sub')}</p>

@@ -7,6 +7,8 @@
 //   /editor/*                         Content Studio (owner key or an editor key)
 //   GET  /stats?key=…                 private stats page for the owner
 //   cron every 10 minutes             new-story alerts, website uptime check, 9 AM morning brief
+//   cron hourly at :07                website view counts per story (Post Views Counter)
+//   /editor/mag/*                     private magazine mailing list and quarterly dispatch (team only)
 import { checkAndNotify, subKey, subscribe } from './push.ts'
 import { sharePage } from './share.ts'
 import { parseHit, recordHit, statsPage, trending } from './stats.ts'
@@ -33,6 +35,8 @@ import {
   uptimeSummary,
   type Who,
 } from './owner.ts'
+import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
+import { collectViews, seoCompare, webTraffic } from './website.ts'
 import { checkIn, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
 
 export interface Env {
@@ -52,7 +56,7 @@ export type { NewsItem } from './site.ts'
 
 const MAX_BODY = 4096
 // Bump when studio/market logic changes, so old cached results are not served.
-const STUDIO_CACHE = 5
+const STUDIO_CACHE = 6
 
 function cors(origin: string | null, env: Env): Record<string, string> {
   const allowed = env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
@@ -123,6 +127,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await myToday(env, who), 200, headers)
         case '/editor/me/history':
           return json(await myHistory(env, who), 200, headers)
+        case '/editor/mag/book':
+          return json(await magazineBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/mag/dispatch':
+          return json(await dispatchOf(env, url.searchParams.get('issue') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/web/traffic':
+          return json(await webTraffic(env), 200, headers)
+        case '/editor/web/seo':
+          return cachedJson(url, ctx, headers, 12 * 60 * 60, () => seoCompare(env))
         case '/editor/team/day':
           return who.role === 'owner' ? json(await teamDay(env, url.searchParams.get('date') ?? ''), 200, headers) : ownerOnly()
         case '/editor/team/month':
@@ -158,6 +170,21 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await submitReport(env, who, body), 200, headers)
       case '/editor/me/device':
         return json({ ok: await registerStaffDevice(env, who, body) }, 200, headers)
+      case '/editor/mag/contact':
+        return json(await saveContact(env, body, who), 200, headers)
+      case '/editor/mag/contact/remove':
+        return who.role === 'owner' ? json(await removeContact(env, Number((body as { id?: unknown }).id), who), 200, headers) : ownerOnly()
+      case '/editor/mag/issue':
+        return who.role === 'owner' ? json(await createIssue(env, body), 200, headers) : ownerOnly()
+      case '/editor/mag/dispatch':
+        return json(await setDispatch(env, body, who), 200, headers)
+      case '/editor/web/refresh': {
+        // Owner can pull fresh counts; at most once every 5 minutes.
+        if (who.role !== 'owner') return ownerOnly()
+        if (await env.SUBS.get('web:refresh-lock')) return json({ result: 'Updated a moment ago; try again in a few minutes.' }, 200, headers)
+        await env.SUBS.put('web:refresh-lock', '1', { expirationTtl: 300 })
+        return json({ result: await collectViews(env) }, 200, headers)
+      }
       case '/editor/team/settings':
         return who.role === 'owner' ? json(await saveTeamSettings(env, body), 200, headers) : ownerOnly()
       case '/editor/team/remind-now':
@@ -228,8 +255,10 @@ export default {
     return json({ error: 'not found' }, 404, headers)
   },
 
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
+    // Its own hourly run, so the ~45 site requests don't share the 50-request limit with alerts.
+    if (event.cron === '7 * * * *') return ctx.waitUntil(run('views', () => collectViews(env)))
     ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env))]))
   },
 } satisfies ExportedHandler<Env>

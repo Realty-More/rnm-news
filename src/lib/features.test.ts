@@ -104,3 +104,44 @@ describe('attendance export', async () => {
     expect(row).toContain('"8.5"')
   })
 })
+
+import { keyPoints, sentences } from './keypoints.ts'
+import { mailingCsv, nextQuarter } from '../pages/MagazineTools.tsx'
+
+describe('key points', () => {
+  const story =
+    '<p>New Delhi, October 26, 2026: India’s office market saw demand spread across sectors in Q3 2026, according to Vestian Research.</p>' +
+    '<p>IT-ITeS remained the largest contributor, but its share fell to 23% from 41% in Q2 2026.</p>' +
+    '<p>“We are seeing a healthy mix of occupiers this year,” said the chief executive of the firm.</p>' +
+    '<p>The share of BFSI rose to 20% from 8% in the previous quarter and 15% a year earlier.</p>' +
+    '<p>Flex spaces kept a steady share of absorption across the major cities during the quarter.</p>' +
+    '<p>Absorption reached 23.7 million sq ft, up 20% year-on-year, the second-highest on record.</p>' +
+    '<p>By Varun Baweja, Director, Fomerah Ventures Pvt. Ltd.</p>'
+  it('keeps the lede and the sentences with numbers, in story order, minus the dateline', () => {
+    const pts = keyPoints(story)
+    expect(pts).toHaveLength(3)
+    expect(pts[0]).toMatch(/^India’s office market/)
+    expect(pts.some((p) => p.includes('said'))).toBe(false)
+    expect(pts.some((p) => p.startsWith('By '))).toBe(false)
+  })
+  it('skips short pieces', () => {
+    expect(keyPoints('<p>Short note one here for the readers today.</p><p>And a second line follows here.</p>')).toEqual([])
+  })
+  it('does not split on Rs. or decimals', () => {
+    expect(sentences('Orders worth Rs. 949 crore came in. Growth was 23.7 per cent.')).toEqual(['Orders worth Rs. 949 crore came in.', 'Growth was 23.7 per cent.'])
+  })
+})
+
+describe('magazine list', () => {
+  it('rolls over to the next quarter', () => {
+    expect(nextQuarter('2026-Q4')).toEqual({ id: '2027-Q1', title: 'Jan–Mar 2027' })
+    expect(nextQuarter('2027-Q2')).toEqual({ id: '2027-Q3', title: 'Jul–Sep 2027' })
+  })
+  it('exports a CSV with each contact’s dispatch status', () => {
+    const c = { id: 1, name: 'Ms. Asha "A" Singh', designation: null, company: '360 Realtors', address: 'Sector 43, Gurugram', city: 'Gurugram', pin: '122002', phone: '99538', email: null, remark: null }
+    const csv = mailingCsv([c], new Map([[1, { id: 1, status: 'sent' as const, courier: 'DTDC', tracking: null, byName: 'Owner', at: '' }]]), 'Oct–Dec 2026')
+    const [head, row] = csv.replace('﻿', '').split('\r\n')
+    expect(head).toContain('"Status (Oct–Dec 2026)"')
+    expect(row).toBe('"Ms. Asha ""A"" Singh","","360 Realtors","Sector 43, Gurugram","Gurugram","122002","99538","","Sent","DTDC",""')
+  })
+})

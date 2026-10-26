@@ -17,8 +17,31 @@ export interface AsyncState<T> {
   reload: () => void
 }
 
-export function useAsync<T>(key: string | null, fn: (signal: AbortSignal) => Promise<T>): AsyncState<T> {
-  const cached = key ? (memo.get(key)?.value as T | undefined) : undefined
+const PERSIST = 'rnm-cache:'
+
+function readPersisted<T>(key: string): T | undefined {
+  try {
+    const raw = localStorage.getItem(PERSIST + key)
+    return raw ? (JSON.parse(raw) as T) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function writePersisted(key: string, value: unknown) {
+  try {
+    localStorage.setItem(PERSIST + key, JSON.stringify(value))
+  } catch {
+    /* storage full or private mode: the memory cache still works */
+  }
+}
+
+/**
+ * Loads `fn` once per key (cached for this session). With `persist`, the last result is also kept
+ * on the device and shown straight away on the next launch while a fresh copy loads.
+ */
+export function useAsync<T>(key: string | null, fn: (signal: AbortSignal) => Promise<T>, { persist = false } = {}): AsyncState<T> {
+  const cached = key ? ((memo.get(key)?.value as T | undefined) ?? (persist ? readPersisted<T>(key) : undefined)) : undefined
   const [data, setData] = useState<T | undefined>(cached)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(key !== null && cached === undefined)
@@ -29,7 +52,7 @@ export function useAsync<T>(key: string | null, fn: (signal: AbortSignal) => Pro
   useEffect(() => {
     if (key === null) return
     const hit = memo.get(key)
-    setData(hit?.value as T | undefined)
+    setData((hit?.value as T | undefined) ?? (persist ? readPersisted<T>(key) : undefined))
     if (hit && nonce === 0 && Date.now() - hit.at < FRESH_MS) {
       setLoading(false)
       setError(null)
@@ -41,6 +64,7 @@ export function useAsync<T>(key: string | null, fn: (signal: AbortSignal) => Pro
     fnRef.current(ctrl.signal).then(
       (value) => {
         memo.set(key, { at: Date.now(), value })
+        if (persist) writePersisted(key, value)
         setData(value)
         setLoading(false)
       },
@@ -51,7 +75,7 @@ export function useAsync<T>(key: string | null, fn: (signal: AbortSignal) => Pro
       },
     )
     return () => ctrl.abort()
-  }, [key, nonce])
+  }, [key, nonce, persist])
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
   return { data, error, loading, reload }

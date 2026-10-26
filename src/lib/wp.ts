@@ -60,7 +60,7 @@ export class ApiError extends Error {
   }
 }
 
-const LIST_FIELDS = 'id,slug,date_gmt,modified_gmt,link,title,excerpt,categories,featured_media,_links,_embedded'
+export const LIST_FIELDS = 'id,slug,date_gmt,modified_gmt,link,title,excerpt,categories,featured_media,_links,_embedded'
 const FULL_FIELDS = `${LIST_FIELDS},content`
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<{ data: T; totalPages: number }> {
@@ -172,6 +172,15 @@ export async function fetchPosts(q: PostQuery = {}, signal?: AbortSignal): Promi
   if (q.after) params.set('after', q.after)
   const { data, totalPages } = await getJson<RawPost[]>(`/posts?${params}`, signal)
   return { posts: data.map(toPost), totalPages }
+}
+
+/** Latest stories saved at build time (public/data/news.json); paints Home before the live API answers. */
+export async function fetchSnapshot(signal?: AbortSignal): Promise<{ posts: Post[]; totalPages: number }> {
+  const res = await fetch(`${import.meta.env.BASE_URL}data/news.json`, { signal, cache: 'no-cache' })
+  if (!res.ok) throw new ApiError(res.status, 'No saved copy.')
+  const { posts } = (await res.json()) as { posts: RawPost[] }
+  if (!posts.length) throw new ApiError(404, 'No saved copy.')
+  return { posts: posts.map(toPost), totalPages: 1 }
 }
 
 export async function fetchPost(idOrSlug: string, signal?: AbortSignal): Promise<Post | null> {

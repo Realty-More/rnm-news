@@ -90,6 +90,26 @@ async function wordpress(api: string): Promise<{ items: Item[]; posts7: number; 
   }
 }
 
+/** Each rival's latest `n` story links (for the side-by-side SEO check). */
+export async function feedLinks(n: number): Promise<{ name: string; items: { title: string; link: string }[] }[]> {
+  const pick = (items: Item[]) => items.slice(0, n).map(({ title, link }) => ({ title, link }))
+  const [et, ht, nxt, sy] = await Promise.all([
+    rss(['https://realty.economictimes.indiatimes.com/rss/topstories']),
+    rss(['https://www.hindustantimes.com/feeds/rss/real-estate/rssfeed.xml']),
+    newsSitemap('https://www.realtynxt.com/news-sitemap.xml'),
+    fetch('https://www.squareyards.com/blog/wp-json/wp/v2/posts?per_page=3&_fields=title,link', { headers: UA })
+      .then((r) => (r.ok ? (r.json() as Promise<{ title: { rendered: string }; link: string }[]>) : []))
+      .then((rows) => rows.map((r) => ({ title: decode(r.title.rendered), date: '', link: r.link })))
+      .catch(() => [] as Item[]),
+  ])
+  return [
+    { name: 'ET Realty', items: pick(et) },
+    { name: 'Hindustan Times Real Estate', items: pick(ht) },
+    { name: 'RealtyNXT', items: pick(nxt) },
+    { name: 'Square Yards', items: pick(sy) },
+  ]
+}
+
 /* ---------- analysis (pure, tested) ---------- */
 export const TOPICS: { key: string; label: string; words: RegExp }[] = [
   { key: 'policy', label: 'Policy, RERA & courts', words: /\b(rera|policy|govt|government|ministry|minister|court|hc|tribunal|nclt|regulat\w*|stamp duty|gst|budget|cabinet|notif\w*|rules?)\b/i },

@@ -11,6 +11,7 @@ import { forgetOwner, ownerKey, ownerRole, refreshRole, studio, unlock } from '.
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
 import { MagazineTab } from './MagazineTools.tsx'
 import { ReelsTab } from './ReelTools.tsx'
+import { AiWriterTab } from './AiTools.tsx'
 import { WebsiteTab } from './WebsiteTools.tsx'
 import { AddToCalendar, CalendarTab, CaptionsTab, NotifyTab, PerformanceTab, ReportTab, SiteTab, TeamTab } from './StudioTools.tsx'
 import { usePageTitle } from './usePageTitle.ts'
@@ -78,6 +79,7 @@ const TABS = [
   { key: 'keywords', label: 'Keywords', group: 'content' },
   { key: 'seo', label: 'SEO check', group: 'content' },
   { key: 'calendar', label: 'Calendar', group: 'content' },
+  { key: 'ai', label: 'AI writer', group: 'content' },
   { key: 'notify', label: 'Notify readers', group: 'publish', owner: true },
   { key: 'whatsapp', label: 'WhatsApp post', group: 'publish' },
   { key: 'captions', label: 'Social captions', group: 'publish' },
@@ -212,6 +214,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'web' && <WebsiteTab />}
       {tab === 'magazine' && <MagazineTab />}
       {tab === 'reels' && <ReelsTab />}
+      {tab === 'ai' && <AiWriterTab />}
     </div>
   )
 }

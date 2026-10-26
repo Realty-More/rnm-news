@@ -4,6 +4,21 @@ import { useCallback } from 'react'
 import { readPrefs, usePrefs } from './prefs.ts'
 
 const hi = {
+  'ai.sub': 'AI · सिर्फ़ RealtyNMore की ख़बरों से जवाब',
+  'ai.new': 'नई चैट',
+  'ai.about': 'इस ख़बर के बारे में:',
+  'ai.anyStory': 'सभी ख़बरों से पूछें',
+  'ai.hello': 'रियल एस्टेट की किसी भी ख़बर के बारे में पूछिए: कंपनी, शहर, प्रोजेक्ट या RERA।',
+  'ai.helloStory': 'इस ख़बर के बारे में कुछ भी पूछिए।',
+  'ai.sources': 'स्रोत',
+  'ai.thinking': 'जवाब तैयार हो रहा है',
+  'ai.placeholder': 'अपना सवाल लिखें…',
+  'ai.placeholderStory': 'इस ख़बर के बारे में पूछें…',
+  'ai.send': 'भेजें',
+  'ai.note': 'AI जवाब RealtyNMore की ख़बरों पर आधारित हैं और गलत हो सकते हैं। निवेश सलाह नहीं।',
+  'ai.failed': 'अभी जवाब नहीं मिल सका। फिर कोशिश करें।',
+  'ai.offline': 'इंटरनेट से जुड़ें, फिर पूछें।',
+  'ai.askStory': 'AI से पूछें',
   'menu.team': 'टीम',
   'menu.login': 'टीम लॉग इन',
   'menu.logout': 'लॉग आउट',
@@ -151,6 +166,21 @@ const hi = {
 export type TKey = keyof typeof hi
 
 const en: Record<TKey, string> = {
+  'ai.sub': 'AI · answers from RealtyNMore stories only',
+  'ai.new': 'New chat',
+  'ai.about': 'About:',
+  'ai.anyStory': 'Ask about any story',
+  'ai.hello': 'Ask about any real estate story: a company, city, project or RERA.',
+  'ai.helloStory': 'Ask anything about this story.',
+  'ai.sources': 'Sources',
+  'ai.thinking': 'Writing an answer',
+  'ai.placeholder': 'Ask a question…',
+  'ai.placeholderStory': 'Ask about this story…',
+  'ai.send': 'Send',
+  'ai.note': 'AI answers are based on RealtyNMore stories and can be wrong. Not investment advice.',
+  'ai.failed': 'Could not get an answer right now. Please try again.',
+  'ai.offline': 'Connect to the internet, then ask again.',
+  'ai.askStory': 'Ask AI',
   'menu.team': 'Team',
   'menu.login': 'Team login',
   'menu.logout': 'Log out',

@@ -14,6 +14,7 @@ import { AnnouncementBanner } from './SiteExtras.tsx'
 import { SiteFooter } from './SiteFooter.tsx'
 import { useT, type TKey } from '../lib/i18n.ts'
 import { NavMenu, SectionRail, useHideOnScroll } from './NavMenu.tsx'
+import { Assistant, assistantReady, openAssistant } from './Assistant.tsx'
 
 // Desktop header links.
 const TABS: { to: string; label: TKey }[] = [
@@ -204,6 +205,11 @@ export function Layout() {
             ))}
           </nav>
           <div className="topbar-actions">
+            {assistantReady && (
+              <button className="icon-btn ask-btn" onClick={() => openAssistant()} aria-label="Ask R&M (AI)">
+                <Icon name="sparkle" />
+              </button>
+            )}
             <NavLink to="/search" className="icon-btn" aria-label="Search">
               <Icon name="search" />
             </NavLink>
@@ -215,6 +221,7 @@ export function Layout() {
         {browsing(pathname) && <SectionRail />}
       </header>
       <NavMenu open={menuOpen} onClose={closeMenu} />
+      <Assistant />
 
       {!isArticle && !pathname.startsWith('/studio') && <Ticker />}
       {!pathname.startsWith('/studio') && <AnnouncementBanner />}

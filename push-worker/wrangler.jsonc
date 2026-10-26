@@ -6,6 +6,8 @@
   "compatibility_date": "2026-10-01",
   // Every 10 minutes: alerts, uptime, brief, reminders. Hourly at :07: website view counts.
   "triggers": { "crons": ["*/10 * * * *", "7 * * * *"] },
+  // Workers AI (free daily allowance) for "Ask R&M" and the team's AI writer.
+  "ai": { "binding": "AI" },
   "kv_namespaces": [
     // Subscribed devices (created with: npx wrangler kv namespace create SUBS)
     { "binding": "SUBS", "id": "b085d47b2dc444aba1c68fa0713e2a0a" }

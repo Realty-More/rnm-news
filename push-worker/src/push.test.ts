@@ -410,3 +410,15 @@ describe('market close files', () => {
     expect(weekStart('2026-10-25')).toBe('2026-10-19')
   })
 })
+
+import { cleanAnswer, keywords } from './ai.ts'
+
+describe('Ask R&M', () => {
+  it('searches on the specific words of a question', () => {
+    expect(keywords('What is the latest news about DLF in Gurugram?')).toEqual(['gurugram', 'dlf'])
+    expect(keywords('RERA kya hai Noida mein')).toEqual(['noida', 'rera'])
+  })
+  it('drops model thinking and citations to sources that do not exist', () => {
+    expect(cleanAnswer('<think>hmm</think>DLF bought land [1]. Prices rose [7].', 3)).toEqual({ text: 'DLF bought land [1]. Prices rose .', cited: [1] })
+  })
+})

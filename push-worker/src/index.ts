@@ -1,6 +1,7 @@
 // R&M News app server (Cloudflare Workers free plan).
 //   POST /subscribe, /unsubscribe     breaking-news alerts (KV)
 //   POST /hit, GET /trending          anonymous usage counts and "Trending in app" (D1)
+//   POST /ai/ask                      "Ask R&M": answers from realtynmore.com stories only (Workers AI)
 //   GET  /a/<id>                      share preview page that opens the story in the app
 //   GET  /site/config                 Editor's Pick and announcement banner for the app
 //   GET  /market/*                    Nifty Realty list and news behind stock moves
@@ -37,6 +38,7 @@ import {
   type Who,
 } from './owner.ts'
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
+import { ask, write } from './ai.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
 import { collectViews, seoCompare, webTraffic } from './website.ts'
 import { checkIn, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
@@ -51,6 +53,7 @@ export interface Env {
   SITE_API: string
   APP_URL: string
   STATS_KEY: string
+  AI: Ai
 }
 
 export { buildNotices, isValidSubscription, matching, newSince } from './push.ts'
@@ -186,6 +189,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await submitReport(env, who, body), 200, headers)
       case '/editor/me/device':
         return json({ ok: await registerStaffDevice(env, who, body) }, 200, headers)
+      case '/editor/ai/write':
+        return json(await write(env, body, who), 200, headers)
       case '/editor/reels/ref-remove':
         return who.role === 'owner' ? json(await removeRef(env, String((body as { id?: unknown }).id ?? '')), 200, headers) : ownerOnly()
       case '/editor/reels/capture': {
@@ -269,6 +274,13 @@ export default {
       if (typeof endpoint !== 'string') return json({ error: 'bad request' }, 400, headers)
       await env.SUBS.delete(await subKey(endpoint))
       return json({ ok: true }, 200, headers)
+    }
+    if (pathname === '/ai/ask') {
+      try {
+        return json(await ask(env, req, body, ctx), 200, headers)
+      } catch (err) {
+        return json({ error: (err as Error).message }, 429, headers)
+      }
     }
     if (pathname === '/hit') {
       const hit = parseHit(body)

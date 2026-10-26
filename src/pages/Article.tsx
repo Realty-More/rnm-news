@@ -3,6 +3,7 @@ import { hindiUrl, useT } from '../lib/i18n.ts'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ListenButton } from '../components/Listen.tsx'
+import { assistantReady, openAssistant } from '../components/Assistant.tsx'
 import { Kicker, PostCard, PostImg, primaryCategory } from '../components/PostCard.tsx'
 import { EmptyState, ErrorState } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
@@ -237,6 +238,11 @@ function ArticleActions({ post, fallback, getText, compact = false }: { post: Po
         <Icon name="whatsapp" size={18} /> {compact ? '' : 'WhatsApp'}
       </a>
       {post?.content && <ListenButton title={post.title} getText={getText} />}
+      {assistantReady && (
+        <button className="btn ghost ask-story" onClick={() => openAssistant({ id: fallback.id, title: fallback.title })} aria-label={t('ai.askStory')}>
+          <Icon name="sparkle" size={18} /> {compact ? '' : t('ai.askStory')}
+        </button>
+      )}
       {prefs.lang === 'hi' && (
         <a className="btn ghost" href={hindiUrl(fallback.link)} target="_blank" rel="noopener noreferrer">
           {t('article.readHindi')} <Icon name="external" size={15} />

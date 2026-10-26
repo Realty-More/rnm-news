@@ -13,6 +13,8 @@ import { forgetOwner, ownerKey, ownerRole } from '../lib/owner.ts'
 const QUICK: { to: string; label: TKey; icon: IconName }[] = [
   { to: '/news', label: 'nav.news', icon: 'news' },
   { to: '/markets', label: 'nav.markets', icon: 'chart' },
+  { to: '/magazine', label: 'nav.magazine', icon: 'magazine' },
+  { to: '/briefing', label: 'nav.briefing', icon: 'headphones' },
   { to: '/videos', label: 'nav.videos', icon: 'play' },
   { to: '/shorts', label: 'videos.shorts', icon: 'flame' },
   { to: '/podcasts', label: 'nav.podcasts', icon: 'mic' },

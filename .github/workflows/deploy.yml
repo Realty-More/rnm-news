@@ -1,5 +1,6 @@
 # Builds the PWA and publishes it to GitHub Pages.
-# Every 30 minutes it also refreshes the YouTube video list (public/data/youtube.json is written during the build).
+# Every 30 minutes it also refreshes the YouTube video list (public/data/youtube.json is written during the build)
+# and the R&M Magazine issue list (public/data/magazine.json and covers).
 name: Build and deploy
 
 on:
@@ -29,6 +30,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # R&M Magazine: finds new issues on realtynmore.com and makes their covers.
+      # Covers already made are kept between runs, so each issue's PDF is downloaded only once.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            public/magazine
+            public/data/magazine.json
+          key: magazine-${{ github.run_id }}
+          restore-keys: magazine-
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Magazine issues
+        continue-on-error: true
+        run: |
+          pip install --quiet pypdfium2==5.14.0 pillow==12.3.0
+          python scripts/magazine.py
       - run: npm run build
         env:
           # Address of the push-worker (repo Settings ▸ Variables ▸ PUSH_API). Empty = alerts hidden.

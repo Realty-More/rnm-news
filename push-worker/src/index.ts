@@ -2,6 +2,7 @@
 //   POST /subscribe, /unsubscribe     breaking-news alerts (KV)
 //   POST /hit, GET /trending          anonymous usage counts and "Trending in app" (D1)
 //   POST /auth/signup|login|logout    Studio accounts: mobile number + password, owner approves staff
+//   GET  /magazine/pdf/<id>           R&M Magazine PDF from realtynmore.com, in parts, for the in-app reader
 //   POST /ai/ask                      "Ask R&M": answers from realtynmore.com stories only (Workers AI)
 //   GET  /a/<id>                      share preview page that opens the story in the app
 //   GET  /site/config                 Editor's Pick and announcement banner for the app
@@ -42,6 +43,7 @@ import {
 } from './owner.ts'
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
 import { ask, write } from './ai.ts'
+import { magazinePdf } from './magazine-pdf.ts'
 import { changePassword, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
@@ -287,6 +289,12 @@ export default {
     const { pathname } = url
     const origin = req.headers.get('Origin')
     const headers = cors(origin, env)
+    // Magazine PDFs are public and read part by part by the app's PDF reader (any origin, Range header).
+    const mag = /^\/magazine\/pdf\/(\d{1,9})$/.exec(pathname)
+    if (mag) {
+      if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Range', 'Access-Control-Max-Age': '86400' } })
+      if (req.method === 'GET') return magazinePdf(env, req, Number(mag[1]), ctx)
+    }
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers })
 
     if (pathname.startsWith('/editor/')) {

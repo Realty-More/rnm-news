@@ -143,6 +143,8 @@ export function Layout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const isArticle = pathname.startsWith('/article') || pathname.startsWith('/read')
+  // Reading a magazine issue is full screen: the reader has its own toolbar.
+  const immersive = /^\/magazine\/\d/.test(pathname)
   const [prefs] = usePrefs()
   const t = useT()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -182,7 +184,7 @@ export function Layout() {
   }, [])
 
   return (
-    <div className="app">
+    <div className={`app ${immersive ? 'immersive' : ''}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -223,8 +225,8 @@ export function Layout() {
       <NavMenu open={menuOpen} onClose={closeMenu} />
       <Assistant />
 
-      {!isArticle && !pathname.startsWith('/studio') && <Ticker />}
-      {!pathname.startsWith('/studio') && <AnnouncementBanner />}
+      {!isArticle && !immersive && !pathname.startsWith('/studio') && <Ticker />}
+      {!immersive && !pathname.startsWith('/studio') && <AnnouncementBanner />}
 
       {!online && (
         <div className="offline-bar" role="status">
@@ -237,7 +239,7 @@ export function Layout() {
         <Outlet />
       </main>
 
-      <SiteFooter />
+      {!immersive && <SiteFooter />}
 
       <nav className={`tabbar ${isArticle ? 'reading' : ''}`} aria-label="Main">
         {MOBILE_TABS.map((tab) => {

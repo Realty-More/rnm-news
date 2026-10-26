@@ -18,6 +18,8 @@ const Saved = lazy(() => import('./pages/Saved.tsx').then((m) => ({ default: m.S
 const Shorts = lazy(() => import('./pages/Shorts.tsx').then((m) => ({ default: m.Shorts })))
 const Studio = lazy(() => import('./pages/Studio.tsx').then((m) => ({ default: m.Studio })))
 const Markets = lazy(() => import('./pages/Markets.tsx').then((m) => ({ default: m.Markets })))
+const MagazineList = lazy(() => import('./pages/Magazine.tsx').then((m) => ({ default: m.MagazineList })))
+const MagazineReader = lazy(() => import('./pages/Magazine.tsx').then((m) => ({ default: m.MagazineReader })))
 const Settings = lazy(() => import('./pages/Settings.tsx').then((m) => ({ default: m.Settings })))
 
 const fallback = (
@@ -44,6 +46,8 @@ export default function App() {
         <Route path="saved" element={<Suspense fallback={fallback}><Saved /></Suspense>} />
         <Route path="studio" element={<Suspense fallback={fallback}><Studio /></Suspense>} />
         <Route path="markets" element={<Suspense fallback={fallback}><Markets /></Suspense>} />
+        <Route path="magazine" element={<Suspense fallback={fallback}><MagazineList /></Suspense>} />
+        <Route path="magazine/:id" element={<Suspense fallback={fallback}><MagazineReader /></Suspense>} />
         <Route path="settings" element={<Suspense fallback={fallback}><Settings /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Route>

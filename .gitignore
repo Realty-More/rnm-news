@@ -7,3 +7,4 @@ android/local.properties
 *.jks
 deliverables
 *.local
+*.tsbuildinfo

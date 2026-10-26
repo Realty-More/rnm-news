@@ -1,0 +1,126 @@
+{
+ "generatedAt": "2026-10-26T12:25:25.118908Z",
+ "issues": [
+  {
+   "id": 116428,
+   "title": "April–June 2026",
+   "period": "2026-06",
+   "kind": "quarterly",
+   "uploaded": "2026-08-13",
+   "pages": 104,
+   "bytes": 15966882,
+   "url": "https://realtynmore.com/wp-content/uploads/2026/08/RM-April-June-2026_For-Web.pdf",
+   "cover": "magazine/116428.jpg"
+  },
+  {
+   "id": 110600,
+   "title": "January–March 2026",
+   "period": "2026-03",
+   "kind": "quarterly",
+   "uploaded": "2026-04-12",
+   "pages": 124,
+   "bytes": 13630955,
+   "url": "https://realtynmore.com/wp-content/uploads/2026/04/Jacket_RM-January-March-2026_organized.pdf",
+   "cover": "magazine/110600.jpg"
+  },
+  {
+   "id": 107979,
+   "title": "12th Anniversary Special",
+   "period": "2026-02",
+   "kind": "special",
+   "uploaded": "2026-02-11",
+   "pages": 76,
+   "bytes": 7159317,
+   "url": "https://realtynmore.com/wp-content/uploads/2026/02/RM-Special-Issue_Web_F.pdf",
+   "cover": "magazine/107979.jpg"
+  },
+  {
+   "id": 105100,
+   "title": "July–September 2025",
+   "period": "2025-09",
+   "kind": "quarterly",
+   "uploaded": "2025-11-24",
+   "pages": 72,
+   "bytes": 8047774,
+   "url": "https://realtynmore.com/wp-content/uploads/2025/11/RM-July-September-2025_Web_R.pdf",
+   "cover": "magazine/105100.jpg"
+  },
+  {
+   "id": 101008,
+   "title": "April–June 2025",
+   "period": "2025-06",
+   "kind": "quarterly",
+   "uploaded": "2025-07-26",
+   "pages": 88,
+   "bytes": 9096634,
+   "url": "https://realtynmore.com/wp-content/uploads/2025/07/RM-April-June-2025_Web-1.pdf",
+   "cover": "magazine/101008.jpg"
+  },
+  {
+   "id": 97251,
+   "title": "January–March 2025",
+   "period": "2025-03",
+   "kind": "quarterly",
+   "uploaded": "2025-04-11",
+   "pages": 72,
+   "bytes": 9133698,
+   "url": "https://realtynmore.com/wp-content/uploads/2025/04/RM_January-March-2025_Low-PDF-for-Web-FINAL.pdf",
+   "cover": "magazine/97251.jpg"
+  },
+  {
+   "id": 95762,
+   "title": "October–December 2024",
+   "period": "2024-12",
+   "kind": "quarterly",
+   "uploaded": "2025-02-18",
+   "pages": 88,
+   "bytes": 21616869,
+   "url": "https://realtynmore.com/wp-content/uploads/2025/02/RM_October-December-2024_Low-PDF-only-preview-Full-Magazine-2.pdf",
+   "cover": "magazine/95762.jpg"
+  },
+  {
+   "id": 95230,
+   "title": "July–September 2024",
+   "period": "2024-09",
+   "kind": "quarterly",
+   "uploaded": "2025-01-28",
+   "pages": 80,
+   "bytes": 11337573,
+   "url": "https://realtynmore.com/wp-content/uploads/2025/01/RM_July-September-2024_Web.pdf",
+   "cover": "magazine/95230.jpg"
+  },
+  {
+   "id": 52504,
+   "title": "September 2020 · 7th Anniversary",
+   "period": "2020-09",
+   "kind": "archive",
+   "uploaded": "2020-10-22",
+   "pages": 113,
+   "bytes": 23068800,
+   "url": "https://realtynmore.com/wp-content/uploads/2020/10/E-magazine.pdf",
+   "cover": "magazine/52504.jpg"
+  },
+  {
+   "id": 91931,
+   "title": "March 2020",
+   "period": "2020-03",
+   "kind": "archive",
+   "uploaded": "2024-08-08",
+   "pages": 53,
+   "bytes": 69707939,
+   "url": "https://realtynmore.com/wp-content/uploads/2024/08/March-2020.pdf",
+   "cover": "magazine/91931.jpg"
+  },
+  {
+   "id": 91933,
+   "title": "December 2019",
+   "period": "2019-12",
+   "kind": "archive",
+   "uploaded": "2024-08-08",
+   "pages": 52,
+   "bytes": 72477508,
+   "url": "https://realtynmore.com/wp-content/uploads/2024/08/December-2019-1-merged.pdf",
+   "cover": "magazine/91933.jpg"
+  }
+ ]
+}

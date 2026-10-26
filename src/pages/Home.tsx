@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useT } from '../lib/i18n.ts'
 import { Link } from 'react-router-dom'
+import { MagazineBand } from '../components/MagazineBand.tsx'
 import { PostCard, PostImg } from '../components/PostCard.tsx'
 import { PullToRefresh } from '../components/PullToRefresh.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
@@ -131,6 +132,8 @@ export function Home() {
           prefs.cities.map((city) => <CitySection key={city} city={city} epoch={epoch} />)}
 
         <Trending epoch={epoch} />
+
+        <MagazineBand />
 
         <VideoStrip onPlay={setPlaying} epoch={epoch} />
 

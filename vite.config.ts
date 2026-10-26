@@ -51,7 +51,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // Only the Latin font files are needed for English headlines.
-        globIgnores: ['**/*{cyrillic,greek,vietnamese,latin-ext}*'],
+        // The magazine reader's PDF engine loads only when someone opens an issue.
+        globIgnores: ['**/*{cyrillic,greek,vietnamese,latin-ext}*', '**/pdf-*.js', '**/pdf.worker*'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
         // Breaking-news notifications (push and notificationclick handlers).

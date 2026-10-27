@@ -565,6 +565,9 @@ describe('personal office hours and attendance reminders', () => {
     const { cleanPeopleTimes } = await import('./team.ts')
     expect(cleanPeopleTimes({ 'ph:1': { start: '09:30', end: 'x' }, 'bad id!': { start: '09:00' }, 'ed:2': {} })).toEqual({ 'ph:1': { start: '09:30' } })
     expect(() => cleanPeopleTimes({ 'ph:1': { start: '18:00', end: '09:00' } })).toThrow()
+    // End only, earlier than the office start: a 6 PM typed as 06:00.
+    expect(() => cleanPeopleTimes({ 'ph:1': { end: '06:00' } }, '10:00', '18:30')).toThrow('Did you mean 18:00')
+    expect(cleanPeopleTimes({ 'ph:1': { end: '18:00' } }, '10:00', '18:30')).toEqual({ 'ph:1': { end: '18:00' } })
     const key = 'a'.repeat(64)
     expect(cleanPeopleTimes({ [key]: { start: '11:00' } })).toEqual({ [key]: { start: '11:00' } })
   })

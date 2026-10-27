@@ -665,26 +665,15 @@ export function TeamTab() {
   const accts = useAsync(hasFullAccess() ? 'studio:accounts' : null, (s) => studio<{ accounts: { phone: string; name: string; status: string; role: string }[] }>('accounts', undefined, s))
   const [mergeTo, setMergeTo] = useState<Record<string, string>>({})
   const [newLogin, setNewLogin] = useState<{ name: string; phone: string; password: string } | null>(null)
-  const [name, setName] = useState('')
-  const [newKey, setNewKey] = useState<{ name: string; key: string } | null>(null)
   const canGrant = hasFullAccess()
-  if (!hasFullAccess()) return <p className="empty">Only the owner can manage team keys.</p>
+  if (!hasFullAccess()) return <p className="empty">Only the owner can manage the team.</p>
+  // Old login keys show only while some are left; new people get a mobile login.
+  if (res.data && res.data.editors.length === 0) return null
   const setAccess = async (e: Editor, admin: boolean) => {
     if (admin && !window.confirm(`Give ${e.name} full access? They will see everything you see: business numbers, traffic, team, attendance and settings.`)) return
     try {
       await studioPost('team/access', { id: e.id, admin })
       toast(admin ? `${e.name} now has full access` : `${e.name} is back to team access`)
-      res.reload()
-    } catch (err) {
-      toast((err as Error).message)
-    }
-  }
-  const create = async (e: FormEvent) => {
-    e.preventDefault()
-    try {
-      const r = await studioPost<{ key: string; editor: Editor }>('team', { name })
-      setNewKey({ name: r.editor.name, key: r.key })
-      setName('')
       res.reload()
     } catch (err) {
       toast((err as Error).message)
@@ -721,26 +710,7 @@ export function TeamTab() {
   }
   return (
     <>
-      <Panel title="Add a team member" note="Give each employee their own login key. Team logins get the writing, publishing, reel-script and magazine tools plus their own My day (check-in and daily report). Owner sections (overview, website traffic, performance, team, attendance, notifications, site settings) stay with your login only. You can remove a key anytime; never share your owner key.">
-        <form className="cal-form" onSubmit={create}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, e.g. Neha (desk)" aria-label="Team member name" />
-          <button className="btn small" disabled={!name.trim()}>
-            Create key
-          </button>
-        </form>
-        {newKey && (
-          <div className="new-key">
-            <p>
-              Key for <b>{newKey.name}</b>. Copy it now; it won’t be shown again.
-            </p>
-            <code>{newKey.key}</code>
-            <button className="mini-btn" onClick={() => copy(newKey.key, 'Key copied')}>
-              Copy key
-            </button>
-          </div>
-        )}
-      </Panel>
-      <Panel title="Team keys" note="Old login keys. To move someone to mobile-number login, type their mobile number and tap “Switch to mobile login”.">
+      <Panel title="Old login keys" note="Older way of logging in. Move each person to a mobile login: type their mobile number and tap “Switch to mobile login”.">
         {newLogin && (
           <div className="new-key auth-newpw" role="status">
             <strong>Mobile login for {newLogin.name}</strong>

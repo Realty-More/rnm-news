@@ -9,7 +9,7 @@ import { useAsync } from '../lib/hooks.ts'
 import { studio, studioPost } from '../lib/owner.ts'
 import { getSpot, mapLink } from '../lib/location.ts'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
-import { AddEmployee } from './AuthTools.tsx'
+import { AddEmployeeDialog } from './EmployeesTools.tsx'
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
 import { MyTasksPanel } from './WorkTools.tsx'
@@ -289,21 +289,9 @@ export function TeamTodayTab() {
   const res = useAsync(`studio:teamday:${date}`, (s) => studio<TeamDay>(`team/day?date=${date}`, undefined, s))
   const d = res.data
   const [adding, setAdding] = useState(false)
-  // Mobile logins are removed as accounts; old login keys are revoked. Their past records stay.
-  const remove = async (p: { id: string; name: string }) => {
-    if (!window.confirm(`Remove ${p.name} from the team? They can no longer log in. Their past attendance and reports stay in the records.`)) return
-    try {
-      if (p.id.startsWith('ph:')) await studioPost('accounts/remove', { phone: p.id.slice(3) })
-      else await studioPost('team/revoke', { id: p.id })
-      toast(`${p.name} removed`)
-      res.reload()
-    } catch (e) {
-      toast((e as Error).message)
-    }
-  }
   return (
     <>
-      {adding && <AddEmployee onAdded={res.reload} onClose={() => setAdding(false)} />}
+      {adding && <AddEmployeeDialog onAdded={res.reload} onClose={() => setAdding(false)} office={d ? { start: d.settings.startTime, end: (d.settings as { endTime?: string }).endTime ?? '' } : undefined} />}
       <div className="team-bar">
         <button className="btn small" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>
           + Add employee
@@ -350,9 +338,6 @@ export function TeamTodayTab() {
                   {p.name}
                   {p.title && <small className="person-title">{p.title}</small>}
                 </strong>
-                <button className="mini-btn danger person-remove" onClick={() => void remove(p)} aria-label={`Remove ${p.name}`}>
-                  Remove
-                </button>
                 <span className={`status ${p.checkIn ? (p.checkOut ? 'out' : 'in') : p.leave ? 'leave' : 'none'}`}>
                   {p.checkIn ? (p.checkOut ? 'Checked out' : 'Working') : p.leave ? `On leave${p.leave.half ? ' (half day)' : ''}` : 'Not checked in'}
                 </span>

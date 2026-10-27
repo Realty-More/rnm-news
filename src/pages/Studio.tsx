@@ -1,6 +1,6 @@
 // Owner-only Content Studio: what readers want, what to write next, keywords and SEO fixes.
 // Hidden from readers (no menu link); opened from Settings on the owner's device or #/studio.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
@@ -9,10 +9,11 @@ import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, isAccountLogin, ownerKey, ownerRole, refreshRole, studio } from '../lib/owner.ts'
 import { AdsTab } from './AdsTools.tsx'
+import { Dialog, EmployeesTab } from './EmployeesTools.tsx'
 import { ProfilePanel } from './ProfileTools.tsx'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
 import { NewsletterTab } from './NewsletterTools.tsx'
-import { AccountsPanel, AuthScreen, ChangePassword, DeleteAccount } from './AuthTools.tsx'
+import { AuthScreen, ChangePassword, DeleteAccount } from './AuthTools.tsx'
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
 import { MagazineTab } from './MagazineTools.tsx'
 import { LeaveTab, TasksTab } from './WorkTools.tsx'
@@ -97,7 +98,7 @@ const TABS = [
   { key: 'magazine', label: 'Magazine list', group: 'publish' },
   { key: 'newsletter', label: 'Newsletter', group: 'publish', owner: true },
   { key: 'ads', label: 'Ad sales', group: 'sales', owner: true },
-  { key: 'team', label: 'Team & keys', group: 'team', owner: true },
+  { key: 'team', label: 'Employees', group: 'team', owner: true },
 ] as const
 const GROUPS = [
   { key: 'today', label: 'Today' },
@@ -188,31 +189,16 @@ function StudioHome({ onLock }: { onLock: () => void }) {
             </div>
           </div>
         )}
-        <div className="studio-head-btns">
-          <button className="btn ghost small" onClick={() => setProfileOpen((o) => !o)} aria-expanded={profileOpen}>
-            Profile
-          </button>
-          {isAccountLogin() && (
-            <button className="btn ghost small" onClick={() => setPwOpen((o) => !o)} aria-expanded={pwOpen}>
-              Password
-            </button>
-          )}
-          {isAccountLogin() && me?.role !== 'owner' && (
-            <button className="btn ghost small" onClick={() => setDelOpen((o) => !o)} aria-expanded={delOpen}>
-              Delete account
-            </button>
-          )}
-          <button
-            className="btn ghost small"
-            onClick={() => {
-              if (!window.confirm('Log out of the Studio on this device?')) return
-              onLock()
-              toast('Logged out')
-            }}
-          >
-            Log out
-          </button>
-        </div>
+        <AccountMenu
+          onProfile={() => setProfileOpen(true)}
+          onPassword={isAccountLogin() ? () => setPwOpen(true) : undefined}
+          onDelete={isAccountLogin() && me?.role !== 'owner' ? () => setDelOpen(true) : undefined}
+          onLogout={() => {
+            onLock()
+            toast('Logged out')
+          }}
+          me={me}
+        />
       </div>
       {profileOpen && <ProfilePanel onClose={() => setProfileOpen(false)} onSaved={() => setMe(ownerRole())} />}
       {pwOpen && <ChangePassword onClose={() => setPwOpen(false)} />}
@@ -263,7 +249,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'report' && <ReportTab />}
       {tab === 'team' && (
         <>
-          <AccountsPanel />
+          <EmployeesTab />
           <TeamTab />
         </>
       )}
@@ -726,5 +712,72 @@ function SeoTab() {
         </section>
       ))}
     </>
+  )
+}
+
+/** Account menu at the top of the Studio: profile, password, delete account and log out in one place. */
+function AccountMenu({ me, onProfile, onPassword, onDelete, onLogout }: { me: ReturnType<typeof ownerRole>; onProfile: () => void; onPassword?: () => void; onDelete?: () => void; onLogout: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [confirmOut, setConfirmOut] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [open])
+  const pick = (fn?: () => void) => () => {
+    setOpen(false)
+    fn?.()
+  }
+  return (
+    <div className="acct-menu" ref={ref}>
+      <button className="btn ghost small acct-menu-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}>
+        <Icon name="settings" size={16} /> Account
+      </button>
+      {open && (
+        <div className="acct-menu-list" role="menu">
+          <div className="acct-menu-who">
+            <strong>{me?.name ?? 'Owner'}</strong>
+            <small>{me?.role === 'owner' ? 'Owner' : me?.role === 'admin' ? 'Full access' : 'Team'}</small>
+          </div>
+          <button role="menuitem" onClick={pick(onProfile)}>
+            My profile
+          </button>
+          {onPassword && (
+            <button role="menuitem" onClick={pick(onPassword)}>
+              Change password
+            </button>
+          )}
+          {onDelete && (
+            <button role="menuitem" className="danger" onClick={pick(onDelete)}>
+              Delete my account
+            </button>
+          )}
+          <hr />
+          <button role="menuitem" onClick={pick(() => setConfirmOut(true))}>
+            Log out
+          </button>
+        </div>
+      )}
+      {confirmOut && (
+        <Dialog title="Log out?" onClose={() => setConfirmOut(false)}>
+          <p>You will need your mobile number and password to log in again on this device.</p>
+          <div className="action-row">
+            <button className="btn" onClick={onLogout}>
+              Log out
+            </button>
+            <button className="btn ghost" onClick={() => setConfirmOut(false)}>
+              Cancel
+            </button>
+          </div>
+        </Dialog>
+      )}
+    </div>
   )
 }

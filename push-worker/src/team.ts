@@ -158,7 +158,7 @@ const isTime = (v: unknown): v is string => typeof v === 'string' && /^([01]\d|2
 const cleanDays = (v: unknown): number[] | null => (Array.isArray(v) ? [...new Set(v.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort() : null)
 
 /** Per-person hours from the Studio form: valid times only, end after start, at most 200 people. */
-export function cleanPeopleTimes(v: unknown): Record<string, PersonTime> {
+export function cleanPeopleTimes(v: unknown, officeStart = '00:00', officeEnd = '23:59'): Record<string, PersonTime> {
   const out: Record<string, PersonTime> = {}
   if (!v || typeof v !== 'object') return out
   for (const [id, raw] of Object.entries(v as Record<string, unknown>).slice(0, 200)) {
@@ -170,7 +170,14 @@ export function cleanPeopleTimes(v: unknown): Record<string, PersonTime> {
     if (isTime(t.end)) p.end = t.end
     const days = cleanDays(t.weekOff)
     if (days) p.weekOff = days
-    if (p.start && p.end && toMin(p.end) <= toMin(p.start)) throw new Error('Each person’s end time must be after their start time.')
+    // Compare with the office time when only one of the two is set (end 06:00 with a 10:00 start is a typo for 18:00).
+    const start = p.start ?? officeStart
+    const end = p.end ?? officeEnd
+    if (toMin(end) <= toMin(start)) {
+      const h = Number(end.slice(0, 2))
+      const hint = h < 12 ? ` Did you mean ${String(h + 12).padStart(2, '0')}:${end.slice(3)} (${h}:${end.slice(3)} PM)?` : ''
+      throw new Error(`An end time (${end}) is before its start time (${start}).${hint}`)
+    }
     if (Object.keys(p).length) out[id] = p
   }
   return out
@@ -187,7 +194,7 @@ export async function saveTeamSettings(env: Env, body: unknown) {
     graceMin: Number.isInteger(b.graceMin) && (b.graceMin as number) >= 0 && (b.graceMin as number) <= 120 ? (b.graceMin as number) : cur.graceMin,
     reminderTime: time(b.reminderTime, cur.reminderTime),
     weekOff: cleanDays(b.weekOff) ?? cur.weekOff,
-    people: b.people === undefined ? cur.people : cleanPeopleTimes(b.people),
+    people: b.people === undefined ? cur.people : cleanPeopleTimes(b.people, time(b.startTime, cur.startTime), time(b.endTime, cur.endTime)),
     notifyCheckIn: flag(b.notifyCheckIn, cur.notifyCheckIn),
     notifyCheckOut: flag(b.notifyCheckOut, cur.notifyCheckOut),
     managerSummary: flag(b.managerSummary, cur.managerSummary),

@@ -146,8 +146,19 @@ export async function accountStaff(env: Env): Promise<{ id: string; name: string
 /* ---------- owner: requests and accounts ---------- */
 
 export async function listAccounts(env: Env) {
-  const { results } = await env.DB.prepare('SELECT phone, name, role, status, created_at AS created, approved_at AS approved, last_login AS lastLogin FROM accounts ORDER BY status = \'pending\' DESC, name').all()
-  return { accounts: results }
+  const [{ results }, { allProfiles }] = await Promise.all([
+    env.DB.prepare("SELECT phone, name, role, status, created_at AS created, approved_at AS approved, last_login AS lastLogin, must_change AS mustChange FROM accounts ORDER BY status = 'pending' DESC, name")
+      .all<{ phone: string; name: string; mustChange: number | null }>(),
+    import('./profile.ts'),
+  ])
+  const profiles = await allProfiles(env)
+  // Picture and designation for the Employees list.
+  return {
+    accounts: results.map((a) => {
+      const p = profiles.get(`ph:${a.phone}`)
+      return { ...a, mustChange: a.mustChange === 1, title: p?.title ?? '', photo: p?.photo ?? '', avatar: p?.avatar ?? '' }
+    }),
+  }
 }
 
 const randomPassword = () => {
@@ -249,9 +260,13 @@ export async function mustChangePassword(env: Env, phone: string | undefined): P
  */
 export async function addStaffLogin(env: Env, body: unknown, who: Who) {
   if (!full(who)) throw new Error('Only the owner or full-access staff can add logins.')
-  const b = (body ?? {}) as { name?: unknown; phone?: unknown }
+  const b = (body ?? {}) as { name?: unknown; phone?: unknown; title?: unknown; start?: unknown; end?: unknown; admin?: unknown }
   const name = typeof b.name === 'string' ? b.name.replace(/\s+/g, ' ').trim() : ''
   if (name.length < 2 || name.length > 40) throw new Error('Write the person’s name (2 to 40 characters).')
+  const title = typeof b.title === 'string' ? b.title.replace(/\s+/g, ' ').trim().slice(0, 60) : ''
+  const isTime = (v: unknown): v is string => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v)
+  const start = isTime(b.start) ? b.start : undefined
+  const end = isTime(b.end) ? b.end : undefined
   const phone = normPhone(b.phone)
   if (!phone) throw new Error('Enter a valid 10-digit Indian mobile number.')
   const cur = await env.DB.prepare('SELECT name, status FROM accounts WHERE phone = ?').bind(phone).first<{ name: string; status: Status }>()
@@ -259,9 +274,20 @@ export async function addStaffLogin(env: Env, body: unknown, who: Who) {
   const password = randomPassword()
   const { salt, hash } = await hashPassword(password, pepperOf(env))
   const now = new Date().toISOString()
-  await env.DB.prepare("INSERT INTO accounts (phone, name, role, status, salt, hash, created_at, approved_at, must_change) VALUES (?, ?, 'editor', 'active', ?, ?, ?, ?, 1)")
-    .bind(phone, name, salt, hash, now, now)
+  // Office time first, so a mistake (end before start) stops before the login is made.
+  if (start || end) {
+    const { teamSettings, cleanPeopleTimes } = await import('./team.ts')
+    const s = await teamSettings(env)
+    const people = { ...s.people, ...cleanPeopleTimes({ [`ph:${phone}`]: { start, end } }, s.startTime, s.endTime) }
+    await env.SUBS.put('team:settings', JSON.stringify({ ...s, people }))
+  }
+  await env.DB.prepare("INSERT INTO accounts (phone, name, role, status, salt, hash, created_at, approved_at, must_change) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, 1)")
+    .bind(phone, name, b.admin === true ? 'admin' : 'editor', salt, hash, now, now)
     .run()
+  if (title)
+    await env.DB.prepare('INSERT INTO profiles (person_id, title, photo, avatar, updated_at) VALUES (?, ?, \'\', \'\', ?) ON CONFLICT(person_id) DO UPDATE SET title = excluded.title')
+      .bind(`ph:${phone}`, title, now)
+      .run()
   return { name, phone, password }
 }
 

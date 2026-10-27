@@ -202,18 +202,24 @@ export function TvWidget({ kind, config, height }: { kind: string; config: Recor
   useEffect(() => {
     const el = ref.current
     if (!el || !online) return
-    el.innerHTML = '<div class="tradingview-widget-container__widget"></div>'
+    // Each load gets its own box. On leaving, the whole box is taken out (not emptied), so a
+    // TradingView script that arrives late still finds its own parent and doesn't throw.
+    const box = document.createElement('div')
+    box.className = 'tradingview-widget-container'
+    box.style.height = '100%'
+    box.innerHTML = '<div class="tradingview-widget-container__widget"></div>'
     const script = document.createElement('script')
     script.type = 'text/javascript'
     script.async = true
     script.src = `https://s3.tradingview.com/external-embedding/embed-widget-${kind}.js`
     script.innerHTML = json
-    el.appendChild(script)
+    box.appendChild(script)
+    el.appendChild(box)
     return () => {
-      el.innerHTML = ''
+      box.remove()
     }
   }, [kind, json, online])
 
   if (!online) return <div className="tv-offline">Market data needs an internet connection.</div>
-  return <div className="tradingview-widget-container tv" ref={ref} style={{ minHeight: height }} />
+  return <div className="tv" ref={ref} style={{ minHeight: height }} />
 }

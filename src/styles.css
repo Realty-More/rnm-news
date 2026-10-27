@@ -6344,3 +6344,93 @@ a.mini-btn {
 .acct-menu-btn {
   gap: 6px;
 }
+
+/* Profile picture buttons never shrink (a shrinking button squashed the photo into an oval). */
+.avatar-btn {
+  flex: none;
+  line-height: 0;
+}
+.avatar-btn img,
+.person-avatar {
+  max-width: none;
+  flex: none;
+  aspect-ratio: 1;
+}
+/* On phones the Account menu opens as a sheet above the bottom tabs, never off-screen. */
+@media (max-width: 760px) {
+  .acct-menu-list {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    z-index: 60;
+    min-width: 0;
+    padding: 8px;
+    border-radius: var(--radius);
+    box-shadow: 0 -8px 40px rgb(0 0 0 / 0.3);
+  }
+  .acct-menu-list button {
+    padding: 14px 12px;
+    font-size: 16px;
+  }
+  .row-menu-list {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    z-index: 60;
+    border-radius: var(--radius);
+  }
+  .row-menu-list button {
+    padding: 14px 12px;
+    font-size: 16px;
+  }
+}
+
+/* Photo crop */
+.crop-box {
+  position: relative;
+  width: min(300px, 78vw);
+  aspect-ratio: 1;
+  margin: 6px auto 14px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #111;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.crop-box:active {
+  cursor: grabbing;
+}
+.crop-box img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.crop-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 0.5);
+  border: 2px solid rgb(255 255 255 / 0.85);
+  pointer-events: none;
+}
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.crop-zoom input {
+  flex: 1;
+  accent-color: var(--accent);
+}

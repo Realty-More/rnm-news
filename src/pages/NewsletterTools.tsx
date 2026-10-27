@@ -60,7 +60,14 @@ export function NewsletterTab() {
   const res = useAsync('studio:newsletter', (s) => studio<Book>('newsletter', undefined, s))
   const [f, setF] = useState<Settings | null>(null)
   const [preview, setPreview] = useState<{ subject: string; html: string } | null>(null)
-  const [testTo, setTestTo] = useState('')
+  // The test address is the user's choice; the last one used is remembered on this device.
+  const [testTo, setTestTo] = useState(() => {
+    try {
+      return localStorage.getItem('rnm-nl-test') ?? ''
+    } catch {
+      return ''
+    }
+  })
   const [q, setQ] = useState('')
   const [show, setShow] = useState<'all' | Sub['status']>('all')
   const [add, setAdd] = useState({ email: '', name: '', consent: false })
@@ -191,7 +198,18 @@ export function NewsletterTab() {
           <button
             className="btn ghost small"
             disabled={!d.connected || busy === 'test' || !testTo.includes('@')}
-            onClick={() => run('test', async () => (await studioPost('newsletter/test', { email: testTo }), toast(`Test sent to ${testTo}`)))}
+            onClick={() =>
+              run('test', async () => {
+                const to = testTo.trim()
+                await studioPost('newsletter/test', { email: to })
+                try {
+                  localStorage.setItem('rnm-nl-test', to)
+                } catch {
+                  /* private mode */
+                }
+                toast(`Test sent to ${to}. Check the inbox (and spam) in a minute.`)
+              })
+            }
           >
             Send test
           </button>

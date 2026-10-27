@@ -177,7 +177,10 @@ function StudioHome({ onLock }: { onLock: () => void }) {
           </div>
         ) : (
           <div className="owner-hello">
-            <img src="./brand/palash.jpg" alt="Palash Roy" width={64} height={64} />
+            <button className="avatar-btn" onClick={() => setProfileOpen((o) => !o)} aria-label="Change my photo" title="Change my photo">
+              {/* The owner's own photo if set, else the default one. */}
+              <img className="person-avatar" src={me?.photo || './brand/palash.jpg'} alt="Palash Roy" width={64} height={64} style={{ width: 64, height: 64 }} />
+            </button>
             <div>
               <span className="owner-badge">Founder &amp; Editor</span>
               <h1>{greeting()}, Palash Roy</h1>
@@ -186,11 +189,9 @@ function StudioHome({ onLock }: { onLock: () => void }) {
           </div>
         )}
         <div className="studio-head-btns">
-          {me?.role !== 'owner' && (
-            <button className="btn ghost small" onClick={() => setProfileOpen((o) => !o)} aria-expanded={profileOpen}>
-              Profile
-            </button>
-          )}
+          <button className="btn ghost small" onClick={() => setProfileOpen((o) => !o)} aria-expanded={profileOpen}>
+            Profile
+          </button>
           {isAccountLogin() && (
             <button className="btn ghost small" onClick={() => setPwOpen((o) => !o)} aria-expanded={pwOpen}>
               Password

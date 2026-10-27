@@ -78,10 +78,17 @@ export function ProfilePanel({ onClose, onSaved }: { onClose: () => void; onSave
   }
 
   return (
-    <Panel title="My profile" note="Your name, designation and picture show to the team and the owner in the Studio.">
+    <Panel
+      title="My profile"
+      note={me.role === 'owner' ? 'Your picture shows at the top of the Studio. Remove it to go back to the default photo.' : 'Your name, designation and picture show to the team and the owner in the Studio.'}
+    >
       <div className="profile-edit">
         <div className="profile-pic">
-          <PersonAvatar name={f.name} photo={f.photo} avatar={f.avatar} size={96} />
+          {me.role === 'owner' && !f.photo && !f.avatar ? (
+            <img className="person-avatar" src="./brand/palash.jpg" alt={f.name} width={96} height={96} style={{ width: 96, height: 96 }} />
+          ) : (
+            <PersonAvatar name={f.name} photo={f.photo} avatar={f.avatar} size={96} />
+          )}
           <input ref={file} type="file" accept="image/*" hidden onChange={(e) => void pick(e.target.files?.[0])} />
           <button className="btn ghost small" onClick={() => file.current?.click()}>
             📷 {f.photo ? 'Change photo' : 'Upload photo'}

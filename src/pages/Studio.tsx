@@ -155,7 +155,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
           <h1>Choose your own password</h1>
           <p className="page-sub">You logged in with a temporary password. Set your own to continue; only you will know it.</p>
         </div>
-        <ChangePassword onClose={() => void refreshRole().then(() => setMe(ownerRole()))} />
+        <ChangePassword forced onClose={() => void refreshRole().then(() => setMe(ownerRole()))} />
         <button className="btn ghost small" onClick={onLock}>
           Log out
         </button>

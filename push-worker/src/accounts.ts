@@ -10,6 +10,8 @@ import { full, sameKey, sha256hex, type Who } from './owner.ts'
 const ITERATIONS = 20000
 const SESSION_DAYS = 180
 const MAX_FAILS = 8
+// One office Wi-Fi is one network address for everyone, so the per-network limit is generous.
+const MAX_NETWORK_FAILS = 80
 const DAY = 86400000
 
 type Status = 'pending' | 'active' | 'rejected'
@@ -107,11 +109,11 @@ export async function login(env: Env, req: Request, body: unknown) {
   if (!phone || typeof b.password !== 'string' || !b.password) throw new Error('Enter your mobile number and password.')
   const phoneKey = `login:${phone}`
   const ipKey = `login-ip:${await sha256hex(ipOf(req))}`
-  if ((await fails(env, phoneKey)) >= MAX_FAILS || (await fails(env, ipKey)) >= MAX_FAILS * 3) throw new Error('Too many wrong tries. Wait an hour, or ask the owner to reset your password.')
+  if ((await fails(env, phoneKey)) >= MAX_FAILS || (await fails(env, ipKey)) >= MAX_NETWORK_FAILS) throw new Error('Too many wrong tries. Wait an hour, or ask the owner to reset your password.')
   const a = await env.DB.prepare('SELECT * FROM accounts WHERE phone = ?').bind(phone).first<Account>()
   if (!a || !(await checkPassword(b.password, a, pepperOf(env)))) {
     await Promise.all([addFail(env, phoneKey), addFail(env, ipKey)])
-    throw new Error('Wrong mobile number or password.')
+    throw new Error(a ? 'Wrong password. Use the latest password you were given (passwords are case-sensitive). Forgot it? Ask the owner for a “New password”.' : 'No login on this mobile number. Ask the owner to add you, or tap “Create account”.')
   }
   if (a.status === 'pending') throw new Error('Your account is waiting for the owner’s approval.')
   if (a.status !== 'active') throw new Error('This account is not active. Please contact the owner.')
@@ -192,8 +194,11 @@ export async function manageAccount(env: Env, action: string, body: unknown, who
 export async function changePassword(env: Env, body: unknown, who: Who, token: string) {
   if (!who.phone) throw new Error('Log in with your mobile number to change your password.')
   const b = (body ?? {}) as { current?: unknown; next?: unknown }
-  const a = await env.DB.prepare('SELECT * FROM accounts WHERE phone = ?').bind(who.phone).first<Account>()
-  if (!a || typeof b.current !== 'string' || !(await checkPassword(b.current, a, pepperOf(env)))) throw new Error('Your current password is not right.')
+  const a = await env.DB.prepare('SELECT * FROM accounts WHERE phone = ?').bind(who.phone).first<Account & { must_change?: number }>()
+  if (!a) throw new Error('Account not found.')
+  // Right after logging in with a temporary password the session itself proves who they are.
+  const forced = a.must_change === 1
+  if (!forced && (typeof b.current !== 'string' || !(await checkPassword(b.current, a, pepperOf(env))))) throw new Error('Your current password is not right.')
   const problem = passwordProblem(b.next)
   if (problem) throw new Error(problem)
   const { salt, hash } = await hashPassword(b.next as string, pepperOf(env))
@@ -216,7 +221,7 @@ export async function deleteAccount(env: Env, req: Request, body: unknown) {
   if (!phone || typeof b.password !== 'string' || !b.password) throw new Error('Enter your mobile number and password.')
   const phoneKey = `login:${phone}`
   const ipKey = `login-ip:${await sha256hex(ipOf(req))}`
-  if ((await fails(env, phoneKey)) >= MAX_FAILS || (await fails(env, ipKey)) >= MAX_FAILS * 3) throw new Error('Too many wrong tries. Wait an hour and try again.')
+  if ((await fails(env, phoneKey)) >= MAX_FAILS || (await fails(env, ipKey)) >= MAX_NETWORK_FAILS) throw new Error('Too many wrong tries. Wait an hour and try again.')
   const a = await env.DB.prepare('SELECT * FROM accounts WHERE phone = ?').bind(phone).first<Account>()
   if (!a || !(await checkPassword(b.password, a, pepperOf(env)))) {
     await Promise.all([addFail(env, phoneKey), addFail(env, ipKey)])

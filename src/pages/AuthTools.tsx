@@ -308,7 +308,7 @@ export function AccountsPanel() {
 }
 
 /** Signed-in account changes its own password. */
-export function ChangePassword({ onClose }: { onClose: () => void }) {
+export function ChangePassword({ onClose, forced = false }: { onClose: () => void; forced?: boolean }) {
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -328,18 +328,20 @@ export function ChangePassword({ onClose }: { onClose: () => void }) {
     }
   }
   return (
-    <Panel title="Change password">
+    <Panel title={forced ? 'Your new password' : 'Change password'} note={forced ? 'At least 8 characters, with letters and numbers.' : undefined}>
       <form onSubmit={submit} className="auth-form">
-        <PasswordInput value={current} onChange={setCurrent} placeholder="Current password" autoComplete="current-password" />
+        {!forced && <PasswordInput value={current} onChange={setCurrent} placeholder="Current password" autoComplete="current-password" />}
         <PasswordInput value={next} onChange={setNext} placeholder="New password (8+ letters and numbers)" autoComplete="new-password" />
         <PasswordInput value={confirm} onChange={setConfirm} placeholder="Confirm new password" autoComplete="new-password" />
         <div className="action-row">
-          <button className="btn" disabled={busy || !current || next.length < 8 || !confirm}>
-            {busy ? 'Saving…' : 'Change password'}
+          <button className="btn" disabled={busy || (!forced && !current) || next.length < 8 || !confirm}>
+            {busy ? 'Saving…' : forced ? 'Save my password' : 'Change password'}
           </button>
-          <button type="button" className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
+          {!forced && (
+            <button type="button" className="btn ghost" onClick={onClose}>
+              Cancel
+            </button>
+          )}
         </div>
       </form>
     </Panel>

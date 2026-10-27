@@ -27,4 +27,5 @@
   // Secrets (npx wrangler secret put <NAME>; locally they come from .dev.vars):
   //   VAPID_PRIVATE_KEY  signs notifications
   //   STATS_KEY          opens the private /stats page
+  //   BREVO_API_KEY      (optional) sends the weekly newsletter; without it sign-ups wait as pending
 }

@@ -595,3 +595,44 @@ describe('personal office hours and attendance reminders', () => {
     expect(summaryText(people, base, att, new Set(['d']), '2026-10-27')).toBe('2 of 3 checked in · 1 late (Ravi) · not in yet: Asha · 1 on leave')
   })
 })
+
+describe('weekly newsletter', () => {
+  const s = { auto: true, day: 6, time: '10:00', fromName: 'Realty & More', fromEmail: 'newsletter@realtynmore.com', replyTo: 'desk@realtynmore.com', address: '', intro: '', dailyCap: 300 }
+  it('checks emails and names the week', async () => {
+    const { isEmail, weekId } = await import('./newsletter.ts')
+    expect(isEmail('a.b@realtynmore.com')).toBe(true)
+    expect(isEmail('bad@')).toBe(false)
+    expect(isEmail('x@y.c')).toBe(false)
+    expect(isEmail('<script>@a.com')).toBe(false)
+    expect(weekId('2026-10-31')).toBe('2026-W44')
+    expect(weekId('2027-01-01')).toBe('2026-W53')
+  })
+  it('builds the issue with tracked links, safe text and an unsubscribe placeholder', async () => {
+    const { buildIssue } = await import('./newsletter.ts')
+    const issue = buildIssue(
+      {
+        week: '2026-W44',
+        dateLabel: '31 October 2026',
+        intro: 'Diwali special <b>',
+        stories: [
+          { id: 1, title: 'DLF <Q2> results', excerpt: 'Profit up', categories: [], link: 'https://realtynmore.com/dlf-q2/', image: 'https://realtynmore.com/a.jpg' },
+          { id: 2, title: 'Second', excerpt: '', categories: [] },
+        ],
+        magazine: { title: 'April–June 2026', cover: 'https://x/c.jpg', link: 'https://realty-more.github.io/rnm-news/#/magazine/1' },
+        video: null,
+        market: { close: 812.5, weekPct: -1.234 },
+        appUrl: 'https://realty-more.github.io/rnm-news/',
+      },
+      s,
+    )
+    expect(issue.subject).toBe('The week in real estate: DLF <Q2> results')
+    expect(issue.html).toContain('DLF &lt;Q2&gt; results')
+    expect(issue.html).not.toContain('<Q2>')
+    expect(issue.html).toContain('Diwali special &lt;b&gt;')
+    expect(issue.html).toContain('https://realtynmore.com/dlf-q2/?utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=2026-W44')
+    expect(issue.html).toContain('{{UNSUB}}')
+    expect(issue.text).toContain('Unsubscribe: {{UNSUB}}')
+    expect(issue.html).toContain('▼ 1.23%')
+    expect(issue.html).toContain('#/article/2')
+  })
+})

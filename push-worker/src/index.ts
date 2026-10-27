@@ -45,6 +45,7 @@ import {
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
 import { ask, write } from './ai.ts'
 import { magazinePdf } from './magazine-pdf.ts'
+import { addSubscriber, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
@@ -62,6 +63,10 @@ export interface Env {
   ALLOWED_ORIGINS: string
   SITE_API: string
   APP_URL: string
+  /** Brevo API key for the weekly newsletter (secret; sending is off without it). */
+  BREVO_API_KEY?: string
+  /** Public address of this server for newsletter links (defaults to the workers.dev address). */
+  NEWSLETTER_URL?: string
   STATS_KEY: string
   AI: Ai
   /** Secret mixed into password hashes (wrangler secret put AUTH_PEPPER). */
@@ -113,8 +118,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
   if (!full(who) && OWNER_ONLY.has(pathname) && !(req.method === 'GET' && pathname === '/editor/site')) return ownerOnly()
   // Check-in, daily report and report reminders are for team members; the owner is not tracked as staff.
   if (who.role === 'owner' && TEAM_ONLY.has(pathname)) return json({ error: 'Attendance and daily reports are for team members.' }, 403, headers)
-  // Ad sales (advertisers, deal values, payments) is for the owner and full-access staff only.
-  if (pathname.startsWith('/editor/ads') && !full(who)) return ownerOnly()
+  // Ad sales (advertisers, deal values, payments) and the newsletter are for the owner and full-access staff only.
+  if ((pathname.startsWith('/editor/ads') || pathname.startsWith('/editor/newsletter')) && !full(who)) return ownerOnly()
   try {
     if (req.method === 'GET') {
       switch (pathname) {
@@ -163,6 +168,10 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return downloadRef(env, url.searchParams.get('id') ?? '', headers)
         case '/editor/ads':
           return json(await adsBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/newsletter':
+          return json(await newsletterBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/newsletter/preview':
+          return json(await previewIssue(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/mag/book':
           return json(await magazineBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/mag/dispatch':
@@ -253,6 +262,16 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: 'Pick a date.' }, 400, headers)
         return json({ result: await captureDay(env, day) }, 200, headers)
       }
+      case '/editor/newsletter/settings':
+        return json(await saveNlSettings(env, body), 200, headers)
+      case '/editor/newsletter/test':
+        return json(await sendTest(env, body), 200, headers)
+      case '/editor/newsletter/send-now':
+        return json(await sendNow(env, who), 200, headers)
+      case '/editor/newsletter/subscriber':
+        return json(await addSubscriber(env, body), 200, headers)
+      case '/editor/newsletter/subscriber/remove':
+        return json(await removeSubscriber(env, body), 200, headers)
       case '/editor/ads/client':
         return json(await saveClient(env, body, who), 200, headers)
       case '/editor/ads/client/remove':
@@ -314,6 +333,9 @@ export default {
     // Browsers always send Origin on these requests, so only listed sites may call from a browser.
     // The Android app's native HTTP sends none; with bearer tokens and no cookies that is safe.
     const allowedCaller = !!headers['Access-Control-Allow-Origin'] || origin === null
+    // Newsletter confirm and unsubscribe links open from email (no app origin), including one-click unsubscribe.
+    if (pathname === '/newsletter/confirm' && req.method === 'GET') return confirmPage(env, url)
+    if (pathname === '/newsletter/unsubscribe' && (req.method === 'GET' || req.method === 'POST')) return unsubscribePage(env, req, url)
     // Magazine PDFs are public and read part by part by the app's PDF reader (any origin, Range header).
     const mag = /^\/magazine\/pdf\/(\d{1,9})$/.exec(pathname)
     if (mag) {
@@ -362,6 +384,13 @@ export default {
       await env.SUBS.delete(await subKey(endpoint))
       return json({ ok: true }, 200, headers)
     }
+    if (pathname === '/newsletter/subscribe') {
+      try {
+        return json(await nlSubscribe(env, req, body), 200, { ...headers, 'Cache-Control': 'no-store' })
+      } catch (err) {
+        return json({ error: (err as Error).message }, 400, headers)
+      }
+    }
     if (pathname === '/auth/delete') {
       try {
         return json(await deleteAccount(env, req, body), 200, { ...headers, 'Cache-Control': 'no-store' })
@@ -402,6 +431,6 @@ export default {
     const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
     // Its own hourly run, so the ~45 site requests don't share the 50-request limit with alerts.
     if (event.cron === '7 * * * *') return ctx.waitUntil(Promise.all([run('views', () => collectViews(env)), run('youtube', () => collectYouTube(env))]))
-    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('nudges', () => attendanceNudges(env)), run('market', () => autoCapture(env))]))
+    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('nudges', () => attendanceNudges(env)), run('newsletter', () => newsletterTick(env)), run('market', () => autoCapture(env))]))
   },
 } satisfies ExportedHandler<Env>

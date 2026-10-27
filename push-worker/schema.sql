@@ -38,3 +38,9 @@ CREATE TABLE IF NOT EXISTS ad_deals (id INTEGER PRIMARY KEY AUTOINCREMENT, clien
 CREATE INDEX IF NOT EXISTS ad_deals_client ON ad_deals (client_id);
 CREATE TABLE IF NOT EXISTS ad_payments (id INTEGER PRIMARY KEY AUTOINCREMENT, deal_id INTEGER NOT NULL, day TEXT NOT NULL, amount INTEGER NOT NULL, mode TEXT, ref TEXT, note TEXT, by_name TEXT, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ad_payments_deal ON ad_payments (deal_id);
+-- Weekly newsletter: subscribers (double opt-in), issues, who got each issue, and emails sent per day (daily cap).
+CREATE TABLE IF NOT EXISTS news_subs (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, name TEXT, status TEXT NOT NULL, token TEXT NOT NULL, source TEXT, created_at TEXT NOT NULL, confirm_sent_at TEXT, confirmed_at TEXT, unsub_at TEXT);
+CREATE INDEX IF NOT EXISTS news_subs_token ON news_subs (token);
+CREATE TABLE IF NOT EXISTS news_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, week TEXT NOT NULL UNIQUE, subject TEXT NOT NULL, html TEXT NOT NULL, text TEXT NOT NULL, status TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL, sent_at TEXT, sent INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS news_sends (issue_id INTEGER NOT NULL, sub_id INTEGER NOT NULL, day TEXT NOT NULL, ok INTEGER NOT NULL, PRIMARY KEY (issue_id, sub_id));
+CREATE TABLE IF NOT EXISTS news_mail (day TEXT NOT NULL, kind TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, kind));

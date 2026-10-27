@@ -13,6 +13,7 @@ import { offlineInfo, refreshOffline } from '../lib/offline.ts'
 import { TEXT_SIZES, usePrefs, useTheme, type ThemePref } from '../lib/prefs.ts'
 import { CHANNEL_URL } from '../lib/youtubeFeed.ts'
 import { SITE } from '../lib/wp.ts'
+import { NewsletterCard } from '../components/NewsletterCard.tsx'
 import { usePageTitle } from './usePageTitle.ts'
 
 // Public pages (also used as the store listing's privacy and account-deletion links).
@@ -155,6 +156,8 @@ export function Settings() {
           </button>
         </div>
       </section>
+
+      <NewsletterCard compact />
 
       <section className="set-group">
         <h2 className="set-title">{t('settings.privacy')}</h2>

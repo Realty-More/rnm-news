@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useT } from '../lib/i18n.ts'
 import { Link } from 'react-router-dom'
 import { MagazineBand } from '../components/MagazineBand.tsx'
+import { NewsletterCard } from '../components/NewsletterCard.tsx'
 import { PostCard, PostImg } from '../components/PostCard.tsx'
 import { PullToRefresh } from '../components/PullToRefresh.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
@@ -134,6 +135,8 @@ export function Home() {
         <Trending epoch={epoch} />
 
         <MagazineBand />
+
+        <NewsletterCard />
 
         <VideoStrip onPlay={setPlaying} epoch={epoch} />
 

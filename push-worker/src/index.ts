@@ -49,7 +49,7 @@ import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, news
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
 import { sendTeamEmail } from './teamEmail.ts'
-import { addStaffLogin, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
+import { addStaffLogin, keyToMobile, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
 import { collectYouTube, youTubeStats } from './youtube.ts'
@@ -246,6 +246,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await addStaffLogin(env, body, who), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/team/email-now':
         return full(who) ? json({ result: await sendTeamEmail(env, true) }, 200, headers) : ownerOnly()
+      case '/editor/team/to-mobile':
+        return json(await keyToMobile(env, body, who), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/team/merge':
         return json(await mergeKeyIntoAccount(env, body, who), 200, headers)
       case '/editor/accounts/approve':

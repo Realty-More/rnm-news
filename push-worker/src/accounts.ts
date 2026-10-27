@@ -298,3 +298,24 @@ export async function mergeKeyIntoAccount(env: Env, body: unknown, who: Who) {
   await env.SUBS.delete(`editor:${keyId}`)
   return { ok: true, moved, name: acc.name }
 }
+
+/**
+ * Gives a login-key user a mobile number login. If the number already has a login, the key is merged
+ * into it; otherwise a login is made with the key's name and a temporary password (shown once).
+ */
+export async function keyToMobile(env: Env, body: unknown, who: Who) {
+  if (!full(who)) throw new Error('Only the owner or full-access staff can do this.')
+  const b = (body ?? {}) as { keyId?: unknown; phone?: unknown }
+  const keyId = typeof b.keyId === 'string' && /^[0-9a-f]{64}$/.test(b.keyId) ? b.keyId : null
+  const phone = normPhone(b.phone)
+  if (!keyId) throw new Error('Pick the login key.')
+  if (!phone) throw new Error('Enter a valid 10-digit Indian mobile number.')
+  const key = await env.SUBS.get<{ name: string }>(`editor:${keyId}`, 'json')
+  if (!key) throw new Error('That login key no longer exists.')
+  const acc = await env.DB.prepare('SELECT name, status FROM accounts WHERE phone = ?').bind(phone).first<{ name: string; status: Status }>()
+  let password: string | undefined
+  if (!acc) password = (await addStaffLogin(env, { name: key.name, phone }, who)).password
+  else if (acc.status !== 'active') throw new Error(`The login on this number (${acc.name}) is not active. Approve it first.`)
+  const merged = await mergeKeyIntoAccount(env, { keyId, phone }, who)
+  return { ...merged, phone, created: !acc, password }
+}

@@ -45,6 +45,14 @@ export function nextQuarter(id: string): { id: string; title: string } {
   return { id: `${ny}-Q${nq}`, title: `${['Jan–Mar', 'Apr–Jun', 'Jul–Sep', 'Oct–Dec'][nq - 1]} ${ny}` }
 }
 
+/** Quarter before "2026-Q4" → { id: "2026-Q3", title: "Jul–Sep 2026" }. */
+export function prevQuarter(id: string): { id: string; title: string } {
+  const [y, q] = id.split('-Q').map(Number)
+  const py = q === 1 ? y - 1 : y
+  const pq = q === 1 ? 4 : q - 1
+  return { id: `${py}-Q${pq}`, title: `${['Jan–Mar', 'Apr–Jun', 'Jul–Sep', 'Oct–Dec'][pq - 1]} ${py}` }
+}
+
 /** CSV the courier (or Excel) can open; one row per contact with this issue's status. */
 export function mailingCsv(rows: Contact[], status: Map<number, Dispatch>, issue: string): string {
   const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
@@ -144,8 +152,10 @@ export function MagazineTab() {
     }
   }
 
-  const newIssue = async () => {
-    const next = nextQuarter(issues[0]?.id ?? book.data!.current)
+  // Next: the quarter after the newest issue. Earlier: the quarter before the oldest (for a missed issue).
+  const newIssue = async (earlier = false) => {
+    const next = earlier ? prevQuarter(issues[issues.length - 1]?.id ?? book.data!.current) : nextQuarter(issues[0]?.id ?? book.data!.current)
+    if (!window.confirm(`Add the ${next.title} issue?`)) return
     try {
       await studioPost('mag/issue', next)
       toast(`${next.title} issue added`)
@@ -189,9 +199,14 @@ export function MagazineTab() {
               ))}
             </select>
             {isOwner && (
-              <button className="btn ghost small" onClick={newIssue}>
-                + Next issue
-              </button>
+              <>
+                <button className="btn ghost small" onClick={() => newIssue(true)}>
+                  + Earlier issue
+                </button>
+                <button className="btn ghost small" onClick={() => newIssue()}>
+                  + Next issue
+                </button>
+              </>
             )}
           </div>
         </div>

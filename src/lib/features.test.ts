@@ -123,7 +123,7 @@ describe('attendance export', async () => {
 })
 
 import { keyPoints, sentences } from './keypoints.ts'
-import { mailingCsv, nextQuarter } from '../pages/MagazineTools.tsx'
+import { mailingCsv, nextQuarter, prevQuarter } from '../pages/MagazineTools.tsx'
 
 describe('key points', () => {
   const story =
@@ -153,6 +153,8 @@ describe('magazine list', () => {
   it('rolls over to the next quarter', () => {
     expect(nextQuarter('2026-Q4')).toEqual({ id: '2027-Q1', title: 'Jan–Mar 2027' })
     expect(nextQuarter('2027-Q2')).toEqual({ id: '2027-Q3', title: 'Jul–Sep 2027' })
+    expect(prevQuarter('2026-Q4')).toEqual({ id: '2026-Q3', title: 'Jul–Sep 2026' })
+    expect(prevQuarter('2026-Q1')).toEqual({ id: '2025-Q4', title: 'Oct–Dec 2025' })
   })
   it('exports a CSV with each contact’s dispatch status', () => {
     const c = { id: 1, name: 'Ms. Asha "A" Singh', designation: null, company: '360 Realtors', address: 'Sector 43, Gurugram', city: 'Gurugram', pin: '122002', phone: '99538', email: null, remark: null }

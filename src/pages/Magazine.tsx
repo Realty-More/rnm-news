@@ -9,26 +9,12 @@ import { toast } from '../components/Toast.tsx'
 import { useAsync } from '../lib/hooks.ts'
 import { PUSH_API } from '../lib/push.ts'
 import { shareLink } from '../lib/share.ts'
+import { Capacitor } from '@capacitor/core'
+import { LIVE_SITE, loadMagazine, type Issue } from '../lib/magazine.ts'
 import { usePageTitle } from './usePageTitle.ts'
 
-export interface Issue {
-  id: number
-  title: string
-  period: string
-  kind: 'quarterly' | 'special' | 'archive'
-  uploaded: string
-  pages: number
-  bytes: number
-  url: string
-  cover: string
-}
-
-const base = import.meta.env.BASE_URL
-export const loadIssues = async (signal?: AbortSignal) => {
-  const r = await fetch(`${base}data/magazine.json`, { signal, cache: 'no-cache' })
-  if (!r.ok) throw new Error('Magazine list unavailable.')
-  return ((await r.json()) as { issues: Issue[] }).issues
-}
+export type { Issue } from '../lib/magazine.ts'
+export const loadIssues = loadMagazine
 const mb = (b: number) => (b ? `${Math.round(b / 1e6)} MB` : '')
 const KIND: Record<Issue['kind'], string> = { quarterly: 'Quarterly issue', special: 'Special', archive: 'Archive' }
 
@@ -51,7 +37,7 @@ export function MagazineList() {
       </div>
       {latest && (
         <Link to={`/magazine/${latest.id}`} className="mz-hero">
-          <img src={`${base}${latest.cover}`} alt={`R&M Magazine ${latest.title} cover`} width={560} height={792} />
+          <img src={latest.cover} alt={`R&M Magazine ${latest.title} cover`} width={560} height={792} />
           <div className="mz-hero-text">
             <span className="kicker">Latest issue</span>
             <h2>{latest.title}</h2>
@@ -72,7 +58,7 @@ export function MagazineList() {
           <div className="mz-grid">
             {list.map((i) => (
               <Link key={i.id} to={`/magazine/${i.id}`} className="mz-issue">
-                <img src={`${base}${i.cover}`} alt={`R&M Magazine ${i.title} cover`} loading="lazy" width={560} height={792} />
+                <img src={i.cover} alt={`R&M Magazine ${i.title} cover`} loading="lazy" width={560} height={792} />
                 <strong>{i.title}</strong>
                 <span>
                   {KIND[i.kind]} · {i.pages} pages
@@ -208,7 +194,9 @@ export function MagazineReader() {
 
   const width = Math.round(fit * zoom)
   const share = async () => {
-    const ok = await shareLink(`R&M Magazine ${issue?.title ?? ''}`.trim(), `${location.origin}${location.pathname}#/magazine/${id}`)
+    // Inside the Android app the page address is "localhost", so share the public site instead.
+    const home = Capacitor.isNativePlatform() ? LIVE_SITE : `${location.origin}${location.pathname}`
+    const ok = await shareLink(`R&M Magazine ${issue?.title ?? ''}`.trim(), `${home}#/magazine/${id}`)
     if (ok === 'copied') toast('Link copied')
   }
 
@@ -241,7 +229,7 @@ export function MagazineReader() {
         <ErrorState error={new Error(error)} onRetry={() => navigate(0)} />
       ) : !doc ? (
         <div className="mz-loading">
-          {issue && <img src={`${base}${issue.cover}`} alt="" />}
+          {issue && <img src={issue.cover} alt="" />}
           <span className="mz-loading-bar">
             <span style={{ width: `${Math.max(progress, 4)}%` }} />
           </span>

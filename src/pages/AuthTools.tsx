@@ -161,8 +161,23 @@ const showPhone = (p: string) => `+91 ${p.slice(0, 5)} ${p.slice(5)}`
 export function AccountsPanel() {
   const res = useAsync('studio:accounts', (s) => studio<{ accounts: Account[] }>('accounts', undefined, s))
   const [busy, setBusy] = useState<string | null>(null)
-  const [newPw, setNewPw] = useState<{ name: string; password: string } | null>(null)
+  const [newPw, setNewPw] = useState<{ name: string; password: string; phone?: string } | null>(null)
+  const [add, setAdd] = useState({ name: '', phone: '' })
   const canGrant = hasFullAccess()
+  const addLogin = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy('add')
+    try {
+      const r = await studioPost<{ name: string; phone: string; password: string }>('accounts/add', add)
+      setNewPw({ name: r.name, password: r.password, phone: r.phone })
+      setAdd({ name: '', phone: '' })
+      res.reload()
+    } catch (err) {
+      toast((err as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
   const act = async (a: Account, action: 'approve' | 'reject' | 'remove' | 'reset' | 'grant' | 'ungrant') => {
     const ask = {
       reject: `Turn down ${a.name}'s request?`,
@@ -193,9 +208,15 @@ export function AccountsPanel() {
     <>
       {newPw && (
         <div className="new-key auth-newpw" role="status">
-          <strong>New password for {newPw.name}</strong>
+          <strong>Login for {newPw.name}</strong>
+          {newPw.phone && (
+            <p>
+              Mobile number: <b>{showPhone(newPw.phone)}</b>
+            </p>
+          )}
+          <p>Temporary password:</p>
           <code>{newPw.password}</code>
-          <p>Send it to them on WhatsApp; they can change it after logging in. It is shown only once.</p>
+          <p>Send it to them on WhatsApp. On their first login the app asks them to choose their own password. It is shown only once.</p>
           <div className="action-row">
             <button className="btn small" onClick={() => void navigator.clipboard?.writeText(newPw.password).then(() => toast('Copied'))}>
               Copy
@@ -205,6 +226,17 @@ export function AccountsPanel() {
             </button>
           </div>
         </div>
+      )}
+      {canGrant && (
+        <Panel title="Add a staff login" note="Their mobile number becomes their login. You get a temporary password to send them; they choose their own on first login.">
+          <form className="cal-form" onSubmit={addLogin}>
+            <input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} placeholder="Full name, e.g. Vimal Singh" aria-label="Full name" maxLength={40} />
+            <input value={add.phone} onChange={(e) => setAdd({ ...add, phone: e.target.value.replace(/[^\d+ ]/g, '') })} placeholder="Mobile number" inputMode="numeric" aria-label="Mobile number" maxLength={14} />
+            <button className="btn small" disabled={busy === 'add' || add.name.trim().length < 2 || add.phone.replace(/\D/g, '').length < 10}>
+              {busy === 'add' ? 'Adding…' : 'Add login'}
+            </button>
+          </form>
+        </Panel>
       )}
       <Panel title={`Account requests${pending.length ? ` (${pending.length})` : ''}`} note="People who tapped “Create account” on the login screen. Approve only your own staff.">
         {pending.length === 0 ? (

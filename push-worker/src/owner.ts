@@ -84,6 +84,12 @@ export async function setKeyAccess(env: Env, id: string, admin: boolean) {
   return true
 }
 
+export async function renameEditor(env: Env, id: string, name: string) {
+  if (!/^[0-9a-f]{64}$/.test(id)) return
+  const e = await env.SUBS.get<Editor>(`editor:${id}`, 'json')
+  if (e) await env.SUBS.put(`editor:${id}`, JSON.stringify({ ...e, name }))
+}
+
 export async function revokeEditor(env: Env, id: string) {
   if (!/^[0-9a-f]{64}$/.test(id)) return false
   await env.SUBS.delete(`editor:${id}`)

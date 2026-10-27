@@ -696,3 +696,44 @@ describe('check-in location', () => {
     expect(cleanOffices(Array.from({ length: 7 }, (_, i) => ({ name: `O${i}`, lat: 20 + i, lng: 70 })))).toHaveLength(5)
   })
 })
+
+describe('team profiles', () => {
+  it('checks names, titles, photos and avatars', async () => {
+    const { cleanProfile } = await import('./profile.ts')
+    expect(cleanProfile({ name: '  Tanisha   Sharma ', title: 'Content Writer' })).toEqual({ name: 'Tanisha Sharma', title: 'Content Writer' })
+    expect(() => cleanProfile({ name: 'T' })).toThrow()
+    expect(cleanProfile({ avatar: '🦁' })).toEqual({ avatar: '🦁' })
+    expect(() => cleanProfile({ avatar: '💩' })).toThrow()
+    expect(cleanProfile({ photo: 'data:image/jpeg;base64,AAAA' })).toEqual({ photo: 'data:image/jpeg;base64,AAAA' })
+    expect(() => cleanProfile({ photo: 'https://evil.example/x.jpg' })).toThrow()
+    expect(() => cleanProfile({ photo: `data:image/jpeg;base64,${'A'.repeat(130000)}` })).toThrow()
+    expect(cleanProfile({ photo: '' })).toEqual({ photo: '' })
+  })
+})
+
+describe('daily team report email', () => {
+  it('lists each person with times, place, report and absences', async () => {
+    const { buildTeamEmail } = await import('./teamEmail.ts')
+    const mail = buildTeamEmail(
+      {
+        day: '2026-10-27',
+        summary: { total: 3, present: 1, late: 1, reports: 1, onLeave: 1 },
+        people: [
+          { name: 'Ravi <K>', checkIn: null, checkOut: null, mode: null, note: null, late: false, minutes: 0, report: null },
+          { name: 'Neha', title: 'Writer', checkIn: '2026-10-27T04:50:00Z', checkOut: '2026-10-27T13:20:00Z', mode: 'office', note: null, late: true, minutes: 510, inPlace: { label: 'At Noida Office', office: 'Noida Office', lat: 28.5, lng: 77.3 }, outPlace: null, report: { done: 'Wrote 3 stories', plan: '', blockers: 'Laptop slow', links: '' }, tasks: { done: ['DLF story'], open: 1, overdue: 0 } },
+          { name: 'Asha', checkIn: null, checkOut: null, mode: null, note: null, late: false, minutes: 0, report: null, leave: { kind: 'Sick leave', half: false } },
+        ],
+      },
+      'https://realty-more.github.io/rnm-news/',
+    )
+    expect(mail.subject).toBe('Team report 27/10: 1/3 in, 1 late, 1 absent, 1 reports')
+    expect(mail.html).toContain('Ravi &lt;K&gt;')
+    expect(mail.html).toContain('At Noida Office')
+    expect(mail.html).toContain('8h 30m')
+    expect(mail.html).toContain('Laptop slow')
+    expect(mail.html).toContain('Sick leave')
+    expect(mail.html.indexOf('Neha')).toBeLessThan(mail.html.indexOf('Asha'))
+    expect(mail.html.indexOf('Asha')).toBeLessThan(mail.html.indexOf('Ravi'))
+    expect(mail.text).toContain('Neha (Writer): in 10:20 late (At Noida Office), out 18:50')
+  })
+})

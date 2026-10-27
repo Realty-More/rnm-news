@@ -35,6 +35,10 @@ export interface TeamSettings {
   offices: Office[]
   /** If true, check-in and check-out need the phone's location. */
   requireLocation: boolean
+  /** Daily team report by email to the owner. */
+  reportEmailOn: boolean
+  reportEmail: string
+  reportEmailTime: string
 }
 export interface Office {
   name: string
@@ -59,7 +63,7 @@ export interface Place {
   meters: number | null
   label: string
 }
-const DEFAULTS: TeamSettings = { startTime: '10:00', endTime: '18:30', graceMin: 15, reminderTime: '18:30', weekOff: [0], people: {}, notifyCheckIn: true, notifyCheckOut: true, managerSummary: true, ownerLive: false, offices: [], requireLocation: false }
+const DEFAULTS: TeamSettings = { startTime: '10:00', endTime: '18:30', graceMin: 15, reminderTime: '18:30', weekOff: [0], people: {}, notifyCheckIn: true, notifyCheckOut: true, managerSummary: true, ownerLive: false, offices: [], requireLocation: false, reportEmailOn: true, reportEmail: 'palash@realtynmore.com', reportEmailTime: '19:30' }
 
 /** Straight-line distance in metres between two points (haversine). */
 export function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -190,6 +194,16 @@ export async function saveTeamSettings(env: Env, body: unknown) {
     ownerLive: flag(b.ownerLive, cur.ownerLive),
     offices: b.offices === undefined ? cur.offices : cleanOffices(b.offices),
     requireLocation: flag(b.requireLocation, cur.requireLocation),
+    reportEmailOn: flag(b.reportEmailOn, cur.reportEmailOn),
+    reportEmail:
+      b.reportEmail === undefined
+        ? cur.reportEmail
+        : typeof b.reportEmail === 'string' && /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/i.test(b.reportEmail.trim())
+          ? b.reportEmail.trim().toLowerCase()
+          : (() => {
+              throw new Error('The report email address doesn’t look right.')
+            })(),
+    reportEmailTime: time(b.reportEmailTime, cur.reportEmailTime),
   }
   if (toMin(next.endTime) <= toMin(next.startTime)) throw new Error('Office end time must be after the start time.')
   await env.SUBS.put('team:settings', JSON.stringify(next))
@@ -340,7 +354,8 @@ export async function teamDay(env: Env, day: string) {
   const attBy = new Map(att.results.map((a) => [a.person_id, a]))
   const repBy = new Map(rep.results.map((r) => [r.person_id, r]))
   const people = teamPeople(editors, att.results)
-  const [onLeave, tasks] = await Promise.all([leaveOnDay(env, day), tasksForDay(env, day)])
+  const { allProfiles } = await import('./profile.ts')
+  const [onLeave, tasks, profiles] = await Promise.all([leaveOnDay(env, day), tasksForDay(env, day), allProfiles(env)])
   const rows = people.map((p) => {
     const a = attBy.get(p.id) ?? null
     const r = repBy.get(p.id) ?? null
@@ -356,6 +371,9 @@ export async function teamDay(env: Env, day: string) {
       mode: a?.mode ?? null,
       note: a?.note ?? null,
       late: isLate(a?.check_in ?? null, forPerson(settings, p.id)),
+      photo: profiles.get(p.id)?.photo || null,
+      avatar: profiles.get(p.id)?.avatar || null,
+      title: profiles.get(p.id)?.title || null,
       inPlace: placeOf(spotIn(a), settings.offices),
       outPlace: placeOf(spotOut(a), settings.offices),
       start: forPerson(settings, p.id).startTime,

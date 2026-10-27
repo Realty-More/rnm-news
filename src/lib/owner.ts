@@ -21,7 +21,17 @@ export function ownerKey(): string | null {
   }
 }
 
-export function ownerRole(): { role: Role; name: string } | null {
+export interface Me {
+  role: Role
+  name: string
+  /** Still on a password the owner gave them: must choose their own first. */
+  mustChange?: boolean
+  photo?: string
+  avatar?: string
+  title?: string
+}
+
+export function ownerRole(): Me | null {
   try {
     const raw = localStorage.getItem(ROLE)
     return raw ? JSON.parse(raw) : null
@@ -127,8 +137,8 @@ export async function registerOwnerDevice(): Promise<'ok' | 'denied' | 'unsuppor
 export async function refreshRole(): Promise<void> {
   if (!ownerKey()) return
   try {
-    const me = await studio<{ role: Role; name: string }>('ping')
-    localStorage.setItem(ROLE, JSON.stringify({ role: me.role, name: me.name }))
+    const me = await studio<Me>('ping')
+    localStorage.setItem(ROLE, JSON.stringify({ role: me.role, name: me.name, mustChange: !!me.mustChange, photo: me.photo ?? '', avatar: me.avatar ?? '', title: me.title ?? '' }))
   } catch {
     /* keep what we have */
   }

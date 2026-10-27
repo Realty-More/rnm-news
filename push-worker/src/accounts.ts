@@ -181,7 +181,7 @@ export async function manageAccount(env: Env, action: string, body: unknown, who
     case 'reset': {
       const password = randomPassword()
       const { salt, hash } = await hashPassword(password, pepperOf(env))
-      await env.DB.batch([env.DB.prepare('UPDATE accounts SET salt = ?, hash = ? WHERE phone = ?').bind(salt, hash, phone), endSessions, env.DB.prepare('DELETE FROM auth_fail WHERE k = ?').bind(`login:${phone}`)])
+      await env.DB.batch([env.DB.prepare('UPDATE accounts SET salt = ?, hash = ?, must_change = 1 WHERE phone = ?').bind(salt, hash, phone), endSessions, env.DB.prepare('DELETE FROM auth_fail WHERE k = ?').bind(`login:${phone}`)])
       return { password }
     }
   }
@@ -198,7 +198,7 @@ export async function changePassword(env: Env, body: unknown, who: Who, token: s
   if (problem) throw new Error(problem)
   const { salt, hash } = await hashPassword(b.next as string, pepperOf(env))
   await env.DB.batch([
-    env.DB.prepare('UPDATE accounts SET salt = ?, hash = ? WHERE phone = ?').bind(salt, hash, who.phone),
+    env.DB.prepare('UPDATE accounts SET salt = ?, hash = ?, must_change = 0 WHERE phone = ?').bind(salt, hash, who.phone),
     env.DB.prepare('DELETE FROM sessions WHERE phone = ? AND token_hash != ?').bind(who.phone, await sha256hex(token)),
   ])
   return { ok: true }
@@ -229,4 +229,72 @@ export async function deleteAccount(env: Env, req: Request, body: unknown) {
     env.DB.prepare('DELETE FROM accounts WHERE phone = ?').bind(phone),
   ])
   return { deleted: true }
+}
+
+/** True when the account still uses a password the owner gave them (they must choose their own). */
+export async function mustChangePassword(env: Env, phone: string | undefined): Promise<boolean> {
+  if (!phone) return false
+  const r = await env.DB.prepare('SELECT must_change FROM accounts WHERE phone = ?').bind(phone).first<{ must_change: number | null }>()
+  return r?.must_change === 1
+}
+
+/**
+ * Owner or full access adds a staff login: name + mobile number. The account is active at once with a
+ * temporary password, shown once to the owner; on first login the person must choose their own.
+ */
+export async function addStaffLogin(env: Env, body: unknown, who: Who) {
+  if (!full(who)) throw new Error('Only the owner or full-access staff can add logins.')
+  const b = (body ?? {}) as { name?: unknown; phone?: unknown }
+  const name = typeof b.name === 'string' ? b.name.replace(/\s+/g, ' ').trim() : ''
+  if (name.length < 2 || name.length > 40) throw new Error('Write the person’s name (2 to 40 characters).')
+  const phone = normPhone(b.phone)
+  if (!phone) throw new Error('Enter a valid 10-digit Indian mobile number.')
+  const cur = await env.DB.prepare('SELECT name, status FROM accounts WHERE phone = ?').bind(phone).first<{ name: string; status: Status }>()
+  if (cur) throw new Error(`${cur.name} already has a login on this number. Use “New password” on their account instead.`)
+  const password = randomPassword()
+  const { salt, hash } = await hashPassword(password, pepperOf(env))
+  const now = new Date().toISOString()
+  await env.DB.prepare("INSERT INTO accounts (phone, name, role, status, salt, hash, created_at, approved_at, must_change) VALUES (?, ?, 'editor', 'active', ?, ?, ?, ?, 1)")
+    .bind(phone, name, salt, hash, now, now)
+    .run()
+  return { name, phone, password }
+}
+
+/**
+ * The same person with an old login key and a mobile login: moves the key's attendance, reports, tasks,
+ * leave, office hours and profile to the account, then removes the key.
+ */
+export async function mergeKeyIntoAccount(env: Env, body: unknown, who: Who) {
+  if (!full(who)) throw new Error('Only the owner or full-access staff can merge logins.')
+  const b = (body ?? {}) as { keyId?: unknown; phone?: unknown }
+  const keyId = typeof b.keyId === 'string' && /^[0-9a-f]{64}$/.test(b.keyId) ? b.keyId : null
+  const phone = normPhone(b.phone)
+  if (!keyId || !phone) throw new Error('Pick the login key and the account.')
+  const key = await env.SUBS.get<{ name: string }>(`editor:${keyId}`, 'json')
+  if (!key) throw new Error('That login key no longer exists.')
+  const acc = await env.DB.prepare("SELECT name FROM accounts WHERE phone = ? AND status = 'active'").bind(phone).first<{ name: string }>()
+  if (!acc) throw new Error('That account is not active.')
+  const to = `ph:${phone}`
+  const r = await env.DB.batch([
+    env.DB.prepare('DELETE FROM attendance WHERE person_id = ?1 AND day IN (SELECT day FROM attendance WHERE person_id = ?2)').bind(keyId, to),
+    env.DB.prepare('UPDATE attendance SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(keyId, to, acc.name),
+    env.DB.prepare('DELETE FROM reports WHERE person_id = ?1 AND day IN (SELECT day FROM reports WHERE person_id = ?2)').bind(keyId, to),
+    env.DB.prepare('UPDATE reports SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(keyId, to, acc.name),
+    env.DB.prepare('UPDATE tasks SET assignee_id = ?2, assignee_name = ?3 WHERE assignee_id = ?1').bind(keyId, to, acc.name),
+    env.DB.prepare('UPDATE leaves SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(keyId, to, acc.name),
+    env.DB.prepare('UPDATE profiles SET person_id = ?2 WHERE person_id = ?1 AND NOT EXISTS (SELECT 1 FROM profiles WHERE person_id = ?2)').bind(keyId, to),
+    env.DB.prepare('DELETE FROM profiles WHERE person_id = ?1').bind(keyId),
+  ])
+  const moved = r.reduce((n, x) => n + (x.meta.changes ?? 0), 0)
+  // Their own office hours move too, unless the account already has some.
+  const { teamSettings } = await import('./team.ts')
+  const s = await teamSettings(env)
+  if (s.people?.[keyId]) {
+    const people = { ...s.people }
+    if (!people[to]) people[to] = people[keyId]
+    delete people[keyId]
+    await env.SUBS.put('team:settings', JSON.stringify({ ...s, people }))
+  }
+  await env.SUBS.delete(`editor:${keyId}`)
+  return { ok: true, moved, name: acc.name }
 }

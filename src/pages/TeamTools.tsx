@@ -8,6 +8,7 @@ import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { studio, studioPost } from '../lib/owner.ts'
 import { getSpot, mapLink } from '../lib/location.ts'
+import { PersonAvatar } from '../components/PersonAvatar.tsx'
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
 import { MyTasksPanel } from './WorkTools.tsx'
@@ -270,6 +271,9 @@ interface TeamDay {
     late: boolean
     inPlace?: Place | null
     outPlace?: Place | null
+    photo?: string | null
+    avatar?: string | null
+    title?: string | null
     start?: string
     end?: string
     minutes: number
@@ -323,7 +327,11 @@ export function TeamTodayTab() {
           {d.people.map((p) => (
             <section key={p.id} className={`person ${p.checkIn ? '' : 'absent'} ${p.leave && !p.checkIn ? 'on-leave' : ''}`}>
               <div className="person-head">
-                <strong>{p.name}</strong>
+                <PersonAvatar name={p.name} photo={p.photo} avatar={p.avatar} size={40} />
+                <strong>
+                  {p.name}
+                  {p.title && <small className="person-title">{p.title}</small>}
+                </strong>
                 <span className={`status ${p.checkIn ? (p.checkOut ? 'out' : 'in') : p.leave ? 'leave' : 'none'}`}>
                   {p.checkIn ? (p.checkOut ? 'Checked out' : 'Working') : p.leave ? `On leave${p.leave.half ? ' (half day)' : ''}` : 'Not checked in'}
                 </span>
@@ -420,6 +428,9 @@ interface FullSettings {
   ownerLive: boolean
   offices?: Office[]
   requireLocation?: boolean
+  reportEmailOn?: boolean
+  reportEmail?: string
+  reportEmailTime?: string
 }
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -606,6 +617,39 @@ function TeamSettingsPanel() {
           </span>
           <input type="checkbox" checked={!!f.requireLocation} onChange={(e) => setF({ ...f, requireLocation: e.target.checked })} />
         </label>
+      </Panel>
+
+      <Panel title="Daily team report by email" note="Every evening: each person’s check-in and check-out time and place, hours, work report, tasks and leave. Not sent on days nobody worked.">
+        <label className="set-row toggle att-toggle">
+          <span>
+            Send the daily team report
+            <small>Through the newsletter’s email connection (Brevo), from desk@realtynmore.com.</small>
+          </span>
+          <input type="checkbox" checked={f.reportEmailOn ?? true} onChange={(e) => setF({ ...f, reportEmailOn: e.target.checked })} />
+        </label>
+        <div className="form-grid att-grid">
+          <label>
+            Send to
+            <input type="email" value={f.reportEmail ?? 'palash@realtynmore.com'} onChange={(e) => setF({ ...f, reportEmail: e.target.value })} />
+          </label>
+          <label>
+            Time (IST)
+            <input type="time" value={f.reportEmailTime ?? '19:30'} onChange={(e) => setF({ ...f, reportEmailTime: e.target.value })} />
+          </label>
+        </div>
+        <button
+          className="btn ghost small"
+          onClick={async () => {
+            try {
+              const r = await studioPost<{ result: string }>('team/email-now', {})
+              toast(r.result)
+            } catch (e) {
+              toast((e as Error).message)
+            }
+          }}
+        >
+          Send today’s report now
+        </button>
       </Panel>
 
       <Panel title="Attendance notifications" note="Sent to phones where “Turn on reminders” is switched on (team) and owner alerts are on (owner).">

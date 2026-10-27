@@ -9,6 +9,8 @@ import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, isAccountLogin, ownerKey, ownerRole, refreshRole, studio } from '../lib/owner.ts'
 import { AdsTab } from './AdsTools.tsx'
+import { ProfilePanel } from './ProfileTools.tsx'
+import { PersonAvatar } from '../components/PersonAvatar.tsx'
 import { NewsletterTab } from './NewsletterTools.tsx'
 import { AccountsPanel, AuthScreen, ChangePassword, DeleteAccount } from './AuthTools.tsx'
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
@@ -132,6 +134,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   const [me, setMe] = useState(ownerRole)
   const [pwOpen, setPwOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   useEffect(() => {
     void refreshRole().then(() => setMe(ownerRole()))
   }, [])
@@ -143,14 +146,34 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   // Employees land on their own day; the owner on the overview.
   const tab = (visible.find((t) => t.key === params.get('tab'))?.key ?? (me?.role === 'editor' ? 'myday' : 'overview')) as Tab
   const group = TABS.find((t) => t.key === tab)!.group
+  // First login with a password the owner gave them: they choose their own before anything else.
+  if (me?.mustChange)
+    return (
+      <div className="page studio">
+        <div className="page-head">
+          <span className="owner-badge">Welcome, {me.name}</span>
+          <h1>Choose your own password</h1>
+          <p className="page-sub">You logged in with a temporary password. Set your own to continue; only you will know it.</p>
+        </div>
+        <ChangePassword onClose={() => void refreshRole().then(() => setMe(ownerRole()))} />
+        <button className="btn ghost small" onClick={onLock}>
+          Log out
+        </button>
+      </div>
+    )
   return (
     <div className="page studio">
       <div className="page-head studio-head">
         {me?.role === 'editor' || me?.role === 'admin' ? (
-          <div>
-            <span className="owner-badge">{me.role === 'admin' ? `Full access · ${me.name}` : `Team · ${me.name}`}</span>
-            <h1>Content Studio</h1>
-            <p className="page-sub">Real data from the app, realtynmore.com, Google and other news sites</p>
+          <div className="owner-hello">
+            <button className="avatar-btn" onClick={() => setProfileOpen((o) => !o)} aria-label="Edit my profile" title="Edit my profile">
+              <PersonAvatar name={me.name} photo={me.photo} avatar={me.avatar} size={64} />
+            </button>
+            <div>
+              <span className="owner-badge">{me.role === 'admin' ? `Full access · ${me.name}` : `Team · ${me.name}`}{me.title ? ` · ${me.title}` : ''}</span>
+              <h1>{greeting()}, {me.name.split(' ')[0]}</h1>
+              <p className="page-sub">Content Studio · real data from the app, realtynmore.com, Google and other news sites</p>
+            </div>
           </div>
         ) : (
           <div className="owner-hello">
@@ -163,6 +186,11 @@ function StudioHome({ onLock }: { onLock: () => void }) {
           </div>
         )}
         <div className="studio-head-btns">
+          {me?.role !== 'owner' && (
+            <button className="btn ghost small" onClick={() => setProfileOpen((o) => !o)} aria-expanded={profileOpen}>
+              Profile
+            </button>
+          )}
           {isAccountLogin() && (
             <button className="btn ghost small" onClick={() => setPwOpen((o) => !o)} aria-expanded={pwOpen}>
               Password
@@ -185,6 +213,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
           </button>
         </div>
       </div>
+      {profileOpen && <ProfilePanel onClose={() => setProfileOpen(false)} onSaved={() => setMe(ownerRole())} />}
       {pwOpen && <ChangePassword onClose={() => setPwOpen(false)} />}
       {delOpen && (
         <DeleteAccount

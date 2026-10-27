@@ -194,6 +194,11 @@ async function sendMail(env: Env, s: NlSettings, m: Mail): Promise<SendResult> {
   return res.status === 402 || res.status === 429 ? 'quota' : 'error'
 }
 
+/** Sends one email with the newsletter's sender (desk@) within the same daily cap. */
+export async function sendRaw(env: Env, m: { to: string; subject: string; html: string; text: string; tag: string }): Promise<SendResult> {
+  return sendMail(env, await nlSettings(env), m)
+}
+
 const workerUrl = (req: Request | null, env: Env) => env.NEWSLETTER_URL || (req ? new URL(req.url).origin : 'https://rnm-news-push.realtynmore.workers.dev')
 
 function confirmMail(s: NlSettings, base: string, to: string, name: string, tok: string): Mail {

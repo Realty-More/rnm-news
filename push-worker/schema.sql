@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS mkt_stock (day TEXT NOT NULL, symbol TEXT NOT NULL, s
 CREATE TABLE IF NOT EXISTS mkt_meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS reel_refs (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT, size INTEGER, week TEXT, kind TEXT, note TEXT, by_name TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS ai_usage (day TEXT NOT NULL, who TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, who));
-CREATE TABLE IF NOT EXISTS accounts (phone TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT, approved_at TEXT, last_login TEXT);
+CREATE TABLE IF NOT EXISTS accounts (phone TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT, approved_at TEXT, last_login TEXT, must_change INTEGER NOT NULL DEFAULT 0);
+-- Added 2026-10-27 to an existing database with: ALTER TABLE accounts ADD COLUMN must_change INTEGER NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, phone TEXT NOT NULL, created_at TEXT, expires_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS sessions_phone ON sessions (phone);
 CREATE TABLE IF NOT EXISTS auth_fail (k TEXT NOT NULL, hour TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (k, hour));
@@ -45,3 +46,5 @@ CREATE INDEX IF NOT EXISTS news_subs_token ON news_subs (token);
 CREATE TABLE IF NOT EXISTS news_issues (id INTEGER PRIMARY KEY AUTOINCREMENT, week TEXT NOT NULL UNIQUE, subject TEXT NOT NULL, html TEXT NOT NULL, text TEXT NOT NULL, status TEXT NOT NULL, created_by TEXT, created_at TEXT NOT NULL, sent_at TEXT, sent INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS news_sends (issue_id INTEGER NOT NULL, sub_id INTEGER NOT NULL, day TEXT NOT NULL, ok INTEGER NOT NULL, PRIMARY KEY (issue_id, sub_id));
 CREATE TABLE IF NOT EXISTS news_mail (day TEXT NOT NULL, kind TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, kind));
+-- Team profiles: display title, photo (small data URL) or avatar.
+CREATE TABLE IF NOT EXISTS profiles (person_id TEXT PRIMARY KEY, title TEXT, photo TEXT, avatar TEXT, updated_at TEXT);

@@ -662,6 +662,8 @@ interface Editor {
 }
 export function TeamTab() {
   const res = useAsync('studio:team', (s) => studio<{ editors: Editor[] }>('team', undefined, s))
+  const accts = useAsync(hasFullAccess() ? 'studio:accounts' : null, (s) => studio<{ accounts: { phone: string; name: string; status: string; role: string }[] }>('accounts', undefined, s))
+  const [mergeTo, setMergeTo] = useState<Record<string, string>>({})
   const [name, setName] = useState('')
   const [newKey, setNewKey] = useState<{ name: string; key: string } | null>(null)
   const canGrant = hasFullAccess()
@@ -682,6 +684,22 @@ export function TeamTab() {
       const r = await studioPost<{ key: string; editor: Editor }>('team', { name })
       setNewKey({ name: r.editor.name, key: r.key })
       setName('')
+      res.reload()
+    } catch (err) {
+      toast((err as Error).message)
+    }
+  }
+  const active = (accts.data?.accounts ?? []).filter((a) => a.status === 'active' && a.role !== 'owner')
+  const first = (n: string) => n.trim().split(/\s+/)[0].toLowerCase()
+  // An old key whose name matches a mobile login is very likely the same person.
+  const likely = (e: Editor) => active.find((a) => first(a.name) === first(e.name))
+  const merge = async (e: Editor, phone: string) => {
+    const a = active.find((x) => x.phone === phone)
+    if (!a) return
+    if (!window.confirm(`Merge the old key “${e.name}” into ${a.name}’s mobile login? Their attendance, reports, tasks and leave move to ${a.name}, and the key stops working.`)) return
+    try {
+      const r = await studioPost<{ moved: number; name: string }>('team/merge', { keyId: e.id, phone })
+      toast(`Merged into ${r.name}${r.moved ? ` (${r.moved} records moved)` : ''}`)
       res.reload()
     } catch (err) {
       toast((err as Error).message)
@@ -731,6 +749,22 @@ export function TeamTab() {
                   </span>
                 </div>
                 <div className="acct-btns">
+                  {active.length > 0 && (
+                    <span className="merge-box">
+                      {likely(e) && <em className="merge-hint">Same person as {likely(e)!.name}?</em>}
+                      <select value={mergeTo[e.id] ?? likely(e)?.phone ?? ''} onChange={(x) => setMergeTo({ ...mergeTo, [e.id]: x.target.value })} aria-label={`Merge ${e.name} into`}>
+                        <option value="">Merge into mobile login…</option>
+                        {active.map((a) => (
+                          <option key={a.phone} value={a.phone}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="mini-btn" disabled={!(mergeTo[e.id] ?? likely(e)?.phone)} onClick={() => void merge(e, (mergeTo[e.id] ?? likely(e)?.phone)!)}>
+                        Merge
+                      </button>
+                    </span>
+                  )}
                   {canGrant && (
                     <button className="mini-btn" onClick={() => setAccess(e, !e.admin)}>
                       {e.admin ? 'Team access' : 'Give full access'}

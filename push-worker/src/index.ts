@@ -47,7 +47,9 @@ import { ask, write } from './ai.ts'
 import { magazinePdf } from './magazine-pdf.ts'
 import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
-import { changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
+import { getProfile, myProfile, saveProfile } from './profile.ts'
+import { sendTeamEmail } from './teamEmail.ts'
+import { addStaffLogin, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
 import { collectYouTube, youTubeStats } from './youtube.ts'
@@ -123,8 +125,13 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
   try {
     if (req.method === 'GET') {
       switch (pathname) {
-        case '/editor/ping':
-          return json({ ok: true, role: who.role, name: who.name }, 200, headers)
+        case '/editor/ping': {
+          // mustChange: still on a password the owner gave them; profile: their photo or avatar for the header.
+          const [mustChange, profile] = await Promise.all([mustChangePassword(env, who.phone), getProfile(env, who.id ?? 'owner')])
+          return json({ ok: true, role: who.role, name: who.name, mustChange, photo: profile.photo, avatar: profile.avatar, title: profile.title }, 200, { ...headers, 'Cache-Control': 'no-store' })
+        }
+        case '/editor/me/profile':
+          return json(await myProfile(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/overview':
           return json(await overview(env), 200, headers)
         case '/editor/ideas':
@@ -233,6 +240,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await submitReport(env, who, body), 200, headers)
       case '/editor/me/device':
         return json({ ok: await registerStaffDevice(env, who, body) }, 200, headers)
+      case '/editor/me/profile':
+        return json(await saveProfile(env, who, body), 200, headers)
+      case '/editor/accounts/add':
+        return json(await addStaffLogin(env, body, who), 200, { ...headers, 'Cache-Control': 'no-store' })
+      case '/editor/team/email-now':
+        return full(who) ? json({ result: await sendTeamEmail(env, true) }, 200, headers) : ownerOnly()
+      case '/editor/team/merge':
+        return json(await mergeKeyIntoAccount(env, body, who), 200, headers)
       case '/editor/accounts/approve':
       case '/editor/accounts/reject':
       case '/editor/accounts/remove':
@@ -435,6 +450,6 @@ export default {
     const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
     // Its own hourly run, so the ~45 site requests don't share the 50-request limit with alerts.
     if (event.cron === '7 * * * *') return ctx.waitUntil(Promise.all([run('views', () => collectViews(env)), run('youtube', () => collectYouTube(env))]))
-    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('nudges', () => attendanceNudges(env)), run('newsletter', () => newsletterTick(env)), run('market', () => autoCapture(env))]))
+    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('nudges', () => attendanceNudges(env)), run('newsletter', () => newsletterTick(env)), run('team-email', () => sendTeamEmail(env)), run('market', () => autoCapture(env))]))
   },
 } satisfies ExportedHandler<Env>

@@ -32,3 +32,9 @@ CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TE
 CREATE INDEX IF NOT EXISTS tasks_assignee ON tasks (assignee_id, status);
 CREATE TABLE IF NOT EXISTS leaves (id INTEGER PRIMARY KEY AUTOINCREMENT, person_id TEXT NOT NULL, name TEXT, kind TEXT NOT NULL, from_day TEXT NOT NULL, to_day TEXT NOT NULL, half INTEGER NOT NULL DEFAULT 0, reason TEXT, status TEXT NOT NULL DEFAULT 'pending', decided_by TEXT, decided_at TEXT, decision_note TEXT, created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS leaves_person ON leaves (person_id, from_day);
+-- Ad sales tracker: advertisers, deals (amount before GST, stage, follow-up, payment due) and payments received.
+CREATE TABLE IF NOT EXISTS ad_clients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, contact TEXT, phone TEXT, email TEXT, city TEXT, gstin TEXT, notes TEXT, created_by TEXT, created_at TEXT, updated_at TEXT);
+CREATE TABLE IF NOT EXISTS ad_deals (id INTEGER PRIMARY KEY AUTOINCREMENT, client_id INTEGER NOT NULL, title TEXT NOT NULL, medium TEXT NOT NULL, period TEXT, amount INTEGER NOT NULL DEFAULT 0, gst_pct REAL NOT NULL DEFAULT 18, stage TEXT NOT NULL DEFAULT 'lead', handled_by TEXT, next_date TEXT, next_action TEXT, invoice_no TEXT, due_day TEXT, notes TEXT, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ad_deals_client ON ad_deals (client_id);
+CREATE TABLE IF NOT EXISTS ad_payments (id INTEGER PRIMARY KEY AUTOINCREMENT, deal_id INTEGER NOT NULL, day TEXT NOT NULL, amount INTEGER NOT NULL, mode TEXT, ref TEXT, note TEXT, by_name TEXT, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ad_payments_deal ON ad_payments (deal_id);

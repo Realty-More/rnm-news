@@ -105,7 +105,7 @@ export async function ownerDeviceCount(env: Env) {
   return (await env.SUBS.list({ prefix: OWNER_PREFIX })).keys.length
 }
 
-const toOwners = (env: Env, notice: Notice) => deliver(env, OWNER_PREFIX, () => [notice])
+export const toOwners = (env: Env, notice: Notice) => deliver(env, OWNER_PREFIX, () => [notice])
 
 /* ---------- #1 custom notification to all readers ---------- */
 export const CUSTOM_PUSH_PER_DAY = 5
@@ -244,12 +244,13 @@ export async function uptimeSummary(env: Env) {
 }
 
 /* ---------- #5 morning brief (9 AM IST) ---------- */
-export function briefText(d: { views: number; opens: number; top: string | null; uptime: number | null; gap: string | null; team?: string | null }): string {
+export function briefText(d: { views: number; opens: number; top: string | null; uptime: number | null; gap: string | null; team?: string | null; ads?: string | null }): string {
   const parts = [`Yesterday: ${d.views} screen views, ${d.opens} stories read.`]
   if (d.top) parts.push(`Top: ${d.top}.`)
   if (d.uptime !== null) parts.push(`Website uptime ${d.uptime}%.`)
   if (d.gap) parts.push(`Readers searched “${d.gap}” and found nothing.`)
   if (d.team) parts.push(d.team)
+  if (d.ads) parts.push(d.ads)
   return parts.join(' ').slice(0, 300)
 }
 
@@ -270,7 +271,9 @@ export async function morningBrief(env: Env, force = false): Promise<string> {
   const top = topRow ? (await fetchByIds(env.SITE_API, [topRow.id]).catch(() => []))[0]?.title ?? null : null
   const { teamBriefLine } = await import('./team.ts')
   const team = await teamBriefLine(env).catch(() => null)
-  const body = briefText({ views, opens, top, uptime: up?.c ? Math.round((up.u / up.c) * 1000) / 10 : null, gap: gapRow?.q ?? null, team })
+  const { adsBrief } = await import('./ads.ts')
+  const ads = await adsBrief(env).catch(() => null)
+  const body = briefText({ views, opens, top, uptime: up?.c ? Math.round((up.u / up.c) * 1000) / 10 : null, gap: gapRow?.q ?? null, team, ads })
   const r = await toOwners(env, { title: '☀️ R&M morning brief', body, url: '#/studio', tag: 'brief' })
   return `brief sent to ${r.sent}`
 }

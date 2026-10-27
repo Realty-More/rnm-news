@@ -8,6 +8,7 @@ import { toast } from '../components/Toast.tsx'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, isAccountLogin, ownerKey, ownerRole, refreshRole, studio } from '../lib/owner.ts'
+import { AdsTab } from './AdsTools.tsx'
 import { AccountsPanel, AuthScreen, ChangePassword, DeleteAccount } from './AuthTools.tsx'
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
 import { MagazineTab } from './MagazineTools.tsx'
@@ -91,6 +92,7 @@ const TABS = [
   { key: 'site', label: 'Site & alerts', group: 'publish', owner: true },
   { key: 'reels', label: 'Reel scripts', group: 'publish' },
   { key: 'magazine', label: 'Magazine list', group: 'publish' },
+  { key: 'ads', label: 'Ad sales', group: 'sales', owner: true },
   { key: 'team', label: 'Team & keys', group: 'team', owner: true },
 ] as const
 const GROUPS = [
@@ -98,6 +100,7 @@ const GROUPS = [
   { key: 'audience', label: 'Audience' },
   { key: 'content', label: 'Content' },
   { key: 'publish', label: 'Publish' },
+  { key: 'sales', label: 'Sales' },
   { key: 'team', label: 'Manage' },
 ] as const
 type Tab = (typeof TABS)[number]['key']
@@ -240,6 +243,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'web' && <WebsiteTab />}
       {tab === 'yt' && <YouTubeTab />}
       {tab === 'magazine' && <MagazineTab />}
+      {tab === 'ads' && <AdsTab />}
       {tab === 'reels' && <ReelsTab />}
       {tab === 'ai' && <AiWriterTab />}
     </div>

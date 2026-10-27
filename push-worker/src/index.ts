@@ -45,12 +45,13 @@ import {
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
 import { ask, write } from './ai.ts'
 import { magazinePdf } from './magazine-pdf.ts'
+import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
 import { collectYouTube, youTubeStats } from './youtube.ts'
 import { collectViews, seoCompare, webTraffic } from './website.ts'
-import { assignablePeople, checkIn, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
+import { assignablePeople, attendanceNudges, checkIn, teamSettings, checkOut, myHistory, myToday, registerStaffDevice, reportReminders, saveTeamSettings, submitReport, teamDay, teamMonth } from './team.ts'
 
 export interface Env {
   SUBS: KVNamespace
@@ -112,6 +113,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
   if (!full(who) && OWNER_ONLY.has(pathname) && !(req.method === 'GET' && pathname === '/editor/site')) return ownerOnly()
   // Check-in, daily report and report reminders are for team members; the owner is not tracked as staff.
   if (who.role === 'owner' && TEAM_ONLY.has(pathname)) return json({ error: 'Attendance and daily reports are for team members.' }, 403, headers)
+  // Ad sales (advertisers, deal values, payments) is for the owner and full-access staff only.
+  if (pathname.startsWith('/editor/ads') && !full(who)) return ownerOnly()
   try {
     if (req.method === 'GET') {
       switch (pathname) {
@@ -158,6 +161,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await listRefs(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/reels/ref':
           return downloadRef(env, url.searchParams.get('id') ?? '', headers)
+        case '/editor/ads':
+          return json(await adsBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/mag/book':
           return json(await magazineBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/mag/dispatch':
@@ -178,6 +183,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await myLeaves(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/leaves':
           return full(who) ? json(await allLeaves(env, url.searchParams.get('month') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
+        case '/editor/team/settings':
+          return full(who) ? json({ settings: await teamSettings(env) }, 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
         case '/editor/team/day':
           return full(who) ? json(await teamDay(env, url.searchParams.get('date') ?? ''), 200, headers) : ownerOnly()
         case '/editor/team/month':
@@ -246,6 +253,20 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: 'Pick a date.' }, 400, headers)
         return json({ result: await captureDay(env, day) }, 200, headers)
       }
+      case '/editor/ads/client':
+        return json(await saveClient(env, body, who), 200, headers)
+      case '/editor/ads/client/remove':
+        return json(await removeClient(env, body), 200, headers)
+      case '/editor/ads/deal':
+        return json(await saveDeal(env, body, who), 200, headers)
+      case '/editor/ads/deal/update':
+        return json(await updateDeal(env, body), 200, headers)
+      case '/editor/ads/deal/remove':
+        return json(await removeDeal(env, body), 200, headers)
+      case '/editor/ads/payment':
+        return json(await addPayment(env, body, who), 200, headers)
+      case '/editor/ads/payment/remove':
+        return json(await removePayment(env, body), 200, headers)
       case '/editor/mag/contact':
         return json(await saveContact(env, body, who), 200, headers)
       case '/editor/mag/contact/remove':
@@ -381,6 +402,6 @@ export default {
     const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
     // Its own hourly run, so the ~45 site requests don't share the 50-request limit with alerts.
     if (event.cron === '7 * * * *') return ctx.waitUntil(Promise.all([run('views', () => collectViews(env)), run('youtube', () => collectYouTube(env))]))
-    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('market', () => autoCapture(env))]))
+    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('nudges', () => attendanceNudges(env)), run('market', () => autoCapture(env))]))
   },
 } satisfies ExportedHandler<Env>

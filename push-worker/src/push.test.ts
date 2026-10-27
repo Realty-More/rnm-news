@@ -514,3 +514,84 @@ describe('joining date', () => {
     expect(row.absent).toBe(3)
   })
 })
+
+describe('ad sales tracker', () => {
+  it('adds GST and works out the balance only for booked deals', async () => {
+    const { totalWithGst, balanceOf } = await import('./ads.ts')
+    expect(totalWithGst({ amount: 100000, gst_pct: 18 })).toBe(118000)
+    expect(balanceOf({ amount: 100000, gst_pct: 18, stage: 'confirmed', received: 50000 })).toBe(68000)
+    expect(balanceOf({ amount: 100000, gst_pct: 18, stage: 'completed', received: 130000 })).toBe(0)
+    expect(balanceOf({ amount: 100000, gst_pct: 18, stage: 'proposal', received: 0 })).toBe(0)
+    expect(balanceOf({ amount: 100000, gst_pct: 18, stage: 'lost' })).toBe(0)
+  })
+  it('names the Indian financial year', async () => {
+    const { fyOf } = await import('./ads.ts')
+    expect(fyOf('2026-10-27')).toBe('2026-27')
+    expect(fyOf('2027-03-31')).toBe('2026-27')
+    expect(fyOf('2027-04-01')).toBe('2027-28')
+    expect(fyOf('2099-12-01')).toBe('2099-00')
+  })
+  it('lists follow-ups due and overdue payments for the morning brief', async () => {
+    const { adsBriefLine, dueToday } = await import('./ads.ts')
+    const base = { client_id: 1, title: 't', medium: 'magazine', period: '', handled_by: '', next_action: '', invoice_no: '', notes: '', created_by: '', created_at: '', updated_at: '' }
+    const deals = [
+      { ...base, id: 1, amount: 50000, gst_pct: 18, stage: 'proposal' as const, next_date: '2026-10-27', due_day: null, received: 0 },
+      { ...base, id: 2, amount: 100000, gst_pct: 18, stage: 'running' as const, next_date: null, due_day: '2026-10-20', received: 18000 },
+      { ...base, id: 3, amount: 100000, gst_pct: 18, stage: 'lost' as const, next_date: '2026-10-01', due_day: '2026-10-01', received: 0 },
+      { ...base, id: 4, amount: 100000, gst_pct: 18, stage: 'lead' as const, next_date: '2026-11-02', due_day: null, received: 0 },
+    ]
+    const d = dueToday(deals, '2026-10-27')
+    expect(d.followUps.map((x) => x.id)).toEqual([1])
+    expect(d.overdue.map((x) => x.id)).toEqual([2])
+    expect(d.overdueAmount).toBe(100000)
+    expect(adsBriefLine(deals, '2026-10-27')).toBe('Ads: 1 ad follow-up due, ₹1,00,000 ad payment overdue.')
+    expect(adsBriefLine([], '2026-10-27')).toBeNull()
+  })
+})
+
+describe('personal office hours and attendance reminders', () => {
+  const base = { startTime: '10:00', endTime: '18:30', graceMin: 15, reminderTime: '18:30', weekOff: [0], people: {}, notifyCheckIn: true, notifyCheckOut: true, managerSummary: true, ownerLive: false }
+  it('applies a person’s own hours and weekly off', async () => {
+    const { forPerson, isLate } = await import('./team.ts')
+    const s = { ...base, people: { 'ph:9000000001': { start: '09:00', end: '17:00', weekOff: [0, 6] } } }
+    const p = forPerson(s, 'ph:9000000001')
+    expect([p.startTime, p.endTime, p.weekOff]).toEqual(['09:00', '17:00', [0, 6]])
+    expect(forPerson(s, 'other').startTime).toBe('10:00')
+    // 09:20 IST is late for a 09:00 start (+15 grace), fine for the 10:00 office default.
+    expect(isLate('2026-10-27T03:50:00Z', p)).toBe(true)
+    expect(isLate('2026-10-27T03:50:00Z', s)).toBe(false)
+  })
+  it('cleans the per-person form', async () => {
+    const { cleanPeopleTimes } = await import('./team.ts')
+    expect(cleanPeopleTimes({ 'ph:1': { start: '09:30', end: 'x' }, 'bad id!': { start: '09:00' }, 'ed:2': {} })).toEqual({ 'ph:1': { start: '09:30' } })
+    expect(() => cleanPeopleTimes({ 'ph:1': { start: '18:00', end: '09:00' } })).toThrow()
+    const key = 'a'.repeat(64)
+    expect(cleanPeopleTimes({ [key]: { start: '11:00' } })).toEqual({ [key]: { start: '11:00' } })
+  })
+  it('plans check-in and check-out reminders by each person’s time', async () => {
+    const { planNudges } = await import('./team.ts')
+    const s = { ...base, people: { early: { start: '09:00' } } }
+    const people = [{ id: 'early', name: 'Neha Jain' }, { id: 'std', name: 'Ravi Kumar' }, { id: 'leave', name: 'Asha' }]
+    const none = new Map()
+    // Tuesday 27 Oct 2026, 09:15 IST: only the 09:00 person is due a check-in reminder.
+    expect(planNudges(people, s, none, new Set(['leave']), '2026-10-27', 9 * 60 + 15).checkIn.map((p) => p.id)).toEqual(['early'])
+    // 10:20 IST: the 10:00 people (not the one on leave).
+    expect(planNudges(people, s, none, new Set(['leave']), '2026-10-27', 10 * 60 + 20).checkIn.map((p) => p.id)).toEqual(['std'])
+    // 19:00 IST: still checked in 30 min after an 18:30 end.
+    const att = new Map([['std', { check_in: '2026-10-27T04:30:00Z', check_out: null }]])
+    expect(planNudges(people, s, att, new Set(), '2026-10-27', 19 * 60).checkOut.map((p) => p.id)).toEqual(['std'])
+    // Sunday is a weekly off: nothing.
+    expect(planNudges(people, s, none, new Set(), '2026-11-01', 10 * 60 + 20).checkIn).toEqual([])
+    // Reminders switched off.
+    expect(planNudges(people, { ...s, notifyCheckIn: false }, none, new Set(), '2026-10-27', 10 * 60 + 20).checkIn).toEqual([])
+  })
+  it('writes the owner’s attendance summary', async () => {
+    const { summaryText } = await import('./team.ts')
+    const people = [{ id: 'a', name: 'Neha Jain' }, { id: 'b', name: 'Ravi Kumar' }, { id: 'c', name: 'Asha Rao' }, { id: 'd', name: 'Om' }]
+    const att = new Map([
+      ['a', { check_in: '2026-10-27T04:20:00Z' }],
+      ['b', { check_in: '2026-10-27T04:55:00Z' }],
+    ])
+    expect(summaryText(people, base, att, new Set(['d']), '2026-10-27')).toBe('2 of 3 checked in · 1 late (Ravi) · not in yet: Asha · 1 on leave')
+  })
+})

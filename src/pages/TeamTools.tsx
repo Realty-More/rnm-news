@@ -22,7 +22,7 @@ interface Today {
   name: string
   attendance: { check_in: string | null; check_out: string | null; mode: string | null; note: string | null } | null
   report: { done: string; plan: string; blockers: string; links: string; submitted_at: string } | null
-  settings: { startTime: string; graceMin: number; reminderTime: string; weekOff?: number[] }
+  settings: { startTime: string; endTime?: string; graceMin: number; reminderTime: string; weekOff?: number[] }
   late: boolean
   minutes: number
 }
@@ -80,7 +80,7 @@ export function MyDayTab() {
             <span className="owner-badge">{formatDate(`${d.day}T06:00:00Z`)}</span>
             <h2>Hi {d.name}</h2>
             <p className="panel-note">
-              Office time {d.settings.startTime} (grace {d.settings.graceMin} min). Report reminder at {d.settings.reminderTime}.
+              Your office time {d.settings.startTime}{d.settings.endTime ? ` to ${d.settings.endTime}` : ''} (grace {d.settings.graceMin} min). Report reminder at {d.settings.reminderTime}.
             </p>
           </div>
           <div className="day-timer">
@@ -150,7 +150,7 @@ export function MyDayTab() {
         </form>
       </Panel>
 
-      <Panel title="Reminders on this phone" note="A nudge at the reminder time if you checked in but haven’t sent your report.">
+      <Panel title="Reminders on this phone" note="Notifications if you haven’t checked in by your office time, a report reminder, and a check-out reminder if you’re still checked in after your day ends.">
         <button
           className="btn ghost small"
           onClick={async () => {
@@ -219,6 +219,8 @@ interface TeamDay {
     mode: string | null
     note: string | null
     late: boolean
+    start?: string
+    end?: string
     minutes: number
     report: { done: string; plan: string; blockers: string; links: string; submittedAt: string } | null
     activity: string[]
@@ -284,6 +286,11 @@ export function TeamTodayTab() {
                 </p>
               )}
               <div className="person-times">
+                {p.start && (
+                  <span className="meta">
+                    Shift {p.start}–{p.end}
+                  </span>
+                )}
                 <span>
                   In <b>{clock(p.checkIn)}</b> {p.late && <em className="late">Late</em>}
                 </span>
@@ -344,51 +351,164 @@ export function TeamTodayTab() {
   )
 }
 
+interface PersonTime {
+  start?: string
+  end?: string
+  weekOff?: number[]
+}
+interface FullSettings {
+  startTime: string
+  endTime: string
+  graceMin: number
+  reminderTime: string
+  weekOff: number[]
+  people: Record<string, PersonTime>
+  notifyCheckIn: boolean
+  notifyCheckOut: boolean
+  managerSummary: boolean
+  ownerLive: boolean
+}
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** Owner / full access: office default hours, each person's own hours, and which notifications go out. */
 function TeamSettingsPanel() {
-  const res = useAsync('studio:myday', (s) => studio<Today>('me/today', undefined, s))
-  const s = res.data?.settings
-  const [start, setStart] = useState('')
-  const [grace, setGrace] = useState('')
-  const [remind, setRemind] = useState('')
-  const [off, setOff] = useState<number[] | null>(null)
-  if (!s) return null
-  const weekOff = off ?? s.weekOff ?? [0]
+  const res = useAsync('studio:team-settings', (s) => studio<{ settings: FullSettings }>('team/settings', undefined, s))
+  const staff = useAsync('studio:people', (s) => studio<{ people: { id: string; name: string }[] }>('people', undefined, s))
+  const [f, setF] = useState<FullSettings | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (res.data) setF({ ...res.data.settings, people: { ...(res.data.settings.people ?? {}) } })
+  }, [res.data])
+  if (!f) return null
+  const setPerson = (id: string, patch: Partial<PersonTime> | null) =>
+    setF((cur) => {
+      if (!cur) return cur
+      const people = { ...cur.people }
+      if (patch === null) delete people[id]
+      else {
+        const next = { ...(people[id] ?? {}), ...patch }
+        for (const k of Object.keys(next) as (keyof PersonTime)[]) if (next[k] === undefined || next[k] === '') delete next[k]
+        if (Object.keys(next).length) people[id] = next
+        else delete people[id]
+      }
+      return { ...cur, people }
+    })
   const save = async () => {
+    setBusy(true)
     try {
-      await studioPost('team/settings', { startTime: start || s.startTime, graceMin: grace === '' ? s.graceMin : Number(grace), reminderTime: remind || s.reminderTime, weekOff })
+      await studioPost('team/settings', f)
       toast('Office timings saved')
       res.reload()
     } catch (e) {
       toast((e as Error).message)
+    } finally {
+      setBusy(false)
     }
   }
+  const toggle = (k: 'notifyCheckIn' | 'notifyCheckOut' | 'managerSummary' | 'ownerLive', label: string, hint: string) => (
+    <label className="set-row toggle att-toggle">
+      <span>
+        {label}
+        <small>{hint}</small>
+      </span>
+      <input type="checkbox" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />
+    </label>
+  )
   return (
-    <Panel title="Office timings" note="Used for the Late mark, the report reminder (IST) and working days in the monthly attendance.">
-      <div className="form-grid">
-        <label>
-          Office starts
-          <input type="time" defaultValue={s.startTime} onChange={(e) => setStart(e.target.value)} />
-        </label>
-        <label>
-          Grace (minutes)
-          <input type="number" min={0} max={120} defaultValue={s.graceMin} onChange={(e) => setGrace(e.target.value)} />
-        </label>
-        <label>
-          Report reminder
-          <input type="time" defaultValue={s.reminderTime} onChange={(e) => setRemind(e.target.value)} />
-        </label>
-      </div>
-      <div className="weekoff" role="group" aria-label="Weekly off days">
-        <span>Weekly off:</span>
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
-          <label key={d} className="auth-check">
-            <input type="checkbox" checked={weekOff.includes(i)} onChange={(e) => setOff(e.target.checked ? [...weekOff, i].sort() : weekOff.filter((x) => x !== i))} /> {d}
+    <>
+      <Panel title="Office timings" note="The default for everyone. Used for the Late mark, reminders (IST) and working days in the monthly attendance.">
+        <div className="form-grid att-grid">
+          <label>
+            Office starts
+            <input type="time" value={f.startTime} onChange={(e) => setF({ ...f, startTime: e.target.value })} />
           </label>
-        ))}
-      </div>
-      <div className="action-row">
-        <button className="btn small" onClick={save}>
-          Save timings
+          <label>
+            Office ends
+            <input type="time" value={f.endTime} onChange={(e) => setF({ ...f, endTime: e.target.value })} />
+          </label>
+          <label>
+            Grace (minutes)
+            <input type="number" min={0} max={120} value={f.graceMin} onChange={(e) => setF({ ...f, graceMin: Number(e.target.value) })} />
+          </label>
+          <label>
+            Report reminder
+            <input type="time" value={f.reminderTime} onChange={(e) => setF({ ...f, reminderTime: e.target.value })} />
+          </label>
+        </div>
+        <div className="weekoff" role="group" aria-label="Weekly off days">
+          <span>Weekly off:</span>
+          {DAYS.map((d, i) => (
+            <label key={d} className="auth-check">
+              <input type="checkbox" checked={f.weekOff.includes(i)} onChange={(e) => setF({ ...f, weekOff: e.target.checked ? [...f.weekOff, i].sort() : f.weekOff.filter((x) => x !== i) })} /> {d}
+            </label>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="Each person’s office time" note="Set a different time or weekly off for anyone. Leave it as “Office default” to use the times above.">
+        {!staff.data ? (
+          <SkeletonList count={2} />
+        ) : staff.data.people.length === 0 ? (
+          <p className="empty">No team members yet.</p>
+        ) : (
+          <ul className="att-people">
+            {staff.data.people.map((p) => {
+              const own = f.people[p.id]
+              const off = own?.weekOff ?? f.weekOff
+              return (
+                <li key={p.id} className={own ? 'custom' : ''}>
+                  <div className="att-person-head">
+                    <strong>{p.name}</strong>
+                    {own ? (
+                      <button className="mini-btn" onClick={() => setPerson(p.id, null)}>
+                        Use office default
+                      </button>
+                    ) : (
+                      <span className="meta">Office default</span>
+                    )}
+                  </div>
+                  <div className="att-person-times">
+                    <label>
+                      Starts
+                      <input type="time" value={own?.start ?? f.startTime} onChange={(e) => setPerson(p.id, { start: e.target.value })} />
+                    </label>
+                    <label>
+                      Ends
+                      <input type="time" value={own?.end ?? f.endTime} onChange={(e) => setPerson(p.id, { end: e.target.value })} />
+                    </label>
+                    <div className="att-days" role="group" aria-label={`${p.name} weekly off`}>
+                      {DAYS.map((d, i) => (
+                        <button
+                          key={d}
+                          type="button"
+                          className={`att-day ${off.includes(i) ? 'off' : ''}`}
+                          aria-pressed={off.includes(i)}
+                          title={off.includes(i) ? `${d}: weekly off` : `${d}: working`}
+                          onClick={() => setPerson(p.id, { weekOff: off.includes(i) ? off.filter((x) => x !== i) : [...off, i].sort() })}
+                        >
+                          {d[0]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        <p className="meta">Highlighted days are weekly offs. Late = after their start time + {f.graceMin} min grace.</p>
+      </Panel>
+
+      <Panel title="Attendance notifications" note="Sent to phones where “Turn on reminders” is switched on (team) and owner alerts are on (owner).">
+        {toggle('notifyCheckIn', 'Check-in reminder', `To anyone not checked in ${f.graceMin} min after their start time (not on weekly off or approved leave).`)}
+        {toggle('notifyCheckOut', 'Check-out reminder', 'To anyone still checked in 30 min after their end time, with a nudge to add the daily report.')}
+        {toggle('managerSummary', 'Morning attendance summary to owner', 'Once a day, 15 min after office start + grace: who is in, late, not in yet and on leave.')}
+        {toggle('ownerLive', 'Live alert for every check-in and check-out', 'A notification to the owner each time someone checks in or out. Can be a lot of notifications.')}
+      </Panel>
+
+      <div className="action-row att-save">
+        <button className="btn" disabled={busy} onClick={save}>
+          {busy ? 'Saving…' : 'Save timings and notifications'}
         </button>
         <button
           className="btn ghost small"
@@ -404,7 +524,7 @@ function TeamSettingsPanel() {
           Send report reminders now
         </button>
       </div>
-    </Panel>
+    </>
   )
 }
 

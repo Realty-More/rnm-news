@@ -7,14 +7,37 @@ import { accountStaff } from './accounts.ts'
 import { approvedLeavesInMonth, leaveDays, leaveOnDay, LEAVE_KINDS, tasksForDay, type Leave } from './work.ts'
 import type { Env } from './index.ts'
 
+/** One person's own office hours, set by the owner (anything left out uses the office default). */
+export interface PersonTime {
+  start?: string
+  end?: string
+  weekOff?: number[]
+}
 export interface TeamSettings {
   startTime: string // "10:00" IST
+  endTime: string // "18:30" IST
   graceMin: number
   reminderTime: string // "18:30" IST, report reminder
   /** Weekly off days, 0 = Sunday … 6 = Saturday (not counted as working or leave days). */
   weekOff: number[]
+  /** Per-person office hours, by person id. */
+  people: Record<string, PersonTime>
+  /** Push reminders: check in (start + grace), check out (30 min after the end time). */
+  notifyCheckIn: boolean
+  notifyCheckOut: boolean
+  /** Attendance summary to the owner 15 minutes after start + grace. */
+  managerSummary: boolean
+  /** A notification to the owner for every check-in and check-out. */
+  ownerLive: boolean
 }
-const DEFAULTS: TeamSettings = { startTime: '10:00', graceMin: 15, reminderTime: '18:30', weekOff: [0] }
+const DEFAULTS: TeamSettings = { startTime: '10:00', endTime: '18:30', graceMin: 15, reminderTime: '18:30', weekOff: [0], people: {}, notifyCheckIn: true, notifyCheckOut: true, managerSummary: true, ownerLive: false }
+
+/** The office settings with this person's own hours and weekly off applied. */
+export function forPerson(s: TeamSettings, id: string): TeamSettings {
+  const p = s.people?.[id]
+  if (!p) return s
+  return { ...s, startTime: p.start ?? s.startTime, endTime: p.end ?? s.endTime, weekOff: p.weekOff ?? s.weekOff }
+}
 const MODES = ['office', 'remote', 'field'] as const
 type Mode = (typeof MODES)[number]
 
@@ -44,16 +67,46 @@ export async function teamSettings(env: Env): Promise<TeamSettings> {
   return { ...DEFAULTS, ...((await env.SUBS.get<Partial<TeamSettings>>('team:settings', 'json')) ?? {}) }
 }
 
+const isTime = (v: unknown): v is string => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v)
+const cleanDays = (v: unknown): number[] | null => (Array.isArray(v) ? [...new Set(v.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort() : null)
+
+/** Per-person hours from the Studio form: valid times only, end after start, at most 200 people. */
+export function cleanPeopleTimes(v: unknown): Record<string, PersonTime> {
+  const out: Record<string, PersonTime> = {}
+  if (!v || typeof v !== 'object') return out
+  for (const [id, raw] of Object.entries(v as Record<string, unknown>).slice(0, 200)) {
+    // Ids: "ph:<mobile>" for account logins, a 64-character hash for login keys.
+    if (!/^[\w:.-]{1,80}$/.test(id) || !raw || typeof raw !== 'object') continue
+    const t = raw as Record<string, unknown>
+    const p: PersonTime = {}
+    if (isTime(t.start)) p.start = t.start
+    if (isTime(t.end)) p.end = t.end
+    const days = cleanDays(t.weekOff)
+    if (days) p.weekOff = days
+    if (p.start && p.end && toMin(p.end) <= toMin(p.start)) throw new Error('Each person’s end time must be after their start time.')
+    if (Object.keys(p).length) out[id] = p
+  }
+  return out
+}
+
 export async function saveTeamSettings(env: Env, body: unknown) {
-  const b = (body ?? {}) as Partial<TeamSettings>
-  const time = (v: unknown, d: string) => (typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : d)
+  const b = (body ?? {}) as Partial<Record<keyof TeamSettings, unknown>>
+  const time = (v: unknown, d: string) => (isTime(v) ? v : d)
+  const flag = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d)
   const cur = await teamSettings(env)
   const next: TeamSettings = {
     startTime: time(b.startTime, cur.startTime),
+    endTime: time(b.endTime, cur.endTime),
     graceMin: Number.isInteger(b.graceMin) && (b.graceMin as number) >= 0 && (b.graceMin as number) <= 120 ? (b.graceMin as number) : cur.graceMin,
     reminderTime: time(b.reminderTime, cur.reminderTime),
-    weekOff: Array.isArray(b.weekOff) ? [...new Set(b.weekOff.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort() : cur.weekOff,
+    weekOff: cleanDays(b.weekOff) ?? cur.weekOff,
+    people: b.people === undefined ? cur.people : cleanPeopleTimes(b.people),
+    notifyCheckIn: flag(b.notifyCheckIn, cur.notifyCheckIn),
+    notifyCheckOut: flag(b.notifyCheckOut, cur.notifyCheckOut),
+    managerSummary: flag(b.managerSummary, cur.managerSummary),
+    ownerLive: flag(b.ownerLive, cur.ownerLive),
   }
+  if (toMin(next.endTime) <= toMin(next.startTime)) throw new Error('Office end time must be after the start time.')
   await env.SUBS.put('team:settings', JSON.stringify(next))
   return { ok: true, settings: next }
 }
@@ -89,7 +142,8 @@ export async function myToday(env: Env, who: Who) {
     env.DB.prepare('SELECT * FROM reports WHERE person_id = ?1 AND day = ?2').bind(id, day).first<Rep>(),
     teamSettings(env),
   ])
-  return { day, name: who.name, attendance: att, report: rep, settings, late: isLate(att?.check_in ?? null, settings), minutes: workedMinutes(att?.check_in ?? null, att?.check_out ?? null) }
+  const mine = forPerson(settings, id)
+  return { day, name: who.name, attendance: att, report: rep, settings: mine, late: isLate(att?.check_in ?? null, mine), minutes: workedMinutes(att?.check_in ?? null, att?.check_out ?? null) }
 }
 
 export async function checkIn(env: Env, who: Who, body: unknown) {
@@ -101,7 +155,9 @@ export async function checkIn(env: Env, who: Who, body: unknown) {
   await env.DB.prepare('INSERT INTO attendance (person_id, name, day, check_in, mode, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(person_id, day) DO NOTHING')
     .bind(personId(who), who.name, istDay(), now, mode, note)
     .run()
-  return myToday(env, who)
+  const today = await myToday(env, who)
+  if (today.attendance?.check_in === now) await ownerLive(env, `${who.name} checked in`, `${istClock(now)} · ${mode}${today.late ? ' · late' : ''}${note ? ` · ${note}` : ''}`)
+  return today
 }
 
 export async function checkOut(env: Env, who: Who) {
@@ -109,7 +165,10 @@ export async function checkOut(env: Env, who: Who) {
     .bind(new Date().toISOString(), personId(who), istDay())
     .run()
   if (!r.meta.changes) return { ok: false, error: 'Check in first.' }
-  return { ok: true, ...(await myToday(env, who)) }
+  const today = await myToday(env, who)
+  const mins = today.minutes
+  await ownerLive(env, `${who.name} checked out`, `${istClock(new Date().toISOString())} · ${Math.floor(mins / 60)}h ${mins % 60}m today${today.report ? '' : ' · no report yet'}`)
+  return { ok: true, ...today }
 }
 
 export function cleanReport(body: unknown): { done: string; plan: string; blockers: string; links: string } | string {
@@ -139,7 +198,7 @@ export async function myHistory(env: Env, who: Who) {
   const rep = await env.DB.prepare('SELECT day, done, submitted_at FROM reports WHERE person_id = ?1 AND day >= ?2').bind(id, since).all<{ day: string; done: string; submitted_at: string }>()
   const reps = new Map(rep.results.map((r) => [r.day, r]))
   return {
-    days: att.results.map((a) => ({ day: a.day, checkIn: a.check_in, checkOut: a.check_out, mode: a.mode, late: isLate(a.check_in, settings), minutes: workedMinutes(a.check_in, a.check_out), report: reps.get(a.day)?.done ?? null })),
+    days: att.results.map((a) => ({ day: a.day, checkIn: a.check_in, checkOut: a.check_out, mode: a.mode, late: isLate(a.check_in, forPerson(settings, id)), minutes: workedMinutes(a.check_in, a.check_out), report: reps.get(a.day)?.done ?? null })),
   }
 }
 
@@ -195,7 +254,9 @@ export async function teamDay(env: Env, day: string) {
       checkOut: a?.check_out ?? null,
       mode: a?.mode ?? null,
       note: a?.note ?? null,
-      late: isLate(a?.check_in ?? null, settings),
+      late: isLate(a?.check_in ?? null, forPerson(settings, p.id)),
+      start: forPerson(settings, p.id).startTime,
+      end: forPerson(settings, p.id).endTime,
       minutes: workedMinutes(a?.check_in ?? null, a?.check_out ?? null),
       report: r ? { done: r.done, plan: r.plan, blockers: r.blockers, links: r.links, submittedAt: r.submitted_at } : null,
       activity,
@@ -252,15 +313,16 @@ export function summarizeMonth(
   month = '',
   upTo = '9999-12-31',
 ): MonthRow[] {
-  const weekOff = s.weekOff ?? [0]
-  const working = month ? workingDaysIn(month, weekOff, upTo) : []
   return people.map((p) => {
+    const ps = forPerson(s, p.id)
+    const weekOff = ps.weekOff ?? [0]
+    const working = month ? workingDaysIn(month, weekOff, upTo) : []
     const mine = att.filter((a) => a.person_id === p.id && a.check_in)
     const repDays = new Set(reps.filter((r) => r.person_id === p.id).map((r) => r.day))
     const ins = mine.map((a) => toMin(istClock(a.check_in!)))
     const avg = ins.length ? Math.round(ins.reduce((x, y) => x + y, 0) / ins.length) : null
     const days: MonthRow['days'] = {}
-    for (const a of mine) days[a.day] = { in: a.check_in ? istClock(a.check_in) : null, out: a.check_out ? istClock(a.check_out) : null, late: isLate(a.check_in, s), report: repDays.has(a.day) }
+    for (const a of mine) days[a.day] = { in: a.check_in ? istClock(a.check_in) : null, out: a.check_out ? istClock(a.check_out) : null, late: isLate(a.check_in, ps), report: repDays.has(a.day) }
     // Approved leave in this month (only up to today counts towards absences; future leave is shown too).
     const leaveByKind: Record<string, number> = {}
     const leaveOn = new Map<string, number>()
@@ -286,7 +348,7 @@ export function summarizeMonth(
       id: p.id,
       name: p.name,
       present: mine.length,
-      late: mine.filter((a) => isLate(a.check_in, s)).length,
+      late: mine.filter((a) => isLate(a.check_in, ps)).length,
       reports: repDays.size,
       minutes: mine.reduce((m, a) => m + (a.check_out ? workedMinutes(a.check_in, a.check_out) : 0), 0),
       avgCheckIn: avg === null ? null : `${String(Math.floor(avg / 60)).padStart(2, '0')}:${String(avg % 60).padStart(2, '0')}`,
@@ -346,9 +408,120 @@ export async function reportReminders(env: Env, force = false): Promise<string> 
 /** One line for the owner's morning brief about yesterday. */
 export async function teamBriefLine(env: Env): Promise<string | null> {
   const y = istDay(Date.now() - 86400000)
-  const editors = (await listEditors(env)).filter((e) => e.active)
+  const editors = await assignablePeople(env)
   if (!editors.length) return null
   const present = (await env.DB.prepare("SELECT COUNT(*) AS n FROM attendance WHERE day = ?1 AND person_id != 'owner'").bind(y).first<{ n: number }>())?.n ?? 0
   const reports = (await env.DB.prepare("SELECT COUNT(*) AS n FROM reports WHERE day = ?1 AND person_id != 'owner'").bind(y).first<{ n: number }>())?.n ?? 0
   return `Team: ${present} of ${editors.length} checked in, ${reports} reports.`
+}
+
+/* ---------- check-in / check-out reminders and the owner's attendance summary ---------- */
+
+async function ownerLive(env: Env, title: string, body: string) {
+  const s = await teamSettings(env)
+  if (!s.ownerLive) return
+  const { toOwners } = await import('./owner.ts')
+  await toOwners(env, { title, body, url: '#/studio?tab=teamday', tag: `att-${title}` }).catch(() => {})
+}
+
+const nowMin = (ms: number) => toMin(new Date(ms + IST_MS).toISOString().slice(11, 16))
+/** True in the 20 minutes from `at` (the cron runs every 10 minutes; KV keeps each nudge to once a day). */
+const inWindow = (mins: number, at: number) => mins >= at && mins < at + 20
+
+/** Who should get which nudge right now (pure, for tests). */
+export function planNudges(
+  people: { id: string; name: string }[],
+  s: TeamSettings,
+  att: Map<string, { check_in: string | null; check_out: string | null }>,
+  onLeave: Set<string>,
+  day: string,
+  mins: number,
+): { checkIn: { id: string; name: string; start: string }[]; checkOut: { id: string; name: string; end: string }[] } {
+  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay()
+  const out = { checkIn: [] as { id: string; name: string; start: string }[], checkOut: [] as { id: string; name: string; end: string }[] }
+  for (const p of people) {
+    const ps = forPerson(s, p.id)
+    if (ps.weekOff.includes(weekday) || onLeave.has(p.id)) continue
+    const a = att.get(p.id)
+    if (s.notifyCheckIn && !a?.check_in && inWindow(mins, toMin(ps.startTime) + s.graceMin)) out.checkIn.push({ id: p.id, name: p.name, start: ps.startTime })
+    if (s.notifyCheckOut && a?.check_in && !a.check_out && inWindow(mins, toMin(ps.endTime) + 30)) out.checkOut.push({ id: p.id, name: p.name, end: ps.endTime })
+  }
+  return out
+}
+
+/** Attendance summary text for the owner (pure, for tests). */
+export function summaryText(
+  people: { id: string; name: string }[],
+  s: TeamSettings,
+  att: Map<string, { check_in: string | null }>,
+  onLeave: Set<string>,
+  day: string,
+): string | null {
+  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay()
+  const due = people.filter((p) => !forPerson(s, p.id).weekOff.includes(weekday))
+  if (!due.length) return null
+  const leave = due.filter((p) => onLeave.has(p.id))
+  const working = due.filter((p) => !onLeave.has(p.id))
+  const inNow = working.filter((p) => att.get(p.id)?.check_in)
+  const late = inNow.filter((p) => isLate(att.get(p.id)!.check_in, forPerson(s, p.id)))
+  const missing = working.filter((p) => !att.get(p.id)?.check_in)
+  const first = (n: string) => n.split(' ')[0]
+  const parts = [`${inNow.length} of ${working.length} checked in`]
+  if (late.length) parts.push(`${late.length} late (${late.map((p) => first(p.name)).join(', ')})`)
+  if (missing.length) parts.push(`not in yet: ${missing.map((p) => first(p.name)).join(', ')}`)
+  if (leave.length) parts.push(`${leave.length} on leave`)
+  return parts.join(' · ').slice(0, 220)
+}
+
+/** Every 10 minutes: check-in and check-out reminders to staff, and the owner's summary once a day. */
+export async function attendanceNudges(env: Env, now = Date.now()): Promise<string> {
+  const s = await teamSettings(env)
+  if (!s.notifyCheckIn && !s.notifyCheckOut && !s.managerSummary) return 'nudges off'
+  const day = istDay(now)
+  const mins = nowMin(now)
+  const summaryAt = toMin(s.startTime) + s.graceMin + 15
+  const wantSummary = s.managerSummary && inWindow(mins, summaryAt) && !(await env.SUBS.get(`state:att-summary:${day}`))
+  // Quick exit outside every reminder window, so most cron runs read nothing else.
+  const times = [s, ...Object.keys(s.people).map((id) => forPerson(s, id))]
+  const near = times.some((t) => inWindow(mins, toMin(t.startTime) + s.graceMin) || inWindow(mins, toMin(t.endTime) + 30))
+  if (!near && !wantSummary) return 'no nudges due'
+  const [people, attRows, leave] = await Promise.all([
+    assignablePeople(env),
+    env.DB.prepare('SELECT person_id, check_in, check_out FROM attendance WHERE day = ?1').bind(day).all<{ person_id: string; check_in: string | null; check_out: string | null }>(),
+    leaveOnDay(env, day),
+  ])
+  const att = new Map(attRows.results.map((a) => [a.person_id, a]))
+  const onLeave = new Set(leave.keys())
+  const plan = planNudges(people, s, att, onLeave, day, mins)
+  // Each person gets each reminder at most once a day.
+  const fresh = async (kind: string, id: string) => {
+    const key = `state:nudge:${kind}:${day}:${id.slice(0, 40)}`
+    if (await env.SUBS.get(key)) return false
+    await env.SUBS.put(key, '1', { expirationTtl: 2 * 86400 })
+    return true
+  }
+  const notices = new Map<string, { title: string; body: string; url: string; tag: string }>()
+  for (const p of plan.checkIn)
+    if (await fresh('in', p.id)) notices.set(p.id, { title: `Good morning, ${p.name.split(' ')[0]}`, body: `Your office time is ${p.start}. You haven’t checked in yet. Tap to check in.`, url: '#/studio?tab=myday', tag: 'checkin-reminder' })
+  for (const p of plan.checkOut)
+    if (await fresh('out', p.id)) notices.set(p.id, { title: 'Still checked in', body: `Your day ended at ${p.end}. Add today’s report and check out before you leave.`, url: '#/studio?tab=myday', tag: 'checkout-reminder' })
+  let sent = 0
+  if (notices.size)
+    sent = (
+      await deliver(env, STAFF_PREFIX, (st) => {
+        const n = notices.get((st as StoredSub & { person?: string }).person ?? '')
+        return n ? [n] : []
+      })
+    ).sent
+  let summary = ''
+  if (wantSummary) {
+    await env.SUBS.put(`state:att-summary:${day}`, '1', { expirationTtl: 2 * 86400 })
+    const text = summaryText(people, s, att, onLeave, day)
+    if (text) {
+      const { toOwners } = await import('./owner.ts')
+      const r = await toOwners(env, { title: `Attendance at ${new Date(now + IST_MS).toISOString().slice(11, 16)}`, body: text, url: '#/studio?tab=teamday', tag: 'att-summary' })
+      summary = `, summary to ${r.sent}`
+    }
+  }
+  return `nudges: ${plan.checkIn.length} in, ${plan.checkOut.length} out, sent ${sent}${summary}`
 }

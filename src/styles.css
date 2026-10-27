@@ -5277,3 +5277,362 @@ em.late {
 .app.immersive .main {
   padding-bottom: 0;
 }
+
+/* ---------- Ad sales ---------- */
+.ad-top {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.ad-top .ad-fy {
+  width: auto;
+  flex: 0 1 180px;
+}
+.ad-top .btn {
+  margin-left: auto;
+}
+.ad-form {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.ad-form .ad-span {
+  grid-column: 1 / -1;
+}
+.ad-row {
+  display: flex;
+  gap: 8px;
+}
+.ad-total {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: 14px;
+}
+.ad-views {
+  margin: 4px 0 14px;
+}
+.ad-list > li {
+  display: block;
+}
+.ad-deal {
+  padding-left: 12px !important;
+  border-left: 4px solid var(--line);
+}
+.ad-deal.stage-confirmed,
+.ad-deal.stage-running {
+  border-left-color: #2e9d5b;
+}
+.ad-deal.stage-completed {
+  border-left-color: #6b7280;
+}
+.ad-deal.stage-lost {
+  opacity: 0.6;
+}
+.ad-deal.stage-lead,
+.ad-deal.stage-proposal,
+.ad-deal.stage-negotiating {
+  border-left-color: var(--accent);
+}
+.ad-deal.overdue {
+  border-left-color: #d9502e;
+}
+.ad-deal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+.ad-deal-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ad-deal-title {
+  font-size: 14.5px;
+}
+.ad-stage {
+  flex: none;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 600 12.5px var(--sans);
+}
+.ad-stage.s-confirmed,
+.ad-stage.s-running {
+  border-color: #2e9d5b;
+  color: #2e9d5b;
+}
+.ad-stage.s-lead,
+.ad-stage.s-proposal,
+.ad-stage.s-negotiating {
+  border-color: var(--accent);
+  color: var(--accent-deep, var(--accent));
+}
+.ad-money {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 10px 0 6px;
+  font-weight: 700;
+}
+.ad-money small {
+  font-weight: 500;
+  color: var(--mute);
+}
+.ad-money .due {
+  color: var(--accent-deep, var(--accent));
+}
+.ad-money .late,
+.ad-due {
+  color: #d9502e;
+}
+.ad-money .paid {
+  color: #2e9d5b;
+}
+.ad-bar {
+  height: 6px;
+  border-radius: 6px;
+  background: var(--line);
+  overflow: hidden;
+}
+.ad-bar span {
+  display: block;
+  height: 100%;
+  background: #2e9d5b;
+}
+.ad-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+.ad-more {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+.ad-pays {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13.5px;
+}
+.ad-pays li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.ad-payform {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.ad-payform input,
+.ad-payform select {
+  height: 40px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+  min-width: 0;
+}
+.ad-btns {
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+a.mini-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.mini-btn.warn {
+  border-color: #d9502e;
+  color: #d9502e;
+}
+.ad-client {
+  display: flex !important;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ad-client > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ad-charts {
+  display: grid;
+  gap: 0 14px;
+}
+@media (min-width: 900px) {
+  .ad-charts {
+    grid-template-columns: 1.6fr 1fr;
+  }
+}
+.ad-chart {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+  height: 150px;
+  align-items: end;
+}
+.ad-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+}
+.ad-bars {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  justify-content: center;
+}
+.ad-bars span {
+  width: 42%;
+  max-width: 14px;
+  min-height: 1px;
+  border-radius: 3px 3px 0 0;
+}
+.ad-bars .b,
+.ad-legend .b {
+  background: var(--accent);
+}
+.ad-bars .r,
+.ad-legend .r {
+  background: #2e9d5b;
+}
+.ad-col small {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--mute);
+}
+.ad-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--mute);
+}
+.ad-legend span {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-left: 6px;
+}
+.ad-top5 {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.ad-top5 li {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  font-size: 14px;
+}
+.ad-top5 i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+/* ---------- Attendance: per-person office time ---------- */
+.att-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.att-people {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.att-people li {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.att-people li.custom {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.att-person-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.att-person-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+.att-person-times label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.att-person-times input {
+  height: 38px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+}
+.att-days {
+  display: flex;
+  gap: 4px;
+}
+.att-day {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 700 12px var(--sans);
+  cursor: pointer;
+}
+.att-day.off {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1a1a;
+}
+.att-toggle {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.att-save {
+  margin: 4px 0 18px;
+}

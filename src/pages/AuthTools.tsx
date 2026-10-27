@@ -386,3 +386,65 @@ export function DeleteAccount({ onClose, onDeleted }: { onClose: () => void; onD
     </Panel>
   )
 }
+
+/** Owner or full access adds an employee: name + mobile; a temporary password is shown once. */
+export function AddEmployee({ onAdded, onClose }: { onAdded: () => void; onClose?: () => void }) {
+  const [add, setAdd] = useState({ name: '', phone: '' })
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState<{ name: string; phone: string; password: string } | null>(null)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const r = await studioPost<{ name: string; phone: string; password: string }>('accounts/add', add)
+      setDone(r)
+      setAdd({ name: '', phone: '' })
+      onAdded()
+    } catch (err) {
+      toast((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Panel title="Add employee" note="Their mobile number becomes their login. You get a temporary password to send them; they choose their own on first login.">
+      {done ? (
+        <div className="new-key auth-newpw" role="status">
+          <strong>{done.name} can now log in</strong>
+          <p>
+            Mobile number: <b>{showPhone(done.phone)}</b>
+          </p>
+          <p>Temporary password:</p>
+          <code>{done.password}</code>
+          <p>Send it to them on WhatsApp. It is shown only once.</p>
+          <div className="action-row">
+            <button className="btn small" onClick={() => void navigator.clipboard?.writeText(`Realtynmore app login\nMobile: ${done.phone}\nPassword: ${done.password}\nhttps://realty-more.github.io/rnm-news/#/studio`).then(() => toast('Copied'))}>
+              Copy login message
+            </button>
+            <button className="btn ghost small" onClick={() => setDone(null)}>
+              Add another
+            </button>
+            {onClose && (
+              <button className="btn ghost small" onClick={onClose}>
+                Done
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <form className="cal-form" onSubmit={submit}>
+          <input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} placeholder="Full name, e.g. Vimal Singh" aria-label="Full name" maxLength={40} />
+          <input value={add.phone} onChange={(e) => setAdd({ ...add, phone: e.target.value.replace(/[^\d+ ]/g, '') })} placeholder="Mobile number" inputMode="numeric" aria-label="Mobile number" maxLength={14} />
+          <button className="btn small" disabled={busy || add.name.trim().length < 2 || add.phone.replace(/\D/g, '').length < 10}>
+            {busy ? 'Adding…' : 'Add employee'}
+          </button>
+          {onClose && (
+            <button type="button" className="btn ghost small" onClick={onClose}>
+              Cancel
+            </button>
+          )}
+        </form>
+      )}
+    </Panel>
+  )
+}

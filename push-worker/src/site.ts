@@ -54,6 +54,12 @@ export async function fetchLatest(api: string): Promise<NewsItem[]> {
   return (await get(`${api}/posts?per_page=10&_embed=wp:featuredmedia&_fields=${FIELDS}`)).map(toItem)
 }
 
+/** Stories matching a search (newest first), for picking newsletter stories. */
+export async function searchPosts(api: string, q: string): Promise<NewsItem[]> {
+  const rows = await get(`${api}/posts?search=${encodeURIComponent(q)}&per_page=12&_embed=wp:featuredmedia&_fields=${FIELDS}`)
+  return rows.map(toItem)
+}
+
 export async function fetchByIds(api: string, ids: number[]): Promise<NewsItem[]> {
   if (!ids.length) return []
   const rows = await get(`${api}/posts?include=${ids.join(',')}&orderby=include&per_page=${ids.length}&_embed=wp:featuredmedia&_fields=${FIELDS}`)

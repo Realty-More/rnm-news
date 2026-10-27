@@ -7,11 +7,10 @@
 //   Sending needs the BREVO_API_KEY secret; until it is set, sign-ups wait as "pending".
 import type { Env } from './index.ts'
 import type { Who } from './owner.ts'
-import { fetchByIds, fetchLatest, type NewsItem } from './site.ts'
+import { fetchByIds, fetchLatest, searchPosts, type NewsItem } from './site.ts'
 
 const IST_MS = 5.5 * 3600000
 const istDay = (ms = Date.now()) => new Date(ms + IST_MS).toISOString().slice(0, 10)
-const istClock = (ms = Date.now()) => new Date(ms + IST_MS).toISOString().slice(11, 16)
 const BATCH = 12 // emails per cron run (the free plan allows 50 outgoing requests per run, shared)
 const CONFIRM_BATCH = 4
 
@@ -25,8 +24,28 @@ export interface NlSettings {
   address: string
   intro: string
   dailyCap: number
+  /** 'pick': the team chooses the stories (nothing is sent until they do); 'auto': the most-read stories. */
+  choice: 'pick' | 'auto'
+  showMagazine: boolean
+  showVideo: boolean
+  showMarket: boolean
 }
-const DEFAULTS: NlSettings = { auto: true, day: 6, time: '10:00', fromName: 'Realty & More', fromEmail: 'newsletter@realtynmore.com', replyTo: 'desk@realtynmore.com', address: '', intro: '', dailyCap: 300 }
+const DEFAULTS: NlSettings = {
+  auto: true,
+  day: 6,
+  time: '10:00',
+  fromName: 'Realty & More',
+  fromEmail: 'desk@realtynmore.com',
+  replyTo: 'desk@realtynmore.com',
+  address: '',
+  intro: '',
+  dailyCap: 300,
+  choice: 'pick',
+  showMagazine: true,
+  showVideo: true,
+  showMarket: true,
+}
+export const MAX_PICKS = 10
 
 export const isEmail = (v: unknown): v is string => typeof v === 'string' && v.length <= 120 && /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/i.test(v)
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -63,10 +82,65 @@ export async function saveNlSettings(env: Env, body: unknown) {
     address: b.address === undefined ? cur.address : text(b.address, 200),
     intro: b.intro === undefined ? cur.intro : text(b.intro, 600),
     dailyCap: Number.isInteger(b.dailyCap) && (b.dailyCap as number) >= 10 && (b.dailyCap as number) <= 100000 ? (b.dailyCap as number) : cur.dailyCap,
+    choice: b.choice === 'auto' || b.choice === 'pick' ? b.choice : cur.choice,
+    showMagazine: typeof b.showMagazine === 'boolean' ? b.showMagazine : cur.showMagazine,
+    showVideo: typeof b.showVideo === 'boolean' ? b.showVideo : cur.showVideo,
+    showMarket: typeof b.showMarket === 'boolean' ? b.showMarket : cur.showMarket,
   }
   if (b.fromEmail !== undefined && !isEmail(b.fromEmail)) throw new Error('The “from” email doesn’t look right.')
   await env.SUBS.put('newsletter:settings', JSON.stringify(next))
   return { ok: true, settings: next }
+}
+
+/* ---------- the team's story picks for this week ---------- */
+
+/** Story ids chosen for a week's issue, in order (the first is the lead story). */
+export async function getPicks(env: Env, week: string): Promise<number[]> {
+  const p = await env.SUBS.get<{ week: string; ids: number[] }>('newsletter:picks', 'json')
+  return p && p.week === week ? p.ids : []
+}
+
+export function cleanPicks(v: unknown): number[] {
+  if (!Array.isArray(v)) throw new Error('Pick the stories.')
+  const ids = [...new Set(v.map(Number).filter((n) => Number.isInteger(n) && n > 0))]
+  if (ids.length > MAX_PICKS) throw new Error(`Pick at most ${MAX_PICKS} stories.`)
+  return ids
+}
+
+export async function savePicks(env: Env, body: unknown) {
+  const ids = cleanPicks((body as { ids?: unknown })?.ids)
+  const week = weekId(istDay())
+  await env.SUBS.put('newsletter:picks', JSON.stringify({ week, ids }), { expirationTtl: 21 * 86400 })
+  return { ok: true, week, ids }
+}
+
+/** When this ISO week's issue is due (ms), from the send day and time (IST). Weeks run Monday to Sunday. */
+export function scheduledMoment(s: Pick<NlSettings, 'day' | 'time'>, now = Date.now()): number {
+  const today = istDay(now)
+  const d = new Date(`${today}T00:00:00Z`)
+  const monday = d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400000
+  const offset = (s.day + 6) % 7 // Monday 0 … Sunday 6
+  const [h, m] = s.time.split(':').map(Number)
+  return monday + offset * 86400000 + (h * 60 + m) * 60000 - IST_MS
+}
+
+/** Candidate stories for the Studio picker: most read this week, and the newest. */
+export async function candidates(env: Env, q: string) {
+  if (q.trim().length >= 2) return { search: await searchPosts(env.SITE_API, q.trim().slice(0, 80)).catch(() => []) }
+  const since = istDay(Date.now() - 7 * 86400000)
+  const [web, opens] = await Promise.all([
+    env.DB.prepare('SELECT post_id AS id, views FROM webposts WHERE published >= ? ORDER BY views DESC LIMIT 15').bind(since).all<{ id: number; views: number }>(),
+    env.DB.prepare('SELECT post_id AS id, SUM(n) AS n FROM opens WHERE day >= ? GROUP BY post_id ORDER BY n DESC LIMIT 15').bind(since).all<{ id: number; n: number }>(),
+  ])
+  const stats = new Map<number, { views: number; opens: number }>()
+  for (const w of web.results) stats.set(w.id, { views: w.views, opens: 0 })
+  for (const o of opens.results) stats.set(o.id, { views: stats.get(o.id)?.views ?? 0, opens: o.n })
+  const topIds = [...stats].sort((a, b) => b[1].views + b[1].opens * 5 - (a[1].views + a[1].opens * 5)).slice(0, 12).map(([id]) => id)
+  const [top, latest] = await Promise.all([topIds.length ? fetchByIds(env.SITE_API, topIds).catch(() => []) : [], fetchLatest(env.SITE_API).catch(() => [])])
+  const week = weekId(istDay())
+  const picks = await getPicks(env, week)
+  const picked = picks.length ? await fetchByIds(env.SITE_API, picks).catch(() => []) : []
+  return { week, picks, picked, top: top.map((p) => ({ ...p, ...stats.get(p.id) })), latest }
 }
 
 /* ---------- sending (Brevo transactional API) ---------- */
@@ -236,8 +310,9 @@ ${intro}<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
 }
 
 /** Gathers this week's content from the app's own data. */
-export async function gatherIssue(env: Env, s: NlSettings, now = Date.now()): Promise<IssueData> {
+export async function gatherIssue(env: Env, s: NlSettings, now = Date.now(), forPreview = false): Promise<IssueData> {
   const day = istDay(now)
+  const picks = await getPicks(env, weekId(day))
   const since = istDay(now - 7 * 86400000)
   const [web, opens, vid, mkt] = await Promise.all([
     env.DB.prepare('SELECT post_id AS id, views FROM webposts WHERE published >= ? ORDER BY views DESC LIMIT 15').bind(since).all<{ id: number; views: number }>(),
@@ -249,9 +324,14 @@ export async function gatherIssue(env: Env, s: NlSettings, now = Date.now()): Pr
   const score = new Map<number, number>()
   for (const w of web.results) score.set(w.id, (score.get(w.id) ?? 0) + w.views)
   for (const o of opens.results) score.set(o.id, (score.get(o.id) ?? 0) + o.n * 5)
-  const ids = [...score].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id]) => id)
-  let stories = ids.length >= 3 ? await fetchByIds(env.SITE_API, ids).catch(() => []) : []
-  if (stories.length < 3) stories = (await fetchLatest(env.SITE_API).catch(() => [])).slice(0, 6)
+  let stories: NewsItem[] = []
+  if (picks.length) stories = await fetchByIds(env.SITE_API, picks)
+  else if (s.choice === 'pick' && !forPreview) throw new Error('Pick this week’s stories first (Studio → Newsletter).')
+  else {
+    const ids = [...score].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id]) => id)
+    stories = ids.length >= 3 ? await fetchByIds(env.SITE_API, ids).catch(() => []) : []
+    if (stories.length < 3) stories = (await fetchLatest(env.SITE_API).catch(() => [])).slice(0, 6)
+  }
   let magazine: IssueData['magazine'] = null
   try {
     const r = await fetch(`${env.APP_URL}data/magazine.json`)
@@ -267,9 +347,9 @@ export async function gatherIssue(env: Env, s: NlSettings, now = Date.now()): Pr
     dateLabel: new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`)),
     intro: s.intro,
     stories,
-    magazine,
-    video: vid ? { title: vid.title, link: `https://www.youtube.com/watch?v=${vid.id}`, thumb: vid.thumb || `https://i.ytimg.com/vi/${vid.id}/hqdefault.jpg` } : null,
-    market,
+    magazine: s.showMagazine ? magazine : null,
+    video: s.showVideo && vid ? { title: vid.title, link: `https://www.youtube.com/watch?v=${vid.id}`, thumb: vid.thumb || `https://i.ytimg.com/vi/${vid.id}/hqdefault.jpg` } : null,
+    market: s.showMarket ? market : null,
     appUrl: env.APP_URL,
   }
 }
@@ -388,8 +468,9 @@ export async function createIssue(env: Env, s: NlSettings, by: string, now = Dat
   await env.DB.prepare("INSERT INTO news_issues (week, subject, html, text, status, created_by, created_at) VALUES (?, ?, ?, ?, 'sending', ?, ?)")
     .bind(data.week, issue.subject, issue.html, issue.text, by, new Date(now).toISOString())
     .run()
-  // The editor's note is for one issue only.
+  // The editor's note and the story picks are for one issue only.
   if (s.intro) await env.SUBS.put('newsletter:settings', JSON.stringify({ ...s, intro: '' }))
+  await env.SUBS.delete('newsletter:picks')
   return { week: data.week, subject: issue.subject }
 }
 
@@ -399,9 +480,19 @@ export async function newsletterTick(env: Env, now = Date.now()): Promise<string
   const s = await nlSettings(env)
   const out: string[] = []
   const day = istDay(now)
-  if (s.auto && new Date(`${day}T00:00:00Z`).getUTCDay() === s.day && istClock(now) >= s.time) {
-    const week = weekId(day)
-    if (!(await env.DB.prepare('SELECT id FROM news_issues WHERE week = ?').bind(week).first())) {
+  const week = weekId(day)
+  const due = scheduledMoment(s, now)
+  if (s.auto && now >= due - 2 * 3600000 && !(await env.DB.prepare('SELECT id FROM news_issues WHERE week = ?').bind(week).first())) {
+    const picked = (await getPicks(env, week)).length > 0
+    if (s.choice === 'pick' && !picked) {
+      // Two hours before the send time, remind the owner (once a week) to pick the stories.
+      if (!(await env.SUBS.get(`state:nl-pick-reminder:${week}`))) {
+        await env.SUBS.put(`state:nl-pick-reminder:${week}`, '1', { expirationTtl: 10 * 86400 })
+        const { toOwners } = await import('./owner.ts')
+        await toOwners(env, { title: 'Newsletter: pick this week’s stories', body: `It goes out at ${s.time} once you choose the stories in Studio → Newsletter.`, url: '#/studio?tab=newsletter', tag: 'nl-pick' }).catch(() => {})
+        out.push('pick reminder sent')
+      }
+    } else if (now >= due) {
       const subs = (await env.DB.prepare("SELECT COUNT(*) AS n FROM news_subs WHERE status = 'active'").first<{ n: number }>())?.n ?? 0
       if (subs) out.push(`created ${(await createIssue(env, s, 'auto', now).catch((e) => ({ subject: (e as Error).message }))).subject}`)
     }
@@ -431,13 +522,15 @@ export async function newsletterBook(env: Env) {
     sentToday(env),
   ])
   const c = Object.fromEntries(counts.results.map((r) => [r.status, r.n]))
-  return { connected: !!env.BREVO_API_KEY, settings: s, counts: { active: c.active ?? 0, pending: c.pending ?? 0, unsubscribed: c.unsubscribed ?? 0 }, sentToday: today, subscribers: subs.results, issues: issues.results, week: weekId(istDay()) }
+  return { connected: !!env.BREVO_API_KEY, picks: await getPicks(env, weekId(istDay())), due: new Date(scheduledMoment(s)).toISOString(), settings: s, counts: { active: c.active ?? 0, pending: c.pending ?? 0, unsubscribed: c.unsubscribed ?? 0 }, sentToday: today, subscribers: subs.results, issues: issues.results, week: weekId(istDay()) }
 }
 
 export async function previewIssue(env: Env) {
   const s = await nlSettings(env)
-  const issue = buildIssue(await gatherIssue(env, s), s)
-  return { subject: issue.subject, html: issue.html.replaceAll('{{UNSUB}}', '#') }
+  const data = await gatherIssue(env, s, Date.now(), true)
+  const issue = buildIssue(data, s)
+  const picked = (await getPicks(env, data.week)).length > 0
+  return { subject: issue.subject, html: issue.html.replaceAll('{{UNSUB}}', '#'), picked }
 }
 
 export async function sendTest(env: Env, body: unknown) {
@@ -445,7 +538,7 @@ export async function sendTest(env: Env, body: unknown) {
   if (!isEmail(to)) throw new Error('Enter the email address for the test.')
   if (!env.BREVO_API_KEY) throw new Error('Email sending isn’t connected yet. Add the Brevo key first (see the steps on this screen).')
   const s = await nlSettings(env)
-  const issue = buildIssue(await gatherIssue(env, s), s)
+  const issue = buildIssue(await gatherIssue(env, s, Date.now(), true), s)
   const r = await sendMail(env, s, { to, subject: `[Test] ${issue.subject}`, html: issue.html.replaceAll('{{UNSUB}}', '#'), text: issue.text.replaceAll('{{UNSUB}}', '#'), tag: 'test' })
   if (r !== 'ok') throw new Error(r === 'quota' ? 'Today’s email limit is used up. Try tomorrow.' : 'The email service refused the message. Check the sender email is verified in Brevo.')
   return { ok: true }

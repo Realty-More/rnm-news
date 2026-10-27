@@ -636,3 +636,21 @@ describe('weekly newsletter', () => {
     expect(issue.html).toContain('#/article/2')
   })
 })
+
+describe('newsletter story picks and schedule', () => {
+  it('works out this week’s send time in IST', async () => {
+    const { scheduledMoment } = await import('./newsletter.ts')
+    // Tue 27 Oct 2026 → Saturday 31 Oct 10:00 IST = 04:30 UTC.
+    expect(new Date(scheduledMoment({ day: 6, time: '10:00' }, Date.parse('2026-10-27T06:00:00Z'))).toISOString()).toBe('2026-10-31T04:30:00.000Z')
+    // Sunday is the last day of the ISO week: Sun 1 Nov 2026 belongs to the week of Mon 26 Oct.
+    expect(new Date(scheduledMoment({ day: 0, time: '09:00' }, Date.parse('2026-10-27T06:00:00Z'))).toISOString()).toBe('2026-11-01T03:30:00.000Z')
+    // Monday morning in IST (still Sunday in UTC) counts as the new week.
+    expect(new Date(scheduledMoment({ day: 6, time: '10:00' }, Date.parse('2026-11-01T19:00:00Z'))).toISOString()).toBe('2026-11-07T04:30:00.000Z')
+  })
+  it('cleans the picked story list', async () => {
+    const { cleanPicks } = await import('./newsletter.ts')
+    expect(cleanPicks([5, '7', 5, -1, 'x', 9])).toEqual([5, 7, 9])
+    expect(() => cleanPicks(Array.from({ length: 11 }, (_, i) => i + 1))).toThrow()
+    expect(() => cleanPicks('1,2')).toThrow()
+  })
+})

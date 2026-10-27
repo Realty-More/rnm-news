@@ -5780,3 +5780,113 @@ a.mini-btn {
   font-weight: 600;
   font-size: 14px;
 }
+
+.nl-picked {
+  list-style: none;
+  counter-reset: pick;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.nl-picked li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.nl-picked li:first-child {
+  border-width: 2px;
+}
+.nl-picked img,
+.nl-cands img,
+.nl-noimg {
+  flex: none;
+  width: 64px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--surface);
+}
+.nl-picked-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.nl-picked-title em {
+  display: block;
+  font: 700 11px var(--cond);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-style: normal;
+  color: var(--accent-deep, var(--accent));
+}
+.nl-picked-btns {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.nl-pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.nl-pick-search {
+  display: flex;
+  gap: 6px;
+  flex: 1 1 220px;
+}
+.nl-pick-search input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+}
+.nl-cands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 460px;
+  overflow-y: auto;
+}
+.nl-cands li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.nl-cand-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.nl-cand-text a {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+}
+.nl-cand-text small {
+  color: var(--mute);
+  font-size: 12px;
+}
+.nl-choice {
+  margin: 4px 0 6px;
+}

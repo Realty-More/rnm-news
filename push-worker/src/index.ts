@@ -45,7 +45,7 @@ import {
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
 import { ask, write } from './ai.ts'
 import { magazinePdf } from './magazine-pdf.ts'
-import { addSubscriber, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
+import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
@@ -170,6 +170,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await adsBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/newsletter':
           return json(await newsletterBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/newsletter/candidates':
+          return json(await candidates(env, url.searchParams.get('q') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/newsletter/preview':
           return json(await previewIssue(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/mag/book':
@@ -264,6 +266,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       }
       case '/editor/newsletter/settings':
         return json(await saveNlSettings(env, body), 200, headers)
+      case '/editor/newsletter/picks':
+        return json(await savePicks(env, body), 200, headers)
       case '/editor/newsletter/test':
         return json(await sendTest(env, body), 200, headers)
       case '/editor/newsletter/send-now':

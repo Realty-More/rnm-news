@@ -19,7 +19,7 @@
   "vars": {
     "VAPID_PUBLIC_KEY": "BA4nnOG7Awwqw50N7abJcS4V9vi8uq7Srw-hS5HEyNljhLSWByPvnM7JHvenvzBg2mAbUVLDngWXZxLIa-1vLwU",
     "VAPID_SUBJECT": "mailto:desk@realtynmore.com",
-    "ALLOWED_ORIGINS": "https://realty-more.github.io,http://localhost:5173,http://localhost:4173",
+    "ALLOWED_ORIGINS": "https://realty-more.github.io,http://localhost:5173,http://localhost:4173,https://localhost,capacitor://localhost",
     "SITE_API": "https://realtynmore.com/wp-json/wp/v2",
     "APP_URL": "https://realty-more.github.io/rnm-news/"
   },

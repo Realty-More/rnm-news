@@ -15,6 +15,9 @@ import { CHANNEL_URL } from '../lib/youtubeFeed.ts'
 import { SITE } from '../lib/wp.ts'
 import { usePageTitle } from './usePageTitle.ts'
 
+// Public pages (also used as the store listing's privacy and account-deletion links).
+const LEGAL = 'https://realty-more.github.io/rnm-news/'
+
 const THEMES: { value: ThemePref; label: string }[] = [
   { value: 'system', label: 'System' },
   { value: 'light', label: 'Light' },
@@ -190,7 +193,17 @@ export function Settings() {
           <a href={CHANNEL_URL} target="_blank" rel="noopener noreferrer">
             Realty &amp; More YouTube channel
           </a>
-          . The app has no ads and no tracking, and keeps no account.
+          . The app has no ads and no tracking, and readers need no account. Published by Realty &amp; More ·{' '}
+          <a href="mailto:desk@realtynmore.com">desk@realtynmore.com</a>
+        </p>
+        <p className="legal-links">
+          <a href={`${LEGAL}privacy.html`} target="_blank" rel="noopener noreferrer">
+            Privacy policy
+          </a>
+          {' · '}
+          <a href={`${LEGAL}delete-account.html`} target="_blank" rel="noopener noreferrer">
+            Delete account
+          </a>
         </p>
         <p className="meta version" onClick={tapVersion}>
           Version {__APP_VERSION__}

@@ -203,3 +203,30 @@ export async function changePassword(env: Env, body: unknown, who: Who, token: s
   ])
   return { ok: true }
 }
+
+/**
+ * Delete my account (Google Play / App Store rule): mobile number + password, from the app or the
+ * public delete-account page. Removes the login, its sessions and failed-login counts. Attendance,
+ * leave, task and report entries are the company's work records and stay with the owner.
+ * The owner's account is not deleted this way.
+ */
+export async function deleteAccount(env: Env, req: Request, body: unknown) {
+  const b = (body ?? {}) as { phone?: unknown; password?: unknown }
+  const phone = normPhone(b.phone)
+  if (!phone || typeof b.password !== 'string' || !b.password) throw new Error('Enter your mobile number and password.')
+  const phoneKey = `login:${phone}`
+  const ipKey = `login-ip:${await sha256hex(ipOf(req))}`
+  if ((await fails(env, phoneKey)) >= MAX_FAILS || (await fails(env, ipKey)) >= MAX_FAILS * 3) throw new Error('Too many wrong tries. Wait an hour and try again.')
+  const a = await env.DB.prepare('SELECT * FROM accounts WHERE phone = ?').bind(phone).first<Account>()
+  if (!a || !(await checkPassword(b.password, a, pepperOf(env)))) {
+    await Promise.all([addFail(env, phoneKey), addFail(env, ipKey)])
+    throw new Error('Wrong mobile number or password.')
+  }
+  if (a.role === 'owner') throw new Error('The owner account can’t be deleted here. Please write to desk@realtynmore.com.')
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM sessions WHERE phone = ?').bind(phone),
+    env.DB.prepare('DELETE FROM auth_fail WHERE k = ?').bind(phoneKey),
+    env.DB.prepare('DELETE FROM accounts WHERE phone = ?').bind(phone),
+  ])
+  return { deleted: true }
+}

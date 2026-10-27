@@ -76,7 +76,7 @@ export async function unlock(key: string): Promise<boolean> {
 /** True when this device signed in with a mobile number and password (not a key). */
 export const isAccountLogin = () => !!ownerKey()?.startsWith('s_')
 
-async function auth<T>(path: 'login' | 'signup', body: unknown): Promise<T> {
+async function auth<T>(path: 'login' | 'signup' | 'delete', body: unknown): Promise<T> {
   if (!PUSH_API) throw new Error('App server is not set up.')
   let res: Response
   try {
@@ -106,6 +106,12 @@ export async function createAccount(a: { name: string; phone: string; password: 
   const r = await auth<{ pending?: boolean; token?: string; role?: Role; name: string }>('signup', a)
   if (r.token && r.role) remember(r.token, r.role, r.name)
   return { pending: !!r.pending, name: r.name }
+}
+
+/** Deletes a staff account for good (mobile number + password), then logs out here. */
+export async function deleteMyAccount(phone: string, password: string): Promise<void> {
+  await auth<{ deleted: boolean }>('delete', { phone, password })
+  forgetOwner()
 }
 
 /** Lets this phone receive owner alerts (website down, morning brief). */

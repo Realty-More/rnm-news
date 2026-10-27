@@ -2,6 +2,7 @@
 //   POST /subscribe, /unsubscribe     breaking-news alerts (KV)
 //   POST /hit, GET /trending          anonymous usage counts and "Trending in app" (D1)
 //   POST /auth/signup|login|logout    Studio accounts: mobile number + password, owner approves staff
+//   POST /auth/delete                 delete my account (mobile number + password)
 //   GET  /magazine/pdf/<id>           R&M Magazine PDF from realtynmore.com, in parts, for the in-app reader
 //   POST /ai/ask                      "Ask R&M": answers from realtynmore.com stories only (Workers AI)
 //   GET  /a/<id>                      share preview page that opens the story in the app
@@ -44,7 +45,7 @@ import {
 import { createIssue, dispatchOf, magazineBook, removeContact, saveContact, setDispatch } from './magazine.ts'
 import { ask, write } from './ai.ts'
 import { magazinePdf } from './magazine-pdf.ts'
-import { changePassword, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
+import { changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
 import { collectYouTube, youTubeStats } from './youtube.ts'
@@ -289,6 +290,9 @@ export default {
     const { pathname } = url
     const origin = req.headers.get('Origin')
     const headers = cors(origin, env)
+    // Browsers always send Origin on these requests, so only listed sites may call from a browser.
+    // The Android app's native HTTP sends none; with bearer tokens and no cookies that is safe.
+    const allowedCaller = !!headers['Access-Control-Allow-Origin'] || origin === null
     // Magazine PDFs are public and read part by part by the app's PDF reader (any origin, Range header).
     const mag = /^\/magazine\/pdf\/(\d{1,9})$/.exec(pathname)
     if (mag) {
@@ -298,7 +302,7 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers })
 
     if (pathname.startsWith('/editor/')) {
-      if (req.method !== 'GET' && !headers['Access-Control-Allow-Origin']) return json({ error: 'not allowed' }, 403, headers)
+      if (req.method !== 'GET' && !allowedCaller) return json({ error: 'not allowed' }, 403, headers)
       const key = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''
       const who = await authenticate(key, env, ctx)
       if (!who) return json({ error: 'owner or editor key required' }, 401, headers)
@@ -321,7 +325,7 @@ export default {
       return json({ error: 'not found' }, 404, headers)
     }
 
-    if (req.method !== 'POST' || !headers['Access-Control-Allow-Origin']) return json({ error: 'not allowed' }, 403, headers)
+    if (req.method !== 'POST' || !allowedCaller) return json({ error: 'not allowed' }, 403, headers)
     let body: unknown
     try {
       body = await readJson(req)
@@ -336,6 +340,13 @@ export default {
       if (typeof endpoint !== 'string') return json({ error: 'bad request' }, 400, headers)
       await env.SUBS.delete(await subKey(endpoint))
       return json({ ok: true }, 200, headers)
+    }
+    if (pathname === '/auth/delete') {
+      try {
+        return json(await deleteAccount(env, req, body), 200, { ...headers, 'Cache-Control': 'no-store' })
+      } catch (err) {
+        return json({ error: (err as Error).message }, 400, headers)
+      }
     }
     if (pathname === '/auth/signup' || pathname === '/auth/login' || pathname === '/auth/logout') {
       try {

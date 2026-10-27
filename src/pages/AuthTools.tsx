@@ -6,7 +6,7 @@ import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { formatDateTime } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
-import { createAccount, hasFullAccess, ownerRole, passwordLogin, studio, studioPost, unlock } from '../lib/owner.ts'
+import { createAccount, deleteMyAccount, hasFullAccess, ownerRole, passwordLogin, studio, studioPost, unlock } from '../lib/owner.ts'
 import { Panel } from './StudioTools.tsx'
 
 type Mode = 'login' | 'signup' | 'key'
@@ -304,6 +304,47 @@ export function ChangePassword({ onClose }: { onClose: () => void }) {
         <div className="action-row">
           <button className="btn" disabled={busy || !current || next.length < 8 || !confirm}>
             {busy ? 'Saving…' : 'Change password'}
+          </button>
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Panel>
+  )
+}
+
+/** Delete my account: needs the mobile number and password again. The owner's account can't be deleted here. */
+export function DeleteAccount({ onClose, onDeleted }: { onClose: () => void; onDeleted: () => void }) {
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!window.confirm('Delete your account for good? You will be logged out and can’t undo this.')) return
+    setBusy(true)
+    try {
+      await deleteMyAccount(phone, password)
+      toast('Your account is deleted.')
+      onDeleted()
+    } catch (err) {
+      toast((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Panel title="Delete account">
+      <p className="meta">
+        This removes your login (name, mobile number and password) and logs you out everywhere. Attendance, leave and task entries are company work
+        records and stay with Realty &amp; More.
+      </p>
+      <form onSubmit={submit} className="auth-form">
+        <PhoneInput value={phone} onChange={setPhone} />
+        <PasswordInput value={password} onChange={setPassword} placeholder="Password" autoComplete="current-password" />
+        <div className="action-row">
+          <button className="btn danger" disabled={busy || phone.replace(/\D/g, '').length < 10 || !password}>
+            {busy ? 'Deleting…' : 'Delete my account'}
           </button>
           <button type="button" className="btn ghost" onClick={onClose}>
             Cancel

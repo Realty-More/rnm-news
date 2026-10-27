@@ -8,7 +8,7 @@ import { toast } from '../components/Toast.tsx'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, isAccountLogin, ownerKey, ownerRole, refreshRole, studio } from '../lib/owner.ts'
-import { AccountsPanel, AuthScreen, ChangePassword } from './AuthTools.tsx'
+import { AccountsPanel, AuthScreen, ChangePassword, DeleteAccount } from './AuthTools.tsx'
 import { AttendanceTab, MyDayTab, TeamTodayTab } from './TeamTools.tsx'
 import { MagazineTab } from './MagazineTools.tsx'
 import { LeaveTab, TasksTab } from './WorkTools.tsx'
@@ -126,6 +126,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   const [params, setParams] = useSearchParams()
   const [me, setMe] = useState(ownerRole)
   const [pwOpen, setPwOpen] = useState(false)
+  const [delOpen, setDelOpen] = useState(false)
   useEffect(() => {
     void refreshRole().then(() => setMe(ownerRole()))
   }, [])
@@ -162,6 +163,11 @@ function StudioHome({ onLock }: { onLock: () => void }) {
               Password
             </button>
           )}
+          {isAccountLogin() && me?.role !== 'owner' && (
+            <button className="btn ghost small" onClick={() => setDelOpen((o) => !o)} aria-expanded={delOpen}>
+              Delete account
+            </button>
+          )}
           <button
             className="btn ghost small"
             onClick={() => {
@@ -175,6 +181,15 @@ function StudioHome({ onLock }: { onLock: () => void }) {
         </div>
       </div>
       {pwOpen && <ChangePassword onClose={() => setPwOpen(false)} />}
+      {delOpen && (
+        <DeleteAccount
+          onClose={() => setDelOpen(false)}
+          onDeleted={() => {
+            setDelOpen(false)
+            onLock()
+          }}
+        />
+      )}
       <nav className="studio-nav" aria-label="Studio">
         <div className="studio-groups" role="tablist" aria-label="Sections">
           {GROUPS.filter((g) => visible.some((t) => t.group === g.key)).map((g) => (

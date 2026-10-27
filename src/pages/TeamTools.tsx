@@ -7,6 +7,7 @@ import { toast } from '../components/Toast.tsx'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { studio, studioPost } from '../lib/owner.ts'
+import { getSpot, mapLink } from '../lib/location.ts'
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
 import { MyTasksPanel } from './WorkTools.tsx'
@@ -22,9 +23,34 @@ interface Today {
   name: string
   attendance: { check_in: string | null; check_out: string | null; mode: string | null; note: string | null } | null
   report: { done: string; plan: string; blockers: string; links: string; submitted_at: string } | null
-  settings: { startTime: string; endTime?: string; graceMin: number; reminderTime: string; weekOff?: number[] }
+  settings: { startTime: string; endTime?: string; graceMin: number; reminderTime: string; weekOff?: number[]; requireLocation?: boolean; offices?: Office[] }
+  place?: { in: Place | null; out: Place | null }
   late: boolean
   minutes: number
+}
+interface Office {
+  name: string
+  lat: number
+  lng: number
+  radius: number
+}
+interface Place {
+  lat: number
+  lng: number
+  acc: number
+  office: string | null
+  meters: number | null
+  label: string
+}
+
+/** "📍 At Noida Office" with a map link, or a note that no location was shared. */
+function PlaceTag({ p, missing = 'No location' }: { p: Place | null | undefined; missing?: string }) {
+  if (!p) return <span className="place-tag none">{missing}</span>
+  return (
+    <a className={`place-tag ${p.office ? 'in' : 'away'}`} href={mapLink(p)} target="_blank" rel="noopener noreferrer" title={`Accuracy about ${p.acc} m. Open in Google Maps`}>
+      📍 {p.label}
+    </a>
+  )
 }
 
 /* ---------- employee: My day ---------- */
@@ -99,9 +125,20 @@ export function MyDayTab() {
               ))}
             </div>
             <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional), e.g. site visit at Sector 150" maxLength={140} aria-label="Note" />
-            <button className="btn big-btn" disabled={busy} onClick={() => act('me/checkin', { mode, note }, 'Checked in')}>
-              <Icon name="clock" size={20} /> Check in
+            <button
+              className="btn big-btn"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                const loc = await getSpot()
+                setBusy(false)
+                if (!loc && d.settings.requireLocation) return toast('Please allow location for this app, then check in again.')
+                void act('me/checkin', { mode, note, loc }, loc ? 'Checked in' : 'Checked in (location not shared)')
+              }}
+            >
+              <Icon name="clock" size={20} /> {busy ? 'Getting location…' : 'Check in'}
             </button>
+            <p className="meta loc-note">📍 Your location is saved only at the moment you check in and check out, never in between. Only the owner sees it.</p>
           </div>
         ) : (
           <div className="att-row">
@@ -111,13 +148,25 @@ export function MyDayTab() {
                 {clock(a.check_in)} {d.late && <em className="late">Late</em>}
               </b>
               <span className="meta">{MODE_LABEL[a.mode ?? 'office']}</span>
+              <PlaceTag p={d.place?.in} missing="Location not shared" />
             </div>
             <div>
               <span className="meta">Check out</span>
               <b>{clock(a.check_out)}</b>
+              {a.check_out && <PlaceTag p={d.place?.out} missing="Location not shared" />}
             </div>
             {!a.check_out && (
-              <button className="btn" disabled={busy} onClick={() => act('me/checkout', {}, d.report ? 'Checked out. Have a good evening!' : 'Checked out. Please add your report.')}>
+              <button
+                className="btn"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true)
+                  const loc = await getSpot()
+                  setBusy(false)
+                  if (!loc && d.settings.requireLocation) return toast('Please allow location for this app, then check out again.')
+                  void act('me/checkout', { loc }, d.report ? 'Checked out. Have a good evening!' : 'Checked out. Please add your report.')
+                }}
+              >
                 <Icon name="clock" size={18} /> Check out
               </button>
             )}
@@ -219,6 +268,8 @@ interface TeamDay {
     mode: string | null
     note: string | null
     late: boolean
+    inPlace?: Place | null
+    outPlace?: Place | null
     start?: string
     end?: string
     minutes: number
@@ -292,10 +343,10 @@ export function TeamTodayTab() {
                   </span>
                 )}
                 <span>
-                  In <b>{clock(p.checkIn)}</b> {p.late && <em className="late">Late</em>}
+                  In <b>{clock(p.checkIn)}</b> {p.late && <em className="late">Late</em>} {p.checkIn && <PlaceTag p={p.inPlace} />}
                 </span>
                 <span>
-                  Out <b>{clock(p.checkOut)}</b>
+                  Out <b>{clock(p.checkOut)}</b> {p.checkOut && <PlaceTag p={p.outPlace} />}
                 </span>
                 <span>
                   Hours <b>{hours(p.minutes)}</b>
@@ -367,6 +418,8 @@ interface FullSettings {
   notifyCheckOut: boolean
   managerSummary: boolean
   ownerLive: boolean
+  offices?: Office[]
+  requireLocation?: boolean
 }
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -497,6 +550,62 @@ function TeamSettingsPanel() {
           </ul>
         )}
         <p className="meta">Highlighted days are weekly offs. Late = after their start time + {f.graceMin} min grace.</p>
+      </Panel>
+
+      <Panel title="Office location (check-in place)" note="Team check-ins show “At office” within this distance, or how far away they were. Location is read only at check-in and check-out.">
+        {(f.offices ?? []).length === 0 && <p className="empty">No office set yet. Stand in the office and tap “Add this place as office”.</p>}
+        <ul className="att-offices">
+          {(f.offices ?? []).map((o, i) => (
+            <li key={`${o.name}-${i}`}>
+              <input
+                value={o.name}
+                onChange={(e) => setF({ ...f, offices: (f.offices ?? []).map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })}
+                aria-label="Office name"
+                maxLength={40}
+              />
+              <label>
+                Radius
+                <select value={o.radius} onChange={(e) => setF({ ...f, offices: (f.offices ?? []).map((x, j) => (j === i ? { ...x, radius: Number(e.target.value) } : x)) })}>
+                  {[50, 100, 150, 250, 500, 1000].map((m) => (
+                    <option key={m} value={m}>
+                      {m} m
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <a className="mini-btn" href={mapLink(o)} target="_blank" rel="noopener noreferrer">
+                Map
+              </a>
+              <button className="mini-btn danger" onClick={() => setF({ ...f, offices: (f.offices ?? []).filter((_, j) => j !== i) })}>
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="action-row">
+          <button
+            className="btn ghost small"
+            disabled={(f.offices ?? []).length >= 5 || busy}
+            onClick={async () => {
+              setBusy(true)
+              const p = await getSpot(15000)
+              setBusy(false)
+              if (!p) return toast('Could not get this phone’s location. Allow location and try again.')
+              if (p.acc > 200) toast(`Location is rough (about ${Math.round(p.acc)} m). Try again near a window for better accuracy.`)
+              setF({ ...f, offices: [...(f.offices ?? []), { name: (f.offices ?? []).length ? `Office ${(f.offices ?? []).length + 1}` : 'Office', lat: p.lat, lng: p.lng, radius: 150 }] })
+              toast('Office added. Rename it if you like, then Save.')
+            }}
+          >
+            📍 Add this place as office
+          </button>
+        </div>
+        <label className="set-row toggle att-toggle">
+          <span>
+            Location needed to check in and out
+            <small>If on, staff can’t check in or out with location switched off. If off, they can, and it shows “No location”.</small>
+          </span>
+          <input type="checkbox" checked={!!f.requireLocation} onChange={(e) => setF({ ...f, requireLocation: e.target.checked })} />
+        </label>
       </Panel>
 
       <Panel title="Attendance notifications" note="Sent to phones where “Turn on reminders” is switched on (team) and owner alerts are on (owner).">

@@ -228,7 +228,7 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       case '/editor/me/checkin':
         return json(await checkIn(env, who, body), 200, headers)
       case '/editor/me/checkout':
-        return json(await checkOut(env, who), 200, headers)
+        return json(await checkOut(env, who, body), 200, headers)
       case '/editor/me/report':
         return json(await submitReport(env, who, body), 200, headers)
       case '/editor/me/device':

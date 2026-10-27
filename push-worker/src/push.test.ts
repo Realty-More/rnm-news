@@ -663,3 +663,36 @@ describe('competitor sources', () => {
     expect(unwrapBing('not a url')).toBe('not a url')
   })
 })
+
+describe('check-in location', () => {
+  const office = { name: 'Noida Office', lat: 28.5355, lng: 77.391, radius: 150 }
+  it('measures distance', async () => {
+    const { distanceM } = await import('./team.ts')
+    // About 1.11 km per 0.01 degree of latitude.
+    expect(Math.round(distanceM({ lat: 28.5355, lng: 77.391 }, { lat: 28.5455, lng: 77.391 }))).toBeGreaterThan(1100)
+    expect(Math.round(distanceM({ lat: 28.5355, lng: 77.391 }, { lat: 28.5455, lng: 77.391 }))).toBeLessThan(1120)
+  })
+  it('cleans positions from the app', async () => {
+    const { cleanSpot } = await import('./team.ts')
+    expect(cleanSpot({ lat: 28.53551234, lng: 77.39101234, acc: 12.4 })).toEqual({ lat: 28.535512, lng: 77.391012, acc: 12 })
+    expect(cleanSpot({ lat: 0, lng: 0, acc: 5 })).toBeNull()
+    expect(cleanSpot({ lat: 'x', lng: 77 })).toBeNull()
+    expect(cleanSpot({ lat: 95, lng: 77 })).toBeNull()
+    expect(cleanSpot(null)).toBeNull()
+  })
+  it('says whether a check-in was at the office', async () => {
+    const { placeOf } = await import('./team.ts')
+    expect(placeOf({ lat: 28.5356, lng: 77.3911, acc: 20 }, [office])?.label).toBe('At Noida Office')
+    const away = placeOf({ lat: 28.5655, lng: 77.391, acc: 20 }, [office])!
+    expect(away.office).toBeNull()
+    expect(away.label).toBe('3.3 km from Noida Office')
+    expect(placeOf({ lat: 28.5355, lng: 77.393, acc: 20 }, [office])?.label).toBe('195 m from Noida Office')
+    expect(placeOf({ lat: 28.5, lng: 77.3, acc: 10 }, [])?.label).toBe('Location shared')
+    expect(placeOf(null, [office])).toBeNull()
+  })
+  it('keeps at most 5 valid offices', async () => {
+    const { cleanOffices } = await import('./team.ts')
+    expect(cleanOffices([{ name: ' HQ ', lat: 28.5, lng: 77.3, radius: 10 }, { name: '', lat: 1, lng: 1 }, { name: 'Bad', lat: 200, lng: 1 }])).toEqual([{ name: 'HQ', lat: 28.5, lng: 77.3, radius: 50 }])
+    expect(cleanOffices(Array.from({ length: 7 }, (_, i) => ({ name: `O${i}`, lat: 20 + i, lng: 70 })))).toHaveLength(5)
+  })
+})

@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS pushes (ts TEXT NOT NULL, title TEXT, body TEXT, url 
 CREATE TABLE IF NOT EXISTS uptime (ts TEXT NOT NULL, ok INTEGER NOT NULL, ms INTEGER, status INTEGER);
 CREATE INDEX IF NOT EXISTS uptime_ts ON uptime (ts);
 CREATE TABLE IF NOT EXISTS calendar (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, notes TEXT, status TEXT NOT NULL DEFAULT 'idea', due TEXT, source TEXT, created_by TEXT, created_at TEXT, updated_at TEXT);
-CREATE TABLE IF NOT EXISTS attendance (person_id TEXT NOT NULL, name TEXT, day TEXT NOT NULL, check_in TEXT, check_out TEXT, mode TEXT, note TEXT, PRIMARY KEY (person_id, day));
+CREATE TABLE IF NOT EXISTS attendance (person_id TEXT NOT NULL, name TEXT, day TEXT NOT NULL, check_in TEXT, check_out TEXT, mode TEXT, note TEXT, in_lat REAL, in_lng REAL, in_acc REAL, out_lat REAL, out_lng REAL, out_acc REAL, PRIMARY KEY (person_id, day));
+-- Added 2026-10-27 to an existing database with: ALTER TABLE attendance ADD COLUMN in_lat REAL; (and in_lng, in_acc, out_lat, out_lng, out_acc)
 CREATE TABLE IF NOT EXISTS reports (person_id TEXT NOT NULL, name TEXT, day TEXT NOT NULL, done TEXT, plan TEXT, blockers TEXT, links TEXT, submitted_at TEXT, PRIMARY KEY (person_id, day));
 CREATE TABLE IF NOT EXISTS webposts (post_id INTEGER PRIMARY KEY, title TEXT, link TEXT, published TEXT, section TEXT, views INTEGER NOT NULL DEFAULT 0, checked_at TEXT);
 CREATE INDEX IF NOT EXISTS webposts_published ON webposts (published);

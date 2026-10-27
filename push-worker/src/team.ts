@@ -1,6 +1,8 @@
 // Team attendance and daily work reports (Cloudflare D1 + KV, free plan).
 // Employees use their editor key: they check in/out themselves and write a daily report.
-// The owner sees everyone's day, monthly attendance and a CSV export. Nothing is tracked in the background.
+// The owner sees everyone's day, monthly attendance and a CSV export. Nothing is tracked in the background:
+// location is read only at the moment of check-in and check-out (when the person allows it), and shown
+// as "at <office>" or the distance from the nearest office the owner set.
 import { deliver, isValidSubscription, subKey, type StoredSub } from './push.ts'
 import { listEditors, type Who } from './owner.ts'
 import { accountStaff } from './accounts.ts'
@@ -29,8 +31,89 @@ export interface TeamSettings {
   managerSummary: boolean
   /** A notification to the owner for every check-in and check-out. */
   ownerLive: boolean
+  /** Office locations for the "at office" check (up to 5). */
+  offices: Office[]
+  /** If true, check-in and check-out need the phone's location. */
+  requireLocation: boolean
 }
-const DEFAULTS: TeamSettings = { startTime: '10:00', endTime: '18:30', graceMin: 15, reminderTime: '18:30', weekOff: [0], people: {}, notifyCheckIn: true, notifyCheckOut: true, managerSummary: true, ownerLive: false }
+export interface Office {
+  name: string
+  lat: number
+  lng: number
+  /** Metres around the point that count as "at office". */
+  radius: number
+}
+/** A position from the phone at check-in or check-out (accuracy in metres). */
+export interface Spot {
+  lat: number
+  lng: number
+  acc: number
+}
+export interface Place {
+  lat: number
+  lng: number
+  acc: number
+  /** The office they were at, or null. */
+  office: string | null
+  /** Metres from the nearest office (null when no office is set). */
+  meters: number | null
+  label: string
+}
+const DEFAULTS: TeamSettings = { startTime: '10:00', endTime: '18:30', graceMin: 15, reminderTime: '18:30', weekOff: [0], people: {}, notifyCheckIn: true, notifyCheckOut: true, managerSummary: true, ownerLive: false, offices: [], requireLocation: false }
+
+/** Straight-line distance in metres between two points (haversine). */
+export function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000
+  const rad = (d: number) => (d * Math.PI) / 180
+  const dLat = rad(b.lat - a.lat)
+  const dLng = rad(b.lng - a.lng)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+/** A position sent by the app, or null if missing or not a real position. */
+export function cleanSpot(v: unknown): Spot | null {
+  if (!v || typeof v !== 'object') return null
+  const { lat, lng, acc } = v as Record<string, unknown>
+  if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat === 0 && lng === 0)) return null
+  const a = typeof acc === 'number' && Number.isFinite(acc) && acc >= 0 ? Math.min(Math.round(acc), 100000) : 9999
+  return { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, acc: a }
+}
+
+/** Where a check-in happened relative to the offices (pure, for tests). */
+export function placeOf(spot: Spot | null, offices: Office[]): Place | null {
+  if (!spot) return null
+  if (!offices.length) return { ...spot, office: null, meters: null, label: 'Location shared' }
+  let best = offices[0]
+  let d = distanceM(spot, best)
+  for (const o of offices.slice(1)) {
+    const x = distanceM(spot, o)
+    if (x < d) {
+      best = o
+      d = x
+    }
+  }
+  // Phone positions indoors can be off by tens of metres, so a little of the reported accuracy counts.
+  const inside = d <= best.radius + Math.min(spot.acc, 100)
+  const far = d >= 1000 ? `${(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`
+  return { ...spot, office: inside ? best.name : null, meters: Math.round(d), label: inside ? `At ${best.name}` : `${far} from ${best.name}` }
+}
+
+export function cleanOffices(v: unknown): Office[] {
+  if (!Array.isArray(v)) return []
+  const out: Office[] = []
+  for (const raw of v.slice(0, 5)) {
+    if (!raw || typeof raw !== 'object') continue
+    const o = raw as Record<string, unknown>
+    const spot = cleanSpot({ lat: o.lat, lng: o.lng, acc: 0 })
+    const name = typeof o.name === 'string' ? o.name.trim().slice(0, 40) : ''
+    if (!spot || !name) continue
+    const radius = Number.isFinite(Number(o.radius)) ? Math.min(2000, Math.max(50, Math.round(Number(o.radius)))) : 150
+    out.push({ name, lat: spot.lat, lng: spot.lng, radius })
+  }
+  return out
+}
 
 /** The office settings with this person's own hours and weekly off applied. */
 export function forPerson(s: TeamSettings, id: string): TeamSettings {
@@ -105,6 +188,8 @@ export async function saveTeamSettings(env: Env, body: unknown) {
     notifyCheckOut: flag(b.notifyCheckOut, cur.notifyCheckOut),
     managerSummary: flag(b.managerSummary, cur.managerSummary),
     ownerLive: flag(b.ownerLive, cur.ownerLive),
+    offices: b.offices === undefined ? cur.offices : cleanOffices(b.offices),
+    requireLocation: flag(b.requireLocation, cur.requireLocation),
   }
   if (toMin(next.endTime) <= toMin(next.startTime)) throw new Error('Office end time must be after the start time.')
   await env.SUBS.put('team:settings', JSON.stringify(next))
@@ -121,7 +206,15 @@ interface Att {
   check_out: string | null
   mode: string | null
   note: string | null
+  in_lat?: number | null
+  in_lng?: number | null
+  in_acc?: number | null
+  out_lat?: number | null
+  out_lng?: number | null
+  out_acc?: number | null
 }
+const spotIn = (a: Att | null): Spot | null => (a?.in_lat != null && a.in_lng != null ? { lat: a.in_lat, lng: a.in_lng, acc: a.in_acc ?? 9999 } : null)
+const spotOut = (a: Att | null): Spot | null => (a?.out_lat != null && a.out_lng != null ? { lat: a.out_lat, lng: a.out_lng, acc: a.out_acc ?? 9999 } : null)
 interface Rep {
   person_id: string
   name: string
@@ -143,31 +236,39 @@ export async function myToday(env: Env, who: Who) {
     teamSettings(env),
   ])
   const mine = forPerson(settings, id)
-  return { day, name: who.name, attendance: att, report: rep, settings: mine, late: isLate(att?.check_in ?? null, mine), minutes: workedMinutes(att?.check_in ?? null, att?.check_out ?? null) }
+  const place = { in: placeOf(spotIn(att), settings.offices), out: placeOf(spotOut(att), settings.offices) }
+  return { day, name: who.name, attendance: att, report: rep, settings: mine, place, late: isLate(att?.check_in ?? null, mine), minutes: workedMinutes(att?.check_in ?? null, att?.check_out ?? null) }
 }
 
 export async function checkIn(env: Env, who: Who, body: unknown) {
-  const b = (body ?? {}) as { mode?: unknown; note?: unknown }
+  const b = (body ?? {}) as { mode?: unknown; note?: unknown; loc?: unknown }
   const mode: Mode = MODES.includes(b.mode as Mode) ? (b.mode as Mode) : 'office'
+  const spot = cleanSpot(b.loc)
+  if (!spot && (await teamSettings(env)).requireLocation) throw new Error('Turn on location for this app to check in.')
   const note = typeof b.note === 'string' ? b.note.trim().slice(0, 140) : ''
   const now = new Date().toISOString()
   // First check-in of the day wins; a repeated tap doesn't move the time.
-  await env.DB.prepare('INSERT INTO attendance (person_id, name, day, check_in, mode, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(person_id, day) DO NOTHING')
-    .bind(personId(who), who.name, istDay(), now, mode, note)
+  await env.DB.prepare(
+    'INSERT INTO attendance (person_id, name, day, check_in, mode, note, in_lat, in_lng, in_acc) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT(person_id, day) DO NOTHING',
+  )
+    .bind(personId(who), who.name, istDay(), now, mode, note, spot?.lat ?? null, spot?.lng ?? null, spot?.acc ?? null)
     .run()
   const today = await myToday(env, who)
-  if (today.attendance?.check_in === now) await ownerLive(env, `${who.name} checked in`, `${istClock(now)} · ${mode}${today.late ? ' · late' : ''}${note ? ` · ${note}` : ''}`)
+  if (today.attendance?.check_in === now)
+    await ownerLive(env, `${who.name} checked in`, `${istClock(now)} · ${mode}${today.late ? ' · late' : ''} · ${today.place.in?.label ?? 'no location'}${note ? ` · ${note}` : ''}`)
   return today
 }
 
-export async function checkOut(env: Env, who: Who) {
-  const r = await env.DB.prepare('UPDATE attendance SET check_out = ?1 WHERE person_id = ?2 AND day = ?3 AND check_in IS NOT NULL')
-    .bind(new Date().toISOString(), personId(who), istDay())
+export async function checkOut(env: Env, who: Who, body: unknown = {}) {
+  const spot = cleanSpot((body as { loc?: unknown } | null)?.loc)
+  if (!spot && (await teamSettings(env)).requireLocation) throw new Error('Turn on location for this app to check out.')
+  const r = await env.DB.prepare('UPDATE attendance SET check_out = ?1, out_lat = ?4, out_lng = ?5, out_acc = ?6 WHERE person_id = ?2 AND day = ?3 AND check_in IS NOT NULL')
+    .bind(new Date().toISOString(), personId(who), istDay(), spot?.lat ?? null, spot?.lng ?? null, spot?.acc ?? null)
     .run()
   if (!r.meta.changes) return { ok: false, error: 'Check in first.' }
   const today = await myToday(env, who)
   const mins = today.minutes
-  await ownerLive(env, `${who.name} checked out`, `${istClock(new Date().toISOString())} · ${Math.floor(mins / 60)}h ${mins % 60}m today${today.report ? '' : ' · no report yet'}`)
+  await ownerLive(env, `${who.name} checked out`, `${istClock(new Date().toISOString())} · ${Math.floor(mins / 60)}h ${mins % 60}m today · ${today.place.out?.label ?? 'no location'}${today.report ? '' : ' · no report yet'}`)
   return { ok: true, ...today }
 }
 
@@ -255,6 +356,8 @@ export async function teamDay(env: Env, day: string) {
       mode: a?.mode ?? null,
       note: a?.note ?? null,
       late: isLate(a?.check_in ?? null, forPerson(settings, p.id)),
+      inPlace: placeOf(spotIn(a), settings.offices),
+      outPlace: placeOf(spotOut(a), settings.offices),
       start: forPerson(settings, p.id).startTime,
       end: forPerson(settings, p.id).endTime,
       minutes: workedMinutes(a?.check_in ?? null, a?.check_out ?? null),
@@ -287,7 +390,7 @@ export interface MonthRow {
   leaveByKind: Record<string, number>
   /** Working days with no check-in and no approved leave. */
   absent: number
-  days: Record<string, { in: string | null; out: string | null; late: boolean; report: boolean; leave?: string }>
+  days: Record<string, { in: string | null; out: string | null; late: boolean; report: boolean; leave?: string; place?: string }>
 }
 
 /** Working days in a month up to `upTo` (inclusive), skipping weekly offs. */
@@ -322,7 +425,7 @@ export function summarizeMonth(
     const ins = mine.map((a) => toMin(istClock(a.check_in!)))
     const avg = ins.length ? Math.round(ins.reduce((x, y) => x + y, 0) / ins.length) : null
     const days: MonthRow['days'] = {}
-    for (const a of mine) days[a.day] = { in: a.check_in ? istClock(a.check_in) : null, out: a.check_out ? istClock(a.check_out) : null, late: isLate(a.check_in, ps), report: repDays.has(a.day) }
+    for (const a of mine) days[a.day] = { in: a.check_in ? istClock(a.check_in) : null, out: a.check_out ? istClock(a.check_out) : null, late: isLate(a.check_in, ps), report: repDays.has(a.day), ...(spotIn(a) ? { place: placeOf(spotIn(a), s.offices ?? [])!.label } : {}) }
     // Approved leave in this month (only up to today counts towards absences; future leave is shown too).
     const leaveByKind: Record<string, number> = {}
     const leaveOn = new Map<string, number>()

@@ -257,6 +257,7 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       case '/editor/accounts/reset':
       case '/editor/accounts/grant':
       case '/editor/accounts/ungrant':
+      case '/editor/accounts/signout':
         return full(who) ? json(await manageAccount(env, pathname.split('/').pop()!, body, who), 200, headers) : ownerOnly()
       case '/editor/me/password':
         return json(await changePassword(env, body, who, req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? ''), 200, headers)

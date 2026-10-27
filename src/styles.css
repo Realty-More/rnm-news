@@ -6434,3 +6434,7 @@ a.mini-btn {
   flex: 1;
   accent-color: var(--accent);
 }
+.emp-status.online {
+  color: #2e9d5b;
+  font-weight: 700;
+}

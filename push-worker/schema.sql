@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS mkt_stock (day TEXT NOT NULL, symbol TEXT NOT NULL, s
 CREATE TABLE IF NOT EXISTS mkt_meta (k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS reel_refs (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT, size INTEGER, week TEXT, kind TEXT, note TEXT, by_name TEXT, at TEXT);
 CREATE TABLE IF NOT EXISTS ai_usage (day TEXT NOT NULL, who TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, who));
-CREATE TABLE IF NOT EXISTS accounts (phone TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT, approved_at TEXT, last_login TEXT, must_change INTEGER NOT NULL DEFAULT 0);
--- Added 2026-10-27 to an existing database with: ALTER TABLE accounts ADD COLUMN must_change INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS accounts (phone TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT, approved_at TEXT, last_login TEXT, must_change INTEGER NOT NULL DEFAULT 0, last_seen TEXT);
+-- Added 2026-10-27 to an existing database with: ALTER TABLE accounts ADD COLUMN must_change INTEGER NOT NULL DEFAULT 0; ALTER TABLE accounts ADD COLUMN last_seen TEXT;
 CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, phone TEXT NOT NULL, created_at TEXT, expires_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS sessions_phone ON sessions (phone);
 CREATE TABLE IF NOT EXISTS auth_fail (k TEXT NOT NULL, hour TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (k, hour));

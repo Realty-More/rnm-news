@@ -132,11 +132,13 @@ export async function sessionWho(env: Env, token: string): Promise<Who | null> {
   const hash = await sha256hex(token)
   const now = Date.now()
   const row = await env.DB.prepare(
-    "SELECT a.phone, a.name, a.role, s.expires_at AS expires FROM sessions s JOIN accounts a ON a.phone = s.phone WHERE s.token_hash = ? AND s.expires_at > ? AND a.status = 'active'",
+    "SELECT a.phone, a.name, a.role, a.last_seen AS seen, s.expires_at AS expires FROM sessions s JOIN accounts a ON a.phone = s.phone WHERE s.token_hash = ? AND s.expires_at > ? AND a.status = 'active'",
   )
     .bind(hash, new Date(now).toISOString())
-    .first<{ phone: string; name: string; role: 'owner' | 'admin' | 'editor'; expires: string }>()
+    .first<{ phone: string; name: string; role: 'owner' | 'admin' | 'editor'; expires: string; seen: string | null }>()
   if (!row) return null
+  // "Last seen" for the Employees list, written at most every 5 minutes.
+  if (!row.seen || Date.parse(row.seen) < now - 5 * 60000) await env.DB.prepare('UPDATE accounts SET last_seen = ? WHERE phone = ?').bind(new Date(now).toISOString(), row.phone).run()
   // Rolling login: anyone who uses the app stays logged in. Once a day at most, the 180 days restart.
   if (Date.parse(row.expires) < now + (SESSION_DAYS - 1) * DAY)
     await env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(new Date(now + SESSION_DAYS * DAY).toISOString(), hash).run()
@@ -153,16 +155,21 @@ export async function accountStaff(env: Env): Promise<{ id: string; name: string
 
 export async function listAccounts(env: Env) {
   const [{ results }, { allProfiles }] = await Promise.all([
-    env.DB.prepare("SELECT phone, name, role, status, created_at AS created, approved_at AS approved, last_login AS lastLogin, must_change AS mustChange FROM accounts ORDER BY status = 'pending' DESC, name")
+    env.DB.prepare("SELECT phone, name, role, status, created_at AS created, approved_at AS approved, last_login AS lastLogin, last_seen AS lastSeen, must_change AS mustChange FROM accounts ORDER BY status = 'pending' DESC, name")
       .all<{ phone: string; name: string; mustChange: number | null }>(),
     import('./profile.ts'),
   ])
-  const profiles = await allProfiles(env)
+  const [profiles, devices] = await Promise.all([
+    allProfiles(env),
+    // Devices still logged in (sessions not ended or expired).
+    env.DB.prepare('SELECT phone, COUNT(*) AS n FROM sessions WHERE expires_at > ? GROUP BY phone').bind(new Date().toISOString()).all<{ phone: string; n: number }>(),
+  ])
+  const devicesBy = new Map(devices.results.map((d) => [d.phone, d.n]))
   // Picture and designation for the Employees list.
   return {
     accounts: results.map((a) => {
       const p = profiles.get(`ph:${a.phone}`)
-      return { ...a, mustChange: a.mustChange === 1, title: p?.title ?? '', photo: p?.photo ?? '', avatar: p?.avatar ?? '' }
+      return { ...a, mustChange: a.mustChange === 1, devices: devicesBy.get(a.phone) ?? 0, title: p?.title ?? '', photo: p?.photo ?? '', avatar: p?.avatar ?? '' }
     }),
   }
 }
@@ -192,6 +199,9 @@ export async function manageAccount(env: Env, action: string, body: unknown, who
       return { ok: true }
     case 'remove':
       await env.DB.batch([env.DB.prepare('DELETE FROM accounts WHERE phone = ?').bind(phone), endSessions])
+      return { ok: true }
+    case 'signout':
+      await endSessions.run()
       return { ok: true }
     case 'grant':
     case 'ungrant':

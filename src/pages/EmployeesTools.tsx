@@ -15,6 +15,8 @@ interface Account {
   status: 'pending' | 'active' | 'rejected'
   created: string
   lastLogin: string | null
+  lastSeen?: string | null
+  devices?: number
   mustChange?: boolean
   title?: string
   photo?: string
@@ -26,6 +28,20 @@ interface Settings {
   people: Record<string, { start?: string; end?: string }>
 }
 const showPhone = (p: string) => `+91 ${p.slice(0, 5)} ${p.slice(5)}`
+
+/** "Online now", "12 min ago", "Today 4:12 pm", "Yesterday", "3 days ago". */
+export function seenLabel(iso: string | null | undefined, now = Date.now()): string {
+  if (!iso) return 'Never'
+  const t = Date.parse(iso)
+  const mins = Math.round((now - t) / 60000)
+  if (mins < 6) return 'Online now'
+  if (mins < 60) return `${mins} min ago`
+  const ist = (ms: number) => new Date(ms + 5.5 * 3600000).toISOString().slice(0, 10)
+  if (ist(t) === ist(now)) return `Today ${new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }).format(new Date(t))}`
+  if (ist(t) === ist(now - 86400000)) return 'Yesterday'
+  const days = Math.round((now - t) / 86400000)
+  return days < 30 ? `${days} days ago` : new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(t))
+}
 const APP = 'https://realty-more.github.io/rnm-news/#/studio'
 const loginMessage = (name: string, phone: string, password: string) =>
   `Hi ${name.split(' ')[0]}, your Realtynmore app login:\nMobile: ${phone}\nTemporary password: ${password}\nOpen: ${APP}\nOn first login you will set your own password.`
@@ -214,7 +230,7 @@ export function EmployeesTab() {
     run(async () => {
       const r = await studioPost<{ password?: string }>(`accounts/${action}`, { phone: a.phone })
       if (r.password) setNewPw({ name: a.name, phone: a.phone, password: r.password })
-      else toast({ approve: `${a.name} can now log in`, reject: 'Request declined', remove: `${a.name} removed`, grant: `${a.name} now has full access`, ungrant: `${a.name} is back to team access` }[action] ?? 'Done')
+      else toast({ approve: `${a.name} can now log in`, reject: 'Request declined', remove: `${a.name} removed`, grant: `${a.name} now has full access`, ungrant: `${a.name} is back to team access`, signout: `${a.name} is logged out everywhere` }[action] ?? 'Done')
       res.reload()
     })
   const run = async (fn: () => Promise<void>) => {
@@ -243,7 +259,7 @@ export function EmployeesTab() {
         <div>
           <h2>Employees</h2>
           <p className="meta">
-            {list.filter((a) => a.status === 'active').length} active · log in with their mobile number and password
+            {list.filter((a) => a.status === 'active').length} active · {list.filter((a) => a.devices && seenLabel(a.lastSeen) === 'Online now').length} online now · {list.filter((a) => a.devices).length} logged in
           </p>
         </div>
         <button className="btn" onClick={() => setAdding(true)}>
@@ -307,8 +323,18 @@ export function EmployeesTab() {
                   )}
                 </span>
                 <span>
-                  <small>Last login</small>
-                  {a.lastLogin ? formatDateTime(a.lastLogin) : 'Never'}
+                  <small>Login</small>
+                  {seenLabel(a.lastSeen ?? a.lastLogin) === 'Online now' && a.devices ? (
+                    <em className="emp-status online">● Online now</em>
+                  ) : a.devices ? (
+                    <em className="emp-status ok">Logged in{a.devices > 1 ? ` · ${a.devices} devices` : ''}</em>
+                  ) : (
+                    <em className="emp-status off">Not logged in</em>
+                  )}
+                </span>
+                <span>
+                  <small>Last seen</small>
+                  {seenLabel(a.lastSeen ?? a.lastLogin)}
                 </span>
               </div>
               <RowMenu
@@ -325,6 +351,20 @@ export function EmployeesTab() {
                               label: 'Give full access',
                               onClick: () => setConfirm({ title: `Give ${a.name} full access?`, text: 'They will see everything you see: business numbers, website traffic, the team, attendance and settings.', action: 'Give full access', run: () => act(a, 'grant') }),
                             },
+                      ]
+                    : []),
+                  ...(a.devices
+                    ? [
+                        {
+                          label: 'Log out from all devices',
+                          onClick: () =>
+                            setConfirm({
+                              title: `Log ${a.name} out everywhere?`,
+                              text: `They are logged in on ${a.devices} device${(a.devices ?? 0) > 1 ? 's' : ''}. They will need their mobile number and password to log in again. Use this if a phone is lost.`,
+                              action: 'Log out everywhere',
+                              run: () => act(a, 'signout'),
+                            }),
+                        },
                       ]
                     : []),
                   {

@@ -2,7 +2,8 @@
 //   Create account: staff requests wait for the owner's approval; the owner's own account is created
 //   once with the owner setup key (STATS_KEY) and is active straight away.
 //   Passwords: PBKDF2-SHA256 over an HMAC with a server-side pepper (AUTH_PEPPER), per-user salt.
-//   Sessions: random tokens ("s_…"), stored only as SHA-256 hashes, valid 180 days, ended on log out.
+//   Sessions: random tokens ("s_…"), stored only as SHA-256 hashes, valid 180 days from the last use
+//   (rolling, so people who use the app never have to log in again), ended on log out.
 //   Forgot password: the owner sets a new one from the Studio.
 import type { Env } from './index.ts'
 import { full, sameKey, sha256hex, type Who } from './owner.ts'
@@ -128,12 +129,17 @@ export async function logout(env: Env, token: string) {
 /** The signed-in person for a session token, or null. */
 export async function sessionWho(env: Env, token: string): Promise<Who | null> {
   if (!/^s_[\w-]{40,60}$/.test(token)) return null
+  const hash = await sha256hex(token)
+  const now = Date.now()
   const row = await env.DB.prepare(
-    "SELECT a.phone, a.name, a.role FROM sessions s JOIN accounts a ON a.phone = s.phone WHERE s.token_hash = ? AND s.expires_at > ? AND a.status = 'active'",
+    "SELECT a.phone, a.name, a.role, s.expires_at AS expires FROM sessions s JOIN accounts a ON a.phone = s.phone WHERE s.token_hash = ? AND s.expires_at > ? AND a.status = 'active'",
   )
-    .bind(await sha256hex(token), new Date().toISOString())
-    .first<{ phone: string; name: string; role: 'owner' | 'admin' | 'editor' }>()
+    .bind(hash, new Date(now).toISOString())
+    .first<{ phone: string; name: string; role: 'owner' | 'admin' | 'editor'; expires: string }>()
   if (!row) return null
+  // Rolling login: anyone who uses the app stays logged in. Once a day at most, the 180 days restart.
+  if (Date.parse(row.expires) < now + (SESSION_DAYS - 1) * DAY)
+    await env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(new Date(now + SESSION_DAYS * DAY).toISOString(), hash).run()
   return row.role === 'owner' ? { role: 'owner', name: row.name, phone: row.phone } : { role: row.role, name: row.name, id: `ph:${row.phone}`, phone: row.phone }
 }
 

@@ -93,9 +93,9 @@ function json(data: unknown, status: number, headers: Record<string, string>) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 }
 
-async function readJson(req: Request): Promise<unknown> {
+async function readJson(req: Request, max = MAX_BODY): Promise<unknown> {
   const text = await req.text()
-  if (text.length > MAX_BODY) throw new Error('too large')
+  if (text.length > max) throw new Error('That is too much to send at once. If it is a photo, try a smaller one.')
   return text ? JSON.parse(text) : {}
 }
 
@@ -213,7 +213,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
 
     // File uploads send the raw file, not JSON.
     if (pathname === '/editor/reels/ref-upload') return json(await uploadRef(env, req, url, who), 200, headers)
-    const body = await readJson(req)
+    // A profile photo (small JPEG as text) is the one bigger body the Studio sends.
+    const body = await readJson(req, pathname === '/editor/me/profile' ? 160_000 : MAX_BODY)
     switch (pathname) {
       case '/editor/push':
         return json(await customPush(env, body, who), 200, headers)

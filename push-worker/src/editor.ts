@@ -6,6 +6,7 @@ import { decode, fetchByIds } from './site.ts'
 import { subscriberCount } from './push.ts'
 import type { Env } from './index.ts'
 import { gently, pageChecks } from './website.ts'
+import { unwrapBing } from './competitors.ts'
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; RM-News-Studio/1.0)' }
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@' })
@@ -60,6 +61,8 @@ export function covered(theirs: string, ours: Set<string>[]): boolean {
 const RIVALS = [
   { name: 'ET Realty', url: 'https://realty.economictimes.indiatimes.com/rss/topstories' },
   { name: 'Hindustan Times', url: 'https://www.hindustantimes.com/feeds/rss/real-estate/rssfeed.xml' },
+  { name: 'Realty First', url: 'https://realtyfirstmag.com/feed/' },
+  { name: 'Realty Plus', url: 'https://www.bing.com/news/search?q=site%3Arprealtyplus.com&format=rss' },
 ]
 
 export const RE_WORDS = ['real estate', 'realty', 'property', 'properties', 'housing', 'home loan', 'flat', 'apartment', 'rera', 'land', 'rent', 'emi', 'repo rate', 'rbi', 'builder', 'developer', 'metro', 'airport', 'expressway', 'stamp duty', 'smart city', 'dlf', 'godrej', 'lodha', 'sobha', 'prestige', 'oberoi', 'brigade', 'noida', 'gurugram', 'gurgaon', 'mumbai', 'pune', 'bengaluru', 'hyderabad', 'jewar', 'infrastructure']
@@ -77,7 +80,7 @@ async function rivalHeadlines() {
         const doc = xml.parse(await res.text())
         const items = asArray(doc?.rss?.channel?.item ?? doc?.feed?.entry)
         for (const it of items.slice(0, 20)) {
-          const link = typeof it.link === 'object' ? text(it.link?.['@href'] ?? it.link) : text(it.link)
+          const link = unwrapBing(typeof it.link === 'object' ? text(it.link?.['@href'] ?? it.link) : text(it.link))
           out.push({ source: r.name, title: strip(text(it.title)), link, date: text(it.pubDate ?? it.updated ?? it.published) })
         }
       } catch {

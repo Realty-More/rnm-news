@@ -654,3 +654,12 @@ describe('newsletter story picks and schedule', () => {
     expect(() => cleanPicks('1,2')).toThrow()
   })
 })
+
+describe('competitor sources', () => {
+  it('unwraps Bing News click links to the article address', async () => {
+    const { unwrapBing } = await import('./competitors.ts')
+    expect(unwrapBing('http://www.bing.com/news/apiclick.aspx?ref=FexRss&aid=&tid=x&url=https%3a%2f%2fwww.rprealtyplus.com%2fnews-views%2fa-story.html&c=1')).toBe('https://www.rprealtyplus.com/news-views/a-story.html')
+    expect(unwrapBing('https://realtyfirstmag.com/x/')).toBe('https://realtyfirstmag.com/x/')
+    expect(unwrapBing('not a url')).toBe('not a url')
+  })
+})

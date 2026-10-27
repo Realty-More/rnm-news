@@ -34,6 +34,7 @@ const FEEDS: { source: string; url: string; sitemap?: boolean }[] = [
   { source: 'Business Standard', url: 'https://www.business-standard.com/rss/markets-106.rss' },
   { source: 'Hindustan Times', url: 'https://www.hindustantimes.com/feeds/rss/real-estate/rssfeed.xml' },
   { source: 'RealtyNXT', url: 'https://www.realtynxt.com/news-sitemap.xml', sitemap: true },
+  { source: 'Realty First', url: 'https://realtyfirstmag.com/feed/' },
 ]
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@' })

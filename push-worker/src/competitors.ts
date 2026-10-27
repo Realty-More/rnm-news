@@ -1,5 +1,7 @@
 // Competitor comparison for the owner's Content Studio. Only public data that the sites publish for
 // readers and search engines (RSS feeds, news sitemaps, open WordPress APIs); nothing behind bot checks.
+// Realty Plus blocks automated visits, so its latest headlines come from Bing News's public RSS
+// (what Bing has indexed from the site); its own pages are never fetched.
 import { XMLParser } from 'fast-xml-parser'
 import { decode } from './site.ts'
 import type { Env } from './index.ts'
@@ -49,6 +51,22 @@ async function rss(urls: string[]): Promise<Item[]> {
   return all.filter((i) => (seen.has(i.link) ? false : (seen.add(i.link), true))).sort((a, b) => b.date.localeCompare(a.date))
 }
 
+/** Bing News wraps each article link in a click-tracking address; this returns the article's own URL. */
+export function unwrapBing(link: string): string {
+  try {
+    const u = new URL(link)
+    return /bing\.com$/.test(u.hostname) && u.searchParams.get('url') ? u.searchParams.get('url')! : link
+  } catch {
+    return link
+  }
+}
+
+/** Latest headlines Bing News has from one site (for sites that block automated visits). */
+async function bingNews(site: string): Promise<Item[]> {
+  const items = await rss([`https://www.bing.com/news/search?q=site%3A${encodeURIComponent(site)}&format=rss`])
+  return items.map((i) => ({ ...i, link: unwrapBing(i.link) })).filter((i) => i.link.includes(site))
+}
+
 async function newsSitemap(url: string): Promise<Item[]> {
   try {
     const res = await fetch(url, { headers: UA })
@@ -93,7 +111,12 @@ async function wordpress(api: string): Promise<{ items: Item[]; posts7: number; 
 /** Each rival's latest `n` story links (for the side-by-side SEO check). */
 export async function feedLinks(n: number): Promise<{ name: string; items: { title: string; link: string }[] }[]> {
   const pick = (items: Item[]) => items.slice(0, n).map(({ title, link }) => ({ title, link }))
-  const [et, ht, nxt, sy] = await Promise.all([
+  const wpLinks = (api: string) =>
+    fetch(`${api}/posts?per_page=3&_fields=title,link`, { headers: UA })
+      .then((r) => (r.ok ? (r.json() as Promise<{ title: { rendered: string }; link: string }[]>) : []))
+      .then((rows) => rows.map((r) => ({ title: decode(r.title.rendered), date: '', link: r.link })))
+      .catch(() => [] as Item[])
+  const [et, ht, nxt, sy, rf] = await Promise.all([
     rss(['https://realty.economictimes.indiatimes.com/rss/topstories']),
     rss(['https://www.hindustantimes.com/feeds/rss/real-estate/rssfeed.xml']),
     newsSitemap('https://www.realtynxt.com/news-sitemap.xml'),
@@ -101,12 +124,14 @@ export async function feedLinks(n: number): Promise<{ name: string; items: { tit
       .then((r) => (r.ok ? (r.json() as Promise<{ title: { rendered: string }; link: string }[]>) : []))
       .then((rows) => rows.map((r) => ({ title: decode(r.title.rendered), date: '', link: r.link })))
       .catch(() => [] as Item[]),
+    wpLinks('https://realtyfirstmag.com/wp-json/wp/v2'),
   ])
   return [
     { name: 'ET Realty', items: pick(et) },
     { name: 'Hindustan Times Real Estate', items: pick(ht) },
     { name: 'RealtyNXT', items: pick(nxt) },
     { name: 'Square Yards', items: pick(sy) },
+    { name: 'Realty First', items: pick(rf) },
   ]
 }
 
@@ -246,12 +271,14 @@ export function advise(ours: Source, others: Source[]): Advice[] {
 
 /* ---------- the endpoint ---------- */
 export async function competitors(env: Env) {
-  const [ours, et, ht, nxt, sy] = await Promise.all([
+  const [ours, et, ht, nxt, sy, rf, rp] = await Promise.all([
     wordpress(env.SITE_API),
     rss(['https://realty.economictimes.indiatimes.com/rss/topstories', 'https://realty.economictimes.indiatimes.com/rss/residential', 'https://realty.economictimes.indiatimes.com/rss/commercial']),
     rss(['https://www.hindustantimes.com/feeds/rss/real-estate/rssfeed.xml']),
     newsSitemap('https://www.realtynxt.com/news-sitemap.xml'),
     wordpress('https://www.squareyards.com/blog/wp-json/wp/v2'),
+    wordpress('https://realtyfirstmag.com/wp-json/wp/v2'),
+    bingNews('rprealtyplus.com'),
   ])
   const week = (items: Item[]) => items.filter((i) => Date.now() - Date.parse(i.date) <= 7 * DAY)
   const sources: Source[] = [
@@ -260,6 +287,8 @@ export async function competitors(env: Env) {
     { name: 'Hindustan Times Real Estate', items: week(ht), basis: `Latest ${ht.length} items in RSS` },
     { name: 'RealtyNXT', items: week(nxt), basis: `Latest ${nxt.length} items in news sitemap` },
     { name: 'Square Yards', items: week(sy?.items ?? []), posts7: sy?.posts7, posts30: sy?.posts30, basis: 'Exact count (blog API)' },
+    { name: 'Realty First', items: week(rf?.items ?? []), posts7: rf?.posts7, posts30: rf?.posts30, basis: 'Exact count (website API)' },
+    { name: 'Realty Plus', items: week(rp), basis: `Latest ${rp.length} items via Bing News (the site blocks automated visits)` },
   ]
   const [us, ...others] = sources
   return {

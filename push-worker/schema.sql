@@ -48,3 +48,5 @@ CREATE TABLE IF NOT EXISTS news_sends (issue_id INTEGER NOT NULL, sub_id INTEGER
 CREATE TABLE IF NOT EXISTS news_mail (day TEXT NOT NULL, kind TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, kind));
 -- Team profiles: display title, photo (small data URL) or avatar.
 CREATE TABLE IF NOT EXISTS profiles (person_id TEXT PRIMARY KEY, title TEXT, photo TEXT, avatar TEXT, updated_at TEXT);
+-- Press release → story drafts (desk house style).
+CREATE TABLE IF NOT EXISTS pr_drafts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, source TEXT, story TEXT NOT NULL, by_name TEXT, created_at TEXT NOT NULL);

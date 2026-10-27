@@ -48,6 +48,7 @@ import { magazinePdf } from './magazine-pdf.ts'
 import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
+import { getDraft, listDrafts, pressToStory, removeDraft } from './press.ts'
 import { sendTeamEmail } from './teamEmail.ts'
 import { addStaffLogin, keyToMobile, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
@@ -177,6 +178,10 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await adsBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/newsletter':
           return json(await newsletterBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/press/drafts':
+          return json(await listDrafts(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/press/draft':
+          return json(await getDraft(env, Number(url.searchParams.get('id'))), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/newsletter/candidates':
           return json(await candidates(env, url.searchParams.get('q') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/newsletter/preview':
@@ -214,7 +219,7 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
     // File uploads send the raw file, not JSON.
     if (pathname === '/editor/reels/ref-upload') return json(await uploadRef(env, req, url, who), 200, headers)
     // A profile photo (small JPEG as text) is the one bigger body the Studio sends.
-    const body = await readJson(req, pathname === '/editor/me/profile' ? 160_000 : MAX_BODY)
+    const body = await readJson(req, pathname === '/editor/me/profile' ? 160_000 : pathname === '/editor/press/story' ? 60_000 : MAX_BODY)
     switch (pathname) {
       case '/editor/push':
         return json(await customPush(env, body, who), 200, headers)
@@ -283,6 +288,10 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: 'Pick a date.' }, 400, headers)
         return json({ result: await captureDay(env, day) }, 200, headers)
       }
+      case '/editor/press/story':
+        return json(await pressToStory(env, body, who), 200, headers)
+      case '/editor/press/remove':
+        return json(await removeDraft(env, body), 200, headers)
       case '/editor/newsletter/settings':
         return json(await saveNlSettings(env, body), 200, headers)
       case '/editor/newsletter/picks':

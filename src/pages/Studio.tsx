@@ -9,6 +9,7 @@ import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { forgetOwner, isAccountLogin, ownerKey, ownerRole, refreshRole, studio } from '../lib/owner.ts'
 import { AdsTab } from './AdsTools.tsx'
+import { PressTab } from './PressTools.tsx'
 import { Dialog, EmployeesTab } from './EmployeesTools.tsx'
 import { ProfilePanel } from './ProfileTools.tsx'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
@@ -85,6 +86,7 @@ const TABS = [
   { key: 'perf', label: 'App performance', group: 'audience', owner: true },
   { key: 'rivals', label: 'Competitors', group: 'audience' },
   { key: 'report', label: 'Weekly report', group: 'audience', owner: true },
+  { key: 'press', label: 'Press release', group: 'content' },
   { key: 'ideas', label: 'What to write', group: 'content' },
   { key: 'keywords', label: 'Keywords', group: 'content' },
   { key: 'seo', label: 'SEO check', group: 'content' },
@@ -262,6 +264,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'yt' && <YouTubeTab />}
       {tab === 'magazine' && <MagazineTab />}
       {tab === 'ads' && <AdsTab />}
+      {tab === 'press' && <PressTab />}
       {tab === 'newsletter' && <NewsletterTab />}
       {tab === 'reels' && <ReelsTab />}
       {tab === 'ai' && <AiWriterTab />}

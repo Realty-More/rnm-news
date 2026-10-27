@@ -740,3 +740,40 @@ describe('daily team report email', () => {
     expect(mail.text).toContain('Neha (Writer): in 10:20 late (At Noida Office), out 18:50')
   })
 })
+
+describe('press release to story', () => {
+  const now = Date.parse('2026-10-27T06:00:00Z')
+  it('reads the dateline in any of the usual forms', async () => {
+    const { datelineFrom } = await import('./press.ts')
+    expect(datelineFrom('Title\nNew Delhi,27th October, 2026: G Square…', now)).toEqual({ city: 'New Delhi', date: 'October 27, 2026' })
+    expect(datelineFrom('Mumbai, Oct 3, 2026: L&T…', now)).toEqual({ city: 'Mumbai', date: 'October 3, 2026' })
+    expect(datelineFrom('New Delhi, October 2026: India’s flexible office market…', now)).toEqual({ city: 'New Delhi', date: 'October 27, 2026' })
+    expect(datelineFrom('No dateline here at all', now)).toEqual({ city: 'New Delhi', date: 'October 27, 2026' })
+  })
+  it('drops About, contacts and tables', async () => {
+    const { cleanRelease } = await import('./press.ts')
+    const out = cleanRelease('Headline\nBody text here.\nAbout Larsen & Toubro:\nL&T is a…\nMedia Contact:\nx@y.com')
+    expect(out).toBe('Headline\nBody text here.')
+  })
+  it('keeps quotes word for word and flags numbers that are not in the release', async () => {
+    const { assemble } = await import('./press.ts')
+    const raw = 'New Delhi,27th October, 2026: G Square Group has signed an MoU with JSW One Homes. It has 25,000 customers.\nMr. Bala Ramajayam, Founder, G Square Group, said, “At G Square, we believe that purchasing a plot and building a villa offers customers distinct advantages.”'
+    const s = assemble(
+      {
+        headlines: ['G Square Group and JSW One Homes Partner to Streamline Turnkey Villa Construction.'],
+        lead: 'G Square Group has signed an MoU with JSW One Homes',
+        before: ['The group has over 25,000 customers and 12,000 acres.'],
+        quotes: [{ n: 1, intro: 'Commenting on the partnership', name: 'Mr. Bala Ramajayam', designation: 'Founder', company: 'G Square Group' }],
+        after: [],
+      },
+      raw,
+      now,
+    )
+    expect(s.paragraphs[0]).toBe('**New Delhi, October 27, 2026:** G Square Group has signed an MoU with JSW One Homes, according to a company press release.')
+    expect(s.paragraphs[2]).toBe('Commenting on the partnership, **Bala Ramajayam**, Founder, **G Square Group**, said, “At G Square, we believe that purchasing a plot and building a villa offers customers distinct advantages.”')
+    expect(s.html).toContain('<p><strong>New Delhi, October 27, 2026:</strong> G Square Group')
+    expect(s.headlines[0]).toBe('G Square Group and JSW One Homes Partner to Streamline Turnkey Villa Construction')
+    expect(s.warnings.join(' ')).toContain('12000')
+    expect(s.warnings.join(' ')).not.toContain('25000')
+  })
+})

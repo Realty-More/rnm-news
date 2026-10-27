@@ -78,7 +78,7 @@ export type { NewsItem } from './site.ts'
 
 const MAX_BODY = 4096
 // Bump when studio/market logic changes, so old cached results are not served.
-const STUDIO_CACHE = 7
+const STUDIO_CACHE = 8
 
 function cors(origin: string | null, env: Env): Record<string, string> {
   const allowed = env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())

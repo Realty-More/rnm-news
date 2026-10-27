@@ -215,7 +215,8 @@ async function sample(link: string, title: string): Promise<Sampled> {
 export async function seoCompare(env: Env) {
   const ours = (await listPosts(env, 3, 0)).map((p) => ({ title: decode(p.title.rendered), link: p.link }))
   const rivals = await feedLinks(2)
-  const groups = [{ name: 'RealtyNMore', items: ours }, ...rivals]
+  // Realty Plus blocks automated visits: listed as not checked, and its pages are never fetched.
+  const groups = [{ name: 'RealtyNMore', items: ours }, ...rivals, { name: 'Realty Plus', items: [] as { title: string; link: string }[] }]
   const sites = await Promise.all(
     groups.map(async (g) => {
       const pages = await Promise.all(g.items.map((i) => sample(i.link, i.title)))

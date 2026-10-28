@@ -72,7 +72,7 @@ export function MagazineList() {
   )
 }
 
-type PdfDoc = import('pdfjs-dist').PDFDocumentProxy
+export type PdfDoc = import('pdfjs-dist').PDFDocumentProxy
 
 // Pages are drawn one at a time: overlapping draws of the same page can stall in pdf.js
 // (seen when zooming). A draw that takes over 20 s is given up so the queue keeps moving.
@@ -84,7 +84,7 @@ function drawQueue(job: () => Promise<void>): Promise<void> {
 }
 
 /** One page: drawn when it comes near the screen, at the current zoom. */
-function PdfPage({ doc, n, width, ratio }: { doc: PdfDoc; n: number; width: number; ratio: number }) {
+export function PdfPage({ doc, n, width, ratio }: { doc: PdfDoc; n: number; width: number; ratio: number }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const [near, setNear] = useState(n <= 2)

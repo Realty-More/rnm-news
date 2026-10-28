@@ -192,6 +192,13 @@ export async function removeKit(env: Env, body: unknown) {
   return { ok: true }
 }
 
+/** The PDF itself, for the in-app reader in the Studio (owner and full access; not counted as a view). */
+export async function kitPdf(env: Env, id: string, headers: Record<string, string>): Promise<Response> {
+  const pdf = isFileId(id) ? await env.SUBS.get(`kit:file:${id}`, 'arrayBuffer') : null
+  if (!pdf) return new Response('Not found', { status: 404, headers })
+  return new Response(pdf, { headers: { ...headers, 'Content-Type': 'application/pdf', 'Cache-Control': 'private, no-store', 'Content-Length': String(pdf.byteLength) } })
+}
+
 /* ---------- Studio: share links ---------- */
 
 export function cleanLink(body: unknown, fileIds: string[], now = Date.now()) {

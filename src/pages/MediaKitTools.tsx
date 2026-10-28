@@ -3,13 +3,14 @@
 //   private link for one advertiser: a branded page "Prepared for <company>" with only the kits
 //   picked, valid for a few days. The list shows who opened it, when, and what they downloaded;
 //   the first open also sends a notification to the owner's phone.
-import { useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
 import { useAsync } from '../lib/hooks.ts'
 import { ownerKey, ownerRole, studio, studioPost } from '../lib/owner.ts'
 import { PUSH_API } from '../lib/push.ts'
-import { Dialog } from './EmployeesTools.tsx'
+import { Dialog, RowMenu } from './EmployeesTools.tsx'
+import { PdfPage, type PdfDoc } from './Magazine.tsx'
 import { Panel } from './StudioTools.tsx'
 
 interface KitFile {
@@ -226,6 +227,95 @@ function RenameDialog({ file, onClose, onSaved }: { file: KitFile; onClose: () =
   )
 }
 
+/* ---------- reading a kit inside the app ---------- */
+
+function KitReader({ file, onClose, onShare }: { file: KitFile; onClose: () => void; onShare: () => void }) {
+  const [doc, setDoc] = useState<PdfDoc | null>(null)
+  const [error, setError] = useState('')
+  const [ratio, setRatio] = useState(1.414)
+  const [zoom, setZoom] = useState(1)
+  const [page, setPage] = useState(1)
+  const [fit, setFit] = useState(() => Math.min(window.innerWidth - 24, 900))
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const on = () => setFit(Math.min(window.innerWidth - 24, 900))
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('resize', on)
+    window.addEventListener('keydown', key)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('resize', on)
+      window.removeEventListener('keydown', key)
+      document.body.style.overflow = ''
+    }
+  }, [onClose])
+  useEffect(() => {
+    let dead = false
+    let loaded: PdfDoc | null = null
+    void (async () => {
+      try {
+        const pdfjs = await import('pdfjs-dist')
+        pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
+        const d = await pdfjs.getDocument({ url: `${SERVER}/editor/kit/pdf?id=${file.id}`, httpHeaders: { Authorization: `Bearer ${ownerKey() ?? ''}` }, disableRange: true, disableStream: true }).promise
+        if (dead) return void d.destroy()
+        loaded = d
+        const vp = (await d.getPage(1)).getViewport({ scale: 1 })
+        setRatio(vp.height / vp.width)
+        setDoc(d)
+      } catch {
+        if (!dead) setError('Could not open this PDF. Check the internet and try again.')
+      }
+    })()
+    return () => {
+      dead = true
+      void loaded?.destroy()
+    }
+  }, [file.id])
+  const onScroll = () => {
+    const mid = window.innerHeight / 2
+    for (const el of box.current?.querySelectorAll<HTMLElement>('.pdf-page') ?? []) {
+      const r = el.getBoundingClientRect()
+      if (r.top <= mid && r.bottom >= mid) return setPage(Number(el.dataset.page))
+    }
+  }
+  const width = Math.round(fit * zoom)
+  return (
+    <div className="mk-reader" role="dialog" aria-modal="true" aria-label={file.title}>
+      <div className="mz-bar">
+        <button className="icon-btn" onClick={onClose} aria-label="Close">
+          ✕
+        </button>
+        <div className="mz-bar-title">
+          <strong>{file.title}</strong>
+          <span>{doc ? `Page ${page} of ${doc.numPages}` : error ? '' : 'Opening…'}</span>
+        </div>
+        <button className="icon-btn" onClick={() => setZoom((z) => Math.max(1, +(z - 0.5).toFixed(1)))} disabled={zoom <= 1} aria-label="Zoom out">
+          −
+        </button>
+        <button className="icon-btn" onClick={() => setZoom((z) => Math.min(3, +(z + 0.5).toFixed(1)))} disabled={zoom >= 3} aria-label="Zoom in">
+          +
+        </button>
+        <button className="btn small mk-wa" onClick={onShare}>
+          WhatsApp
+        </button>
+      </div>
+      <div className="mk-reader-body" ref={box} onScroll={onScroll}>
+        {error ? (
+          <p className="empty">{error}</p>
+        ) : !doc ? (
+          <div className="mz-loading">{file.cover && <img src={file.cover} alt="" />}</div>
+        ) : (
+          <div className={`pdf-pages ${zoom > 1 ? 'zoomed' : ''}`}>
+            {Array.from({ length: doc.numPages }, (_, i) => (
+              <PdfPage key={`${i}-${width}`} doc={doc} n={i + 1} width={width} ratio={ratio} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ---------- sharing ---------- */
 
 function ShareResult({ link, onDone }: { link: { company: string; person: string; phone: string; url: string; expires: string }; onDone: () => void }) {
@@ -261,10 +351,10 @@ function ShareResult({ link, onDone }: { link: { company: string; person: string
   )
 }
 
-function ShareDialog({ book, onClose, onSaved }: { book: Book; onClose: () => void; onSaved: () => void }) {
+function ShareDialog({ book, only, onClose, onSaved }: { book: Book; only?: string[]; onClose: () => void; onSaved: () => void }) {
   const clients = useAsync('studio:kit-clients', (s) => studio<{ clients: Client[] }>('ads', undefined, s))
   const [f, setF] = useState({ clientId: '', company: '', person: '', phone: '', days: 15 })
-  const [files, setFiles] = useState<string[]>(book.files.map((x) => x.id))
+  const [files, setFiles] = useState<string[]>(only?.length ? only : book.files.map((x) => x.id))
   const [busy, setBusy] = useState(false)
   const [made, setMade] = useState<{ company: string; person: string; phone: string; url: string; expires: string } | null>(null)
   const pickClient = (id: string) => {
@@ -444,7 +534,11 @@ export function MediaKitTab() {
   const res = useAsync('studio:kit', (s) => studio<Book>('kit', undefined, s))
   const [adding, setAdding] = useState<{ file: File; existing?: KitFile } | null>(null)
   const [renaming, setRenaming] = useState<KitFile | null>(null)
-  const [sharing, setSharing] = useState(false)
+  const [sharing, setSharing] = useState<string[] | null>(null)
+  const [reading, setReading] = useState<KitFile | null>(null)
+  const [removing, setRemoving] = useState<KitFile | null>(null)
+  const replaceFor = useRef<KitFile | undefined>(undefined)
+  const replaceInput = useRef<HTMLInputElement>(null)
   const [activity, setActivity] = useState<KitLink | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const book = res.data
@@ -496,8 +590,13 @@ export function MediaKitTab() {
     res.reload()
   }
   const remove = async (f: KitFile) => {
-    if (!window.confirm(`Remove “${f.title}”? Links already shared will no longer show it.`)) return
-    await studioPost('kit/remove', { id: f.id }).catch((err) => toast((err as Error).message))
+    try {
+      await studioPost('kit/remove', { id: f.id })
+      toast(`“${f.title}” removed`)
+    } catch (err) {
+      toast((err as Error).message)
+    }
+    setRemoving(null)
     res.reload()
   }
 
@@ -512,7 +611,7 @@ export function MediaKitTab() {
         note="Only the owner and full-access staff see this. Share a private link with an advertiser: they get a page made for their company, and you see when they open it."
         actions={
           book.files.length > 0 ? (
-            <button className="btn small" onClick={() => setSharing(true)}>
+            <button className="btn small" onClick={() => setSharing([])}>
               Share media kit
             </button>
           ) : undefined
@@ -540,38 +639,51 @@ export function MediaKitTab() {
         <div className="mk-files">
           {book.files.map((f, i) => (
             <article key={f.id} className="mk-file">
-              <div className="mk-cover">{f.cover ? <img src={f.cover} alt="" width={380} height={538} /> : <span>PDF</span>}</div>
+              <button className="mk-cover" onClick={() => setReading(f)} aria-label={`Open ${f.title}`}>
+                {f.cover ? <img src={f.cover} alt="" width={380} height={538} /> : <span>PDF</span>}
+              </button>
               <div className="mk-file-body">
                 <strong>{f.title}</strong>
                 <span className="meta">
                   {f.pages ? `${f.pages} pages · ` : ''}
                   {sizeOf(f.size)} · updated {day(f.updated_at)}
                 </span>
-                <div className="task-btns">
-                  <button className="mini-btn" onClick={() => setRenaming(f)}>
-                    Rename
+                <div className="mk-file-btns">
+                  <button className="btn small" onClick={() => setReading(f)}>
+                    Open
                   </button>
-                  <label className="mini-btn">
-                    Replace PDF
-                    <input type="file" accept="application/pdf,.pdf" hidden onChange={pick(f)} />
-                  </label>
-                  {i > 0 && (
-                    <button className="mini-btn" onClick={() => void move(f, 'up')} aria-label={`Move ${f.title} up`}>
-                      ↑
-                    </button>
-                  )}
-                  {i < book.files.length - 1 && (
-                    <button className="mini-btn" onClick={() => void move(f, 'down')} aria-label={`Move ${f.title} down`}>
-                      ↓
-                    </button>
-                  )}
-                  <button className="mini-btn danger" onClick={() => void remove(f)}>
-                    Remove
+                  <button className="btn ghost small mk-wa" onClick={() => setSharing([f.id])}>
+                    WhatsApp
                   </button>
+                  <RowMenu
+                    items={[
+                      { label: 'Rename', onClick: () => setRenaming(f) },
+                      {
+                        label: 'Replace PDF',
+                        onClick: () => {
+                          replaceFor.current = f
+                          replaceInput.current?.click()
+                        },
+                      },
+                      ...(i > 0 ? [{ label: 'Move up', onClick: () => void move(f, 'up') }] : []),
+                      ...(i < book.files.length - 1 ? [{ label: 'Move down', onClick: () => void move(f, 'down') }] : []),
+                      { label: 'Remove…', danger: true, onClick: () => setRemoving(f) },
+                    ]}
+                  />
                 </div>
               </div>
             </article>
           ))}
+          <input
+            ref={replaceInput}
+            type="file"
+            accept="application/pdf,.pdf"
+            hidden
+            onChange={(e) => {
+              pick(replaceFor.current)(e)
+              replaceFor.current = undefined
+            }}
+          />
           <label className="mk-add">
             <span>＋</span>
             <strong>Add media kit PDF</strong>
@@ -690,7 +802,33 @@ export function MediaKitTab() {
           }}
         />
       )}
-      {sharing && <ShareDialog book={book} onClose={() => setSharing(false)} onSaved={res.reload} />}
+      {sharing && <ShareDialog book={book} only={sharing} onClose={() => setSharing(null)} onSaved={res.reload} />}
+      {reading && (
+        <KitReader
+          file={reading}
+          onClose={() => setReading(null)}
+          onShare={() => {
+            const id = reading.id
+            setReading(null)
+            setSharing([id])
+          }}
+        />
+      )}
+      {removing && (
+        <Dialog title="Remove media kit?" onClose={() => setRemoving(null)}>
+          <p>
+            <b>{removing.title}</b> will be deleted. Advertisers who already have a link will no longer see it. To change the file, use <b>Replace PDF</b> instead.
+          </p>
+          <div className="action-row">
+            <button className="btn ghost" onClick={() => setRemoving(null)} autoFocus>
+              Keep it
+            </button>
+            <button className="btn danger" onClick={() => void remove(removing)}>
+              Remove
+            </button>
+          </div>
+        </Dialog>
+      )}
       {activity && <ActivityDialog link={activity} files={book.files} onClose={() => setActivity(null)} />}
     </>
   )

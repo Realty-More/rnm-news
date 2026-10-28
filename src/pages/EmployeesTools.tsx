@@ -174,7 +174,7 @@ export function AddEmployeeDialog({ onClose, onAdded, office }: { onClose: () =>
 }
 
 /** The "⋯" menu on each employee row. */
-function RowMenu({ items }: { items: { label: string; danger?: boolean; onClick: () => void }[] }) {
+export function RowMenu({ items }: { items: { label: string; danger?: boolean; onClick: () => void }[] }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {

@@ -50,7 +50,7 @@ import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, news
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
 import { getDraft, listDrafts, pressToStory, removeDraft } from './press.ts'
-import { changeLink, createLink, kitAsset, kitBook, kitPage, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
+import { changeLink, createLink, kitAsset, kitBook, kitPage, kitPdf, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
 import { sendTeamEmail } from './teamEmail.ts'
 import { addStaffLogin, keyToMobile, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
@@ -184,6 +184,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await newsletterBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/kit':
           return json(await kitBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/kit/pdf':
+          return kitPdf(env, url.searchParams.get('id') ?? '', headers)
         case '/editor/kit/views':
           return json(await linkViews(env, url.searchParams.get('token') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/press/drafts':

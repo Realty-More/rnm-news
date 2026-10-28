@@ -50,3 +50,8 @@ CREATE TABLE IF NOT EXISTS news_mail (day TEXT NOT NULL, kind TEXT NOT NULL, n I
 CREATE TABLE IF NOT EXISTS profiles (person_id TEXT PRIMARY KEY, title TEXT, photo TEXT, avatar TEXT, updated_at TEXT);
 -- Press release → story drafts (desk house style).
 CREATE TABLE IF NOT EXISTS pr_drafts (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, source TEXT, story TEXT NOT NULL, by_name TEXT, created_at TEXT NOT NULL);
+-- Media kit (owner only): rate-card PDFs (files in KV kit:file:<id>), private share links and their opens.
+CREATE TABLE IF NOT EXISTS kit_files (id TEXT PRIMARY KEY, title TEXT NOT NULL, file_name TEXT, size INTEGER NOT NULL, pages INTEGER, sort INTEGER NOT NULL DEFAULT 0, has_cover INTEGER NOT NULL DEFAULT 0, by_name TEXT, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS kit_links (token TEXT PRIMARY KEY, company TEXT NOT NULL, person TEXT, phone TEXT, files TEXT NOT NULL, client_id INTEGER, by_name TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, preview INTEGER NOT NULL DEFAULT 0, opens INTEGER NOT NULL DEFAULT 0, downloads INTEGER NOT NULL DEFAULT 0, first_open TEXT, last_open TEXT);
+CREATE TABLE IF NOT EXISTS kit_views (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL, at TEXT NOT NULL, kind TEXT NOT NULL, file_id TEXT, device TEXT, place TEXT);
+CREATE INDEX IF NOT EXISTS kit_views_token ON kit_views (token, at);

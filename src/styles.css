@@ -6533,3 +6533,208 @@ a.mini-btn {
   text-transform: none;
   letter-spacing: normal;
 }
+
+/* ---------- Studio → Sales → Media kit ---------- */
+.mk-files {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.mk-file {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  min-width: 0;
+}
+.mk-cover {
+  flex: none;
+  width: 92px;
+  aspect-ratio: 1 / 1.414;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  color: var(--mute);
+  font-weight: 700;
+  font-size: 13px;
+}
+.mk-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  display: block;
+}
+.mk-file-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.mk-file-body strong {
+  font-size: 15px;
+  line-height: 1.3;
+}
+.mk-file-body .task-btns {
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+.mk-file-body label.mini-btn {
+  cursor: pointer;
+}
+.mk-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 154px;
+  padding: 14px;
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--mute);
+  text-align: center;
+  cursor: pointer;
+}
+.mk-add:hover,
+.mk-add:focus-within {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.mk-add span {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--accent-deep);
+}
+.mk-add strong {
+  color: var(--ink);
+}
+.mk-add small {
+  font-size: 12.5px;
+}
+.mk-form label {
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 5px;
+}
+.mk-form label small {
+  font-weight: 400;
+  color: var(--mute);
+}
+.mk-form textarea {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+.mk-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 10px;
+}
+.mk-pick {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px 10px;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.mk-pick legend {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
+  padding: 0 4px;
+}
+.mk-pick .auth-check {
+  font-weight: 500;
+  color: var(--ink);
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.mk-result .mk-url {
+  margin: 6px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: 500 13.5px var(--sans);
+  word-break: break-all;
+}
+.mk-msg {
+  white-space: pre-wrap;
+  font: 13.5px/1.55 var(--sans);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin: 10px 0 12px;
+  max-height: 240px;
+  overflow: auto;
+}
+.mk-links li > div:first-child {
+  min-width: 0;
+}
+.mk-status {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12.5px;
+}
+.mk-line {
+  display: block;
+  font-size: 12.5px;
+}
+.mk-links .task-btns {
+  flex-wrap: wrap;
+}
+.mk-activity {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.mk-activity li {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.mk-activity strong {
+  font-size: 14px;
+}
+.mk-activity .meta {
+  font-size: 12.5px;
+}
+.mk-file-body .task-btns,
+.mk-links .task-btns {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  flex: initial;
+}
+.mk-links li {
+  flex-wrap: wrap;
+}
+.mk-links .task-btns {
+  justify-content: flex-end;
+  max-width: 330px;
+}
+.form-grid.mk-form {
+  grid-template-columns: 1fr;
+}
+@media (max-width: 640px) {
+  .mk-links .task-btns {
+    max-width: none;
+    justify-content: flex-start;
+  }
+}

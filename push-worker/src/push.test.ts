@@ -777,3 +777,31 @@ describe('press release to story', () => {
     expect(s.warnings.join(' ')).not.toContain('25000')
   })
 })
+
+describe('media kit links', async () => {
+  const { cleanLink, deviceOf, isBot, isToken } = await import('./mediakit.ts')
+  it('does not count link previews as opens', () => {
+    expect(isBot('WhatsApp/2.24.1.6 A')).toBe(true)
+    expect(isBot('facebookexternalhit/1.1')).toBe(true)
+    expect(isBot('TelegramBot (like TwitterBot)')).toBe(true)
+    expect(isBot('')).toBe(true)
+    expect(isBot('Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36')).toBe(false)
+    expect(isBot('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1')).toBe(false)
+  })
+  it('names the device', () => {
+    expect(deviceOf('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile')).toBe('Phone · iOS')
+    expect(deviceOf('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130')).toBe('Computer · Windows')
+  })
+  it('checks a new share link', () => {
+    const now = Date.parse('2026-10-28T06:00:00Z')
+    const l = cleanLink({ company: '  Godrej  Properties ', person: 'Mr Mehta', phone: '98100 12345', files: ['abcd1234', 'zzzz9999', 'abcd1234'], days: 7 }, ['abcd1234'], now)
+    expect(l).toMatchObject({ company: 'Godrej Properties', phone: '9810012345', files: ['abcd1234'] })
+    expect(l.expires).toBe('2026-11-04T06:00:00.000Z')
+    expect(cleanLink({ company: 'DLF', files: ['abcd1234'], days: 3 }, ['abcd1234'], now).expires).toBe('2026-11-12T06:00:00.000Z')
+    expect(() => cleanLink({ company: 'D', files: ['abcd1234'] }, ['abcd1234'])).toThrow(/company/)
+    expect(() => cleanLink({ company: 'DLF', files: [] }, ['abcd1234'])).toThrow(/Pick/)
+    expect(() => cleanLink({ company: 'DLF', phone: '123', files: ['abcd1234'] }, ['abcd1234'])).toThrow(/mobile/)
+    expect(isToken('Ab3_-Ab3_-Ab3_-Ab3_-Ab')).toBe(true)
+    expect(isToken('short')).toBe(false)
+  })
+})

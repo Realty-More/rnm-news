@@ -6,6 +6,7 @@
 //   GET  /magazine/pdf/<id>           R&M Magazine PDF from realtynmore.com, in parts, for the in-app reader
 //   POST /ai/ask                      "Ask R&M": answers from realtynmore.com stories only (Workers AI)
 //   GET  /a/<id>                      share preview page that opens the story in the app
+//   GET  /k/<token>                   private media kit page for one advertiser (expires; opens are logged)
 //   GET  /site/config                 Editor's Pick and announcement banner for the app
 //   GET  /market/*                    Nifty Realty list and news behind stock moves
 //   /editor/*                         Content Studio (owner key or an editor key)
@@ -49,6 +50,7 @@ import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, news
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
 import { getDraft, listDrafts, pressToStory, removeDraft } from './press.ts'
+import { changeLink, createLink, kitAsset, kitBook, kitPage, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
 import { sendTeamEmail } from './teamEmail.ts'
 import { addStaffLogin, keyToMobile, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
@@ -123,6 +125,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
   if (who.role === 'owner' && TEAM_ONLY.has(pathname)) return json({ error: 'Attendance and daily reports are for team members.' }, 403, headers)
   // Ad sales (advertisers, deal values, payments) and the newsletter are for the owner and full-access staff only.
   if ((pathname.startsWith('/editor/ads') || pathname.startsWith('/editor/newsletter')) && !full(who)) return ownerOnly()
+  // The media kit (rate cards and share links to advertisers) is for the owner alone, not staff with full access.
+  if (pathname.startsWith('/editor/kit') && who.role !== 'owner') return ownerOnly()
   try {
     if (req.method === 'GET') {
       switch (pathname) {
@@ -178,6 +182,10 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await adsBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/newsletter':
           return json(await newsletterBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/kit':
+          return json(await kitBook(env), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/kit/views':
+          return json(await linkViews(env, url.searchParams.get('token') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/press/drafts':
           return json(await listDrafts(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/press/draft':
@@ -218,6 +226,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
 
     // File uploads send the raw file, not JSON.
     if (pathname === '/editor/reels/ref-upload') return json(await uploadRef(env, req, url, who), 200, headers)
+    if (pathname === '/editor/kit/upload') return json(await uploadKit(env, req, url, who), 200, headers)
+    if (pathname === '/editor/kit/cover') return json(await uploadCover(env, req, url), 200, headers)
     // A profile photo (small JPEG as text) is the one bigger body the Studio sends.
     const body = await readJson(req, pathname === '/editor/me/profile' ? 160_000 : pathname === '/editor/press/story' ? 60_000 : MAX_BODY)
     switch (pathname) {
@@ -290,6 +300,20 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       }
       case '/editor/press/story':
         return json(await pressToStory(env, body, who), 200, headers)
+      case '/editor/kit/file':
+        return json(await updateKit(env, body), 200, headers)
+      case '/editor/kit/move':
+        return json(await moveKit(env, body), 200, headers)
+      case '/editor/kit/remove':
+        return json(await removeKit(env, body), 200, headers)
+      case '/editor/kit/settings':
+        return json(await saveKitSettings(env, body), 200, headers)
+      case '/editor/kit/link':
+        return json(await createLink(env, body, who, url.origin), 200, { ...headers, 'Cache-Control': 'no-store' })
+      case '/editor/kit/preview':
+        return json(await createLink(env, body, who, url.origin, true), 200, { ...headers, 'Cache-Control': 'no-store' })
+      case '/editor/kit/link/change':
+        return json(await changeLink(env, body), 200, headers)
       case '/editor/press/remove':
         return json(await removeDraft(env, body), 200, headers)
       case '/editor/newsletter/settings':
@@ -374,6 +398,9 @@ export default {
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Range', 'Access-Control-Max-Age': '86400' } })
       if (req.method === 'GET') return magazinePdf(env, req, Number(mag[1]), ctx)
     }
+    // Media kit links sent to advertisers (WhatsApp, email): the page, its PDFs and cover pictures.
+    const kit = /^\/k\/([A-Za-z0-9_-]{22})(?:\/(f|c)\/([a-z0-9]{8,24}))?\/?$/.exec(pathname)
+    if (kit && (req.method === 'GET' || req.method === 'HEAD')) return kit[2] ? kitAsset(env, req, kit[1], kit[2] as 'f' | 'c', kit[3], ctx) : kitPage(env, req, kit[1], ctx)
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers })
 
     if (pathname.startsWith('/editor/')) {

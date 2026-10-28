@@ -625,8 +625,8 @@ export function PressTab() {
   return (
     <>
       <Panel
-        title="Press release → R&M story"
-        note="Drop in everything Palash sir sends: one or more press releases (Word, PDF or text) and the photos. Each release becomes its own story in the desk format, with the right category, and photos placed the way realtynmore.com shows them. Always read it once before publishing."
+        title="Story desk: files → R&M story"
+        note="Drop in whatever Palash sir sends: press releases, guest articles, appointment news, reports or event notes (Word, PDF or text), with the photos. Each file becomes its own story in the desk format, with the right category, and photos placed the way realtynmore.com shows them. Always read it once before publishing."
       >
         <label className={`pr-drop ${drag ? 'on' : ''}`} onDragOver={(e) => (e.preventDefault(), setDrag(true))} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
           <input type="file" multiple accept=".docx,.pdf,.txt,image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" hidden onChange={onPick} />
@@ -655,7 +655,7 @@ export function PressTab() {
             ))}
           </div>
         )}
-        <textarea className="pr-text" style={docs.length || photos.length ? { minHeight: 76 } : undefined} value={text} onChange={(e) => setText(e.target.value)} rows={docs.length ? 3 : 8} placeholder="…or paste a press release here" aria-label="Press release text" />
+        <textarea className="pr-text" style={docs.length || photos.length ? { minHeight: 76 } : undefined} value={text} onChange={(e) => setText(e.target.value)} rows={docs.length ? 3 : 8} placeholder="…or paste the text here (press release, article, any news)" aria-label="Story text" />
         <div className="pr-opts">
           <label>
             Story type

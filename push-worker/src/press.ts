@@ -180,14 +180,14 @@ export function assemble(ai: AiOut, raw: string, now = Date.now(), force?: Kind)
     const intro = tidy(q.intro).replace(/,?$/, ',')
     quoteParas.push(`${intro && intro !== ',' ? `${intro} ` : ''}${who}, said, “${text}”`.replace(/^([a-z])/, (m) => m.toUpperCase()))
   }
-  if (quotes.length && !quoteParas.length) warnings.push('The release has a quote, but it was not placed. Add the spokesperson paragraph by hand.')
+  if (quotes.length && !quoteParas.length) warnings.push('There is a quote in the file, but it was not placed. Add the spokesperson paragraph by hand.')
   const paragraphs = [lead, ...(ai.before ?? []).map(tidy), ...quoteParas, ...(ai.after ?? []).map(tidy)].filter((p) => p.length > 20)
   if (paragraphs.length) paragraphs[0] = `**${city}, ${date}:** ${paragraphs[0]}`
   const all = [...new Set((ai.headlines ?? []).map((h) => tidy(h).replace(/^["“]|["”]$/g, '').replace(/\.$/, '')).filter(Boolean))]
   const headlines = [...all.filter(goodLength), ...all.filter((h) => !goodLength(h))].slice(0, 3)
   const body = paragraphs.map(plain).join(' ')
   const odd = unknownNumbers(`${headlines.join(' ')} ${body.replace(`${city}, ${date}:`, '')}`, raw)
-  if (odd.length) warnings.push(`Check these numbers; they are not in the release: ${odd.join(', ')}`)
+  if (odd.length) warnings.push(`Check these numbers; they are not in the file sent: ${odd.join(', ')}`)
   if (!headlines.length) warnings.push('No headline came back. Write one by hand.')
   const slug = slugOf(headlines[0] ?? '')
   return {
@@ -371,7 +371,7 @@ export async function pressToStory(env: Env, body: unknown, who: Who) {
   const b = (body ?? {}) as { text?: unknown; source?: unknown; kind?: unknown }
   const raw = typeof b.text === 'string' ? b.text.trim() : ''
   const forced = isKind(b.kind) ? b.kind : undefined
-  if (raw.length < 200) throw new Error('Add the press release (upload the Word or PDF file, or paste the text).')
+  if (raw.length < 200) throw new Error('Add the text (upload the Word or PDF file, or paste it).')
   const day = istToday().toISOString().slice(0, 10)
   const used = await env.DB.prepare("INSERT INTO ai_usage (day, who, n) VALUES (?, 'team', 1) ON CONFLICT(day, who) DO UPDATE SET n = n + 1 RETURNING n").bind(day).first<{ n: number }>()
   if ((used?.n ?? 1) > 150) throw new Error('Today’s free AI quota for the team is used up. Try again tomorrow.')
@@ -401,7 +401,7 @@ export async function pressToStory(env: Env, body: unknown, who: Who) {
       /* try the next model */
     }
   }
-  if (!ai?.lead) throw new Error('The AI could not read this release. Try again, or paste just the main text.')
+  if (!ai?.lead) throw new Error('The AI could not read this file. Try again, or paste just the main text.')
   // Short headlines miss the house style; ask once more for headlines only.
   if ((ai.headlines ?? []).filter((h) => goodLength(h.trim())).length < 2) {
     try {

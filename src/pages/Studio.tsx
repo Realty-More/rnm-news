@@ -87,7 +87,7 @@ const TABS = [
   { key: 'perf', label: 'App performance', group: 'audience', owner: true },
   { key: 'rivals', label: 'Competitors', group: 'audience' },
   { key: 'report', label: 'Weekly report', group: 'audience', owner: true },
-  { key: 'press', label: 'Press release', group: 'content' },
+  { key: 'press', label: 'Story desk', group: 'content' },
   { key: 'ideas', label: 'What to write', group: 'content' },
   { key: 'keywords', label: 'Keywords', group: 'content' },
   { key: 'seo', label: 'SEO check', group: 'content' },

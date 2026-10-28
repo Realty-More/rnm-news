@@ -6809,3 +6809,186 @@ button.mk-cover:focus-visible {
 .mk-file-body > strong {
   padding-right: 30px;
 }
+
+/* Press release: several files and photos at once, and the story laid out like realtynmore.com. */
+.pr-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 20px 14px;
+  margin-bottom: 10px;
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  text-align: center;
+  cursor: pointer;
+}
+.pr-drop.on,
+.pr-drop:hover,
+.pr-drop:focus-within {
+  border-color: var(--accent);
+}
+.pr-drop strong {
+  font-size: 16px;
+}
+.pr-drop span {
+  color: var(--mute);
+  font-size: 13px;
+}
+.pr-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.pr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 4px 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 13px;
+  overflow: hidden;
+}
+.pr-chip-img {
+  padding-left: 4px;
+}
+.pr-chip img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+.pr-chip button {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--mute);
+  cursor: pointer;
+}
+.pr-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+.pr-opts label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mute);
+}
+.pr-opts select,
+.pr-photo-row select {
+  height: 40px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+  max-width: 100%;
+}
+.pr-cat {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.pr-cat b {
+  color: var(--accent-deep);
+}
+.pr-cat span {
+  color: var(--mute);
+}
+.pr-featured {
+  margin: 0 0 14px;
+}
+.pr-featured img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.pr-featured figcaption {
+  font-size: 12px;
+  color: var(--mute);
+  margin-top: 4px;
+}
+.pr-fig {
+  margin: 4px 0 8px;
+}
+.pr-fig.left {
+  float: left;
+  margin-right: 16px;
+  clear: left;
+}
+.pr-fig.right {
+  float: right;
+  margin-left: 16px;
+  clear: right;
+}
+.pr-fig img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pr-clear {
+  clear: both;
+}
+.pr-photos h3 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+}
+.pr-photos ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.pr-photos li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.pr-photos li.off img {
+  opacity: 0.4;
+}
+.pr-photos li > img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: none;
+  background: var(--surface);
+}
+.pr-photos li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pr-photo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pr-photos small {
+  font-size: 12.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}

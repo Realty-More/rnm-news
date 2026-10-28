@@ -49,7 +49,7 @@ import { magazinePdf } from './magazine-pdf.ts'
 import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
-import { getDraft, listDrafts, pressToStory, removeDraft } from './press.ts'
+import { getDraft, listDrafts, pressImage, pressToStory, removeDraft, savePressImage, setImageRole } from './press.ts'
 import { changeLink, createLink, kitAsset, kitBook, kitPage, kitPdf, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
 import { sendTeamEmail } from './teamEmail.ts'
 import { addStaffLogin, keyToMobile, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
@@ -188,6 +188,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return kitPdf(env, url.searchParams.get('id') ?? '', headers)
         case '/editor/kit/views':
           return json(await linkViews(env, url.searchParams.get('token') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/press/image':
+          return pressImage(env, url, headers)
         case '/editor/press/drafts':
           return json(await listDrafts(env), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/press/draft':
@@ -228,10 +230,11 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
 
     // File uploads send the raw file, not JSON.
     if (pathname === '/editor/reels/ref-upload') return json(await uploadRef(env, req, url, who), 200, headers)
+    if (pathname === '/editor/press/image') return json(await savePressImage(env, req, url), 200, headers)
     if (pathname === '/editor/kit/upload') return json(await uploadKit(env, req, url, who), 200, headers)
     if (pathname === '/editor/kit/cover') return json(await uploadCover(env, req, url), 200, headers)
     // A profile photo (small JPEG as text) is the one bigger body the Studio sends.
-    const body = await readJson(req, pathname === '/editor/me/profile' ? 160_000 : pathname === '/editor/press/story' ? 60_000 : MAX_BODY)
+    const body = await readJson(req, pathname === '/editor/me/profile' ? 160_000 : pathname === '/editor/press/story' ? 120_000 : MAX_BODY)
     switch (pathname) {
       case '/editor/push':
         return json(await customPush(env, body, who), 200, headers)
@@ -316,6 +319,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await createLink(env, body, who, url.origin, true), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/kit/link/change':
         return json(await changeLink(env, body), 200, headers)
+      case '/editor/press/image-role':
+        return json(await setImageRole(env, body), 200, headers)
       case '/editor/press/remove':
         return json(await removeDraft(env, body), 200, headers)
       case '/editor/newsletter/settings':

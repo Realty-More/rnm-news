@@ -775,6 +775,42 @@ describe('press release to story', () => {
     expect(s.headlines[0]).toBe('G Square Group and JSW One Homes Partner to Streamline Turnkey Villa Construction')
     expect(s.warnings.join(' ')).toContain('12000')
     expect(s.warnings.join(' ')).not.toContain('25000')
+    expect(s.kind).toBe('news')
+    expect(s.people).toEqual([{ name: 'Bala Ramajayam', designation: 'Founder', company: 'G Square Group', role: 'speaker' }])
+  })
+  it('writes appointments in the Leadership Updates style', async () => {
+    const { assemble } = await import('./press.ts')
+    const raw = 'Mumbai, October 21, 2026: WSB Real Estate Partners has announced the appointment of Akash Rastogi as Managing Partner.'
+    const s = assemble({ category: 'leadership', appointees: [{ name: 'Mr. Akash Rastogi', designation: 'Managing Partner' }], headlines: ['WSB Real Estate Partners Appoints Akash Rastogi as Managing Partner'], lead: 'WSB Real Estate Partners has appointed Akash Rastogi as Managing Partner to lead its industrial and logistics platform' }, raw, now)
+    expect(s.category).toBe('Leadership Updates')
+    expect(s.paragraphs[0]).toBe('**Mumbai, October 21, 2026:** WSB Real Estate Partners has appointed **Akash Rastogi** as Managing Partner to lead its industrial and logistics platform, according to a press release.')
+    expect(s.people[0]).toMatchObject({ name: 'Akash Rastogi', role: 'appointee' })
+  })
+  it('keeps a guest column as written, with byline and disclaimer', async () => {
+    const { assembleGuest, looksLikeGuest } = await import('./press.ts')
+    const raw = [
+      'The Rise of Home Elevators in Luxury Villas',
+      'Navin Rajagopalan',
+      'Director, City Lifts India Limited',
+      'Luxury housing in India is witnessing a significant transformation as home elevators are rapidly becoming an integral part of premium villas and bungalows across the country.',
+      'Technology and Design',
+      'Today’s residential elevators are compact, energy-efficient, aesthetically customizable, and capable of blending seamlessly with luxury interiors and smart homes.',
+      'About the Author',
+      'Navin Rajagopalan is the Director of City Lifts India Limited.',
+    ].join('\n')
+    expect(looksLikeGuest(raw)).toBe(true)
+    expect(looksLikeGuest('Mumbai, October 21, 2026: WSB Real Estate Partners has announced the appointment of Akash Rastogi.')).toBe(false)
+    const s = assembleGuest({ headlines: ['The Rise of Home Elevators in Luxury Villas & Bungalows'], author: { name: 'Navin Rajagopalan', designation: 'Director', company: 'City Lifts India Limited' } }, raw)
+    expect(s.kind).toBe('guest')
+    expect(s.dateline).toBe('')
+    expect(s.paragraphs[0]).toBe('***By Navin Rajagopalan, Director, City Lifts India Limited***')
+    expect(s.paragraphs[1]).toMatch(/^Luxury housing in India/)
+    expect(s.paragraphs[2]).toBe('**Technology and Design**')
+    expect(s.paragraphs.at(-1)).toContain('Disclaimer: Views expressed in this article are those of the author')
+    expect(s.paragraphs.join(' ')).not.toContain('About the Author')
+    expect(s.html).toContain('<p><strong><em>By Navin Rajagopalan, Director, City Lifts India Limited</em></strong></p>')
+    expect(s.headlines).toEqual(['The Rise of Home Elevators in Luxury Villas', 'The Rise of Home Elevators in Luxury Villas & Bungalows'])
+    expect(s.people[0].role).toBe('author')
   })
 })
 

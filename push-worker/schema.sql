@@ -55,3 +55,5 @@ CREATE TABLE IF NOT EXISTS kit_files (id TEXT PRIMARY KEY, title TEXT NOT NULL, 
 CREATE TABLE IF NOT EXISTS kit_links (token TEXT PRIMARY KEY, company TEXT NOT NULL, person TEXT, phone TEXT, files TEXT NOT NULL, client_id INTEGER, by_name TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, preview INTEGER NOT NULL DEFAULT 0, opens INTEGER NOT NULL DEFAULT 0, downloads INTEGER NOT NULL DEFAULT 0, first_open TEXT, last_open TEXT);
 CREATE TABLE IF NOT EXISTS kit_views (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL, at TEXT NOT NULL, kind TEXT NOT NULL, file_id TEXT, device TEXT, place TEXT);
 CREATE INDEX IF NOT EXISTS kit_views_token ON kit_views (token, at);
+-- Photos sent with a press release, kept with its draft (files in KV pr:img:<draft>:<n>).
+CREATE TABLE IF NOT EXISTS pr_images (draft_id INTEGER NOT NULL, n INTEGER NOT NULL, role TEXT, person TEXT, name TEXT, type TEXT, w INTEGER, h INTEGER, size INTEGER, PRIMARY KEY (draft_id, n));

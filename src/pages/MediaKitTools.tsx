@@ -1,4 +1,4 @@
-// Studio → Sales → Media kit (the owner only; employees never see it, even with full access).
+// Studio → Sales → Media kit (owner and full-access staff only; other employees never see it).
 //   The rate-card PDFs are kept on the app server, never in the public app. To send them, make a
 //   private link for one advertiser: a branded page "Prepared for <company>" with only the kits
 //   picked, valid for a few days. The list shows who opened it, when, and what they downloaded;
@@ -509,7 +509,7 @@ export function MediaKitTab() {
     <>
       <Panel
         title="Media kit"
-        note="Only you can see this. Share a private link with an advertiser: they get a page made for their company, and you see when they open it."
+        note="Only the owner and full-access staff see this. Share a private link with an advertiser: they get a page made for their company, and you see when they open it."
         actions={
           book.files.length > 0 ? (
             <button className="btn small" onClick={() => setSharing(true)}>

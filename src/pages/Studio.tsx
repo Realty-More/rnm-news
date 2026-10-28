@@ -101,7 +101,7 @@ const TABS = [
   { key: 'magazine', label: 'Magazine list', group: 'publish' },
   { key: 'newsletter', label: 'Newsletter', group: 'publish', owner: true },
   { key: 'ads', label: 'Ad sales', group: 'sales', owner: true },
-  { key: 'mediakit', label: 'Media kit', group: 'sales', owner: true, onlyOwner: true },
+  { key: 'mediakit', label: 'Media kit', group: 'sales', owner: true },
   { key: 'team', label: 'Employees', group: 'team', owner: true },
 ] as const
 const GROUPS = [
@@ -147,9 +147,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
   // staff tools (check-in and daily report) only for team logins. Palash Roy is not tracked as staff.
   // Full access (owner, or staff the owner trusts) sees owner sections; only the owner skips staff tools.
   const isFull = me?.role === 'owner' || me?.role === 'admin' || !me
-  // A few tools (the media kit) are for the owner alone, not for staff with full access.
-  const isOwner = me?.role === 'owner' || !me
-  const visible = TABS.filter((t) => ('onlyOwner' in t ? isOwner : 'owner' in t ? isFull : 'staff' in t ? me?.role !== 'owner' : true))
+  const visible = TABS.filter((t) => ('owner' in t ? isFull : 'staff' in t ? me?.role !== 'owner' : true))
   // Employees land on their own day; the owner on the overview.
   const tab = (visible.find((t) => t.key === params.get('tab'))?.key ?? (me?.role === 'editor' ? 'myday' : 'overview')) as Tab
   const group = TABS.find((t) => t.key === tab)!.group

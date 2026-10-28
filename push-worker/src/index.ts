@@ -125,8 +125,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
   if (who.role === 'owner' && TEAM_ONLY.has(pathname)) return json({ error: 'Attendance and daily reports are for team members.' }, 403, headers)
   // Ad sales (advertisers, deal values, payments) and the newsletter are for the owner and full-access staff only.
   if ((pathname.startsWith('/editor/ads') || pathname.startsWith('/editor/newsletter')) && !full(who)) return ownerOnly()
-  // The media kit (rate cards and share links to advertisers) is for the owner alone, not staff with full access.
-  if (pathname.startsWith('/editor/kit') && who.role !== 'owner') return ownerOnly()
+  // The media kit (rate cards and share links to advertisers): owner and full-access staff, not other employees.
+  if (pathname.startsWith('/editor/kit') && !full(who)) return ownerOnly()
   try {
     if (req.method === 'GET') {
       switch (pathname) {

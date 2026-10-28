@@ -1,4 +1,4 @@
-// Media kit (the owner only; not shown to any employee, even with full access): the rate-card PDFs and private share links for advertisers.
+// Media kit (owner and full-access staff only; other employees never see it): the rate-card PDFs and private share links for advertisers.
 //   Files: each PDF is kept in KV (kit:file:<id>) with a first-page cover picture (kit:cover:<id>);
 //   the details are in D1 (kit_files). Nothing about the kit is in the public app.
 //   Links: /k/<token> is a branded page made for one advertiser, showing only the kits picked for them.

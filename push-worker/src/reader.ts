@@ -190,6 +190,14 @@ export interface GoogleClaims {
 
 /** Checks a Google ID token (signature, our client ID, issuer, expiry, verified email). */
 export async function verifyGoogleToken(token: string, clientId: string, keys: Jwk[], now = Date.now()): Promise<GoogleClaims> {
+  try {
+    return await checkGoogleToken(token, clientId, keys, now)
+  } catch (err) {
+    // Our own messages pass through; a broken token gets a plain one.
+    throw /Google|verified|expired/.test((err as Error).message) ? err : new Error('Google sign-in did not work. Please try again.')
+  }
+}
+async function checkGoogleToken(token: string, clientId: string, keys: Jwk[], now: number): Promise<GoogleClaims> {
   const parts = token.split('.')
   if (parts.length !== 3) throw new Error('Google sign-in did not work. Please try again.')
   const header = JSON.parse(new TextDecoder().decode(fromB64url(parts[0]))) as { kid?: string; alg?: string }

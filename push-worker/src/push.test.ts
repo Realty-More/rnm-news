@@ -746,6 +746,27 @@ describe('daily team report email', () => {
     expect(cards.indexOf('Asha')).toBeLessThan(cards.indexOf('Ravi'))
     expect(mail.text).toContain('Neha (Writer): in 10:20 late (At Noida Office), out 18:50')
   })
+  it('adds what was published on the website that day', async () => {
+    const { buildTeamEmail } = await import('./teamEmail.ts')
+    const day = { day: '2026-10-28', summary: { total: 1, present: 1, late: 0, reports: 1 }, people: [{ name: 'Neha', checkIn: '2026-10-28T05:00:00Z', checkOut: '2026-10-28T12:30:00Z', mode: 'office', note: null, late: false, minutes: 450, report: { done: 'Stories', plan: '', blockers: '', links: '' } }] }
+    const site = {
+      prevCount: 15,
+      stories: [
+        { id: 1, title: 'L&T Reports 33% Surge in Q2 PAT', link: 'https://realtynmore.com/lt/', time: '2026-10-28T06:08:00Z', section: 'News', views: 63 },
+        { id: 2, title: 'The Rise of Home Elevators', link: 'https://realtynmore.com/elevators/', time: '2026-10-28T06:14:00Z', section: 'Guest Column', views: 15 },
+      ],
+    }
+    const mail = buildTeamEmail(day, 'https://realty-more.github.io/rnm-news/', Date.parse('2026-10-28T14:00:00Z'), null, site)
+    expect(mail.subject).toContain('· 2 stories published')
+    expect(mail.html).toContain('Published on realtynmore.com')
+    expect(mail.html).toContain('Most read so far · 63 views')
+    expect(mail.html).toContain('L&amp;T Reports 33% Surge in Q2 PAT')
+    expect(mail.html).toContain('▼ 13 vs yesterday')
+    expect(mail.html).toContain('78</b> views so far')
+    expect(mail.text).toContain('- 11:38 am · L&T Reports 33% Surge in Q2 PAT (News, 63 views)')
+    const none = buildTeamEmail(day, 'https://realty-more.github.io/rnm-news/', Date.parse('2026-10-28T14:00:00Z'), null, { stories: [] })
+    expect(none.html).toContain('<b>No stories published</b> on realtynmore.com today')
+  })
 })
 
 describe('press release to story', () => {

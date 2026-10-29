@@ -2,7 +2,8 @@
 // "Evening Brief": dark logo header with a greeting and one-line summary, four headline numbers with
 // the change since the previous working day, numbered action items (absent, blocked, overdue, late,
 // missing reports, not checked out), then each person with a day timeline (shift, worked, late start),
-// times, place, the work report and tasks.
+// times, place, the work report and tasks; and what was published on realtynmore.com that day
+// (count vs the previous day, sections, most read so far, every story with time and views).
 // Email-safe HTML only (tables and inline styles; no scripts, SVG or web fonts).
 // Sent through the same Brevo connection as the newsletter.
 import type { Env } from './index.ts'
@@ -79,6 +80,70 @@ export function daySegments(from: number, to: number, start: number, end: number
   return out.map((s) => ({ ...s, w: Math.round(s.w * 10) / 10 }))
 }
 
+/* ---------- what went up on realtynmore.com that day ---------- */
+
+export interface PublishedStory {
+  id: number
+  title: string
+  link: string
+  time: string // ISO, UTC
+  section: string
+  views: number | null
+}
+export interface PublishedDay {
+  stories: PublishedStory[]
+  prevCount?: number
+  prevLabel?: string
+}
+
+/** UTC bounds of an IST calendar day. */
+const istDayBounds = (day: string) => {
+  const start = Date.parse(`${day}T00:00:00Z`) - IST_MS
+  return { start, end: start + 86400000 }
+}
+
+/**
+ * Stories published on the site that day (one request to the site), with the view counts the
+ * hourly job has saved. Falls back to the saved list if the site does not answer.
+ */
+export async function publishedOn(env: Env, day: string, prevDay?: string): Promise<PublishedDay> {
+  const { start, end } = istDayBounds(day)
+  let stories: PublishedStory[] = []
+  try {
+    const q = new URLSearchParams({ after: new Date(start - 6 * 3600000).toISOString(), before: new Date(end + 6 * 3600000).toISOString(), per_page: '60', _fields: 'id,date_gmt,link,title,categories' })
+    const res = await fetch(`${env.SITE_API}/posts?${q}`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RM-News-Studio/1.0)' } })
+    if (!res.ok) throw new Error(String(res.status))
+    const { decode } = await import('./site.ts')
+    const { sectionOf } = await import('./website.ts')
+    const rows = (await res.json()) as { id: number; date_gmt: string; link: string; title: { rendered: string }; categories: number[] }[]
+    stories = rows
+      .map((p) => ({ id: p.id, title: decode(p.title.rendered), link: p.link, time: `${p.date_gmt}Z`, section: sectionOf(p.categories ?? []), views: null as number | null }))
+      .filter((p) => Date.parse(p.time) >= start && Date.parse(p.time) < end)
+  } catch {
+    const { results } = await env.DB.prepare('SELECT post_id AS id, title, link, published AS time, section, views FROM webposts WHERE published >= ? AND published < ? ORDER BY published')
+      .bind(new Date(start).toISOString().slice(0, 19), new Date(end).toISOString().slice(0, 19))
+      .all<PublishedStory>()
+    stories = results.map((r) => ({ ...r, time: r.time.endsWith('Z') ? r.time : `${r.time}Z` }))
+  }
+  if (stories.length) {
+    const ids = stories.map((s) => s.id)
+    const { results } = await env.DB.prepare(`SELECT post_id AS id, views FROM webposts WHERE post_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all<{ id: number; views: number }>()
+    const seen = new Map(results.map((r) => [r.id, r.views]))
+    stories = stories.map((s) => ({ ...s, views: seen.get(s.id) ?? s.views ?? null }))
+  }
+  stories.sort((a, b) => a.time.localeCompare(b.time))
+  let prevCount: number | undefined
+  if (prevDay) {
+    const pb = istDayBounds(prevDay)
+    const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM webposts WHERE published >= ? AND published < ?')
+      .bind(new Date(pb.start).toISOString().slice(0, 19), new Date(pb.end).toISOString().slice(0, 19))
+      .first<{ n: number }>()
+      .catch(() => null)
+    prevCount = r?.n ?? undefined
+  }
+  return { stories, prevCount }
+}
+
 /** The previous working day's totals, for "vs yesterday". */
 export interface PrevDay {
   day: string
@@ -92,7 +157,7 @@ export interface PrevDay {
 const F = { sans: 'Arial,Helvetica,sans-serif', serif: "Georgia,'Times New Roman',serif" }
 
 /** The email (pure, for tests). */
-export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(), prev?: PrevDay | null, ownerName = 'Palash'): { subject: string; html: string; text: string } {
+export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(), prev?: PrevDay | null, site?: PublishedDay | null, ownerName = 'Palash'): { subject: string; html: string; text: string } {
   const date = new Date(`${d.day}T00:00:00Z`)
   const dateLabel = new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date)
   const shortDate = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date)
@@ -105,7 +170,7 @@ export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(),
   const workedMin = (p: DayPerson) => (p.checkIn && !p.checkOut && isToday ? Math.max(p.minutes, nowMin - minOf(p.checkIn)) : p.minutes)
   const teamMin = present.reduce((n, p) => n + workedMin(p), 0)
   const onTime = Math.max(0, s.present - s.late)
-  const subject = `Daily Team Report · ${shortDate} · ${s.present}/${s.total} in${s.late ? ` · ${s.late} late` : ''}${absent.length ? ` · ${absent.length} absent` : ''}${noReport.length ? ` · ${noReport.length} report${noReport.length === 1 ? '' : 's'} pending` : ''}`
+  const subject = `Daily Team Report · ${shortDate} · ${s.present}/${s.total} in${s.late ? ` · ${s.late} late` : ''}${absent.length ? ` · ${absent.length} absent` : ''}${noReport.length ? ` · ${noReport.length} report${noReport.length === 1 ? '' : 's'} pending` : ''}${site ? ` · ${site.stories.length} stor${site.stories.length === 1 ? 'y' : 'ies'} published` : ''}`
   const order = (p: DayPerson) => (p.checkIn ? 0 : p.leave ? 1 : 2)
   const people = [...d.people].sort((a, b) => order(a) - order(b) || (a.checkIn ?? '').localeCompare(b.checkIn ?? '') || a.name.localeCompare(b.name))
   const grace = 15
@@ -128,6 +193,7 @@ export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(),
     items.push({ tone: 'amber', html: `<b>${esc(p.name)}</b> came in ${by > 0 ? `${hours(by).replace(/^0h /, '')} late` : 'late'}, at ${clock12(p.checkIn)}` })
   }
   if (noReport.length) items.push({ tone: 'amber', html: `<b>No work report from</b> ${noReport.map((p) => esc(p.name)).join(', ')}` })
+  if (site && site.stories.length === 0 && s.present > 0) items.push({ tone: 'amber', html: '<b>No stories published</b> on realtynmore.com today' })
   for (const p of present.filter((x) => !x.checkOut)) items.push({ tone: 'grey', html: `<b>${esc(p.name)}</b> has not checked out yet` })
   const TONE = { red: { dot: C.red, bg: '#FBEAE5', fg: '#B23F20' }, amber: { dot: C.orange, bg: '#FCEFE2', fg: '#A6501A' }, grey: { dot: '#9A9AA0', bg: '#F1F0EC', fg: '#55555A' } }
 
@@ -213,6 +279,47 @@ ${meta}${report}${tasks}
 </td></tr>`
   }
 
+  // What went up on the website that day.
+  const pub = site?.stories ?? []
+  const withViews = pub.filter((x) => x.views !== null)
+  const totalViews = withViews.reduce((n, x) => n + (x.views ?? 0), 0)
+  const sections = [...pub.reduce((m, x) => m.set(x.section, (m.get(x.section) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1])
+  const top = [...withViews].sort((a, b) => (b.views ?? 0) - (a.views ?? 0))[0]
+  const storyTime = (iso: string) => clock12(iso).replace(' ', ' ')
+  const countDelta =
+    site?.prevCount !== undefined
+      ? (() => {
+          const diff = pub.length - site.prevCount!
+          return diff ? `<span style="color:${diff > 0 ? '#1F7A45' : '#B23F20'}">${diff > 0 ? '▲' : '▼'} ${Math.abs(diff)} vs ${prevLabel || 'yesterday'}</span>` : `<span style="color:${C.mute}">same as ${prevLabel || 'yesterday'}</span>`
+        })()
+      : ''
+  const MAX_STORIES = 30
+  const publishedSection = `${section('Published on realtynmore.com', `<span style="font:700 11px ${F.sans};color:${C.mute}">${pub.length}</span>`)}
+<tr><td class="px" style="padding:12px 36px 0">
+${
+  pub.length
+    ? `<div style="font:14px/1.6 ${F.sans};color:#2A2A2E"><b style="font:700 22px ${F.serif};color:${C.ink}">${pub.length}</b> stor${pub.length === 1 ? 'y' : 'ies'} published${countDelta ? ` &nbsp;·&nbsp; ${countDelta}` : ''}${withViews.length ? ` &nbsp;·&nbsp; <b>${totalViews.toLocaleString('en-IN')}</b> views so far` : ''}</div>
+<div style="margin-top:6px;font:12.5px/1.7 ${F.sans};color:${C.mute}">${sections.map(([name, n]) => `<span style="display:inline-block;margin:0 6px 4px 0;padding:2px 9px;border:1px solid ${C.line};border-radius:999px;color:#55555A">${esc(name)} <b style="color:${C.ink}">${n}</b></span>`).join('')}</div>
+${
+  top && (top.views ?? 0) > 0
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;background:#FBF6EA;border-radius:4px"><tr><td style="padding:14px 16px"><div style="font:700 10px ${F.sans};letter-spacing:1.4px;text-transform:uppercase;color:#A87412">Most read so far · ${(top.views ?? 0).toLocaleString('en-IN')} views</div><a href="${esc(top.link)}" style="display:block;margin-top:4px;font:700 16px/1.4 ${F.serif};color:${C.ink};text-decoration:none">${esc(top.title)}</a></td></tr></table>`
+    : ''
+}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px">
+${pub
+  .slice(0, MAX_STORIES)
+  .map(
+    (x, i) =>
+      `<tr><td width="70" valign="top" style="padding:10px 10px 10px 0;${i ? `border-top:1px solid ${C.line};` : ''}font:12px ${F.sans};color:#9A9AA0;white-space:nowrap">${storyTime(x.time)}</td><td valign="top" style="padding:9px 0;${i ? `border-top:1px solid ${C.line};` : ''}"><a href="${esc(x.link)}" style="font:600 14px/1.45 ${F.sans};color:${C.ink};text-decoration:none">${esc(x.title)}</a><div style="margin-top:2px;font:11.5px ${F.sans};color:${C.mute}">${esc(x.section)}</div></td><td width="56" valign="top" align="right" style="padding:10px 0 10px 10px;${i ? `border-top:1px solid ${C.line};` : ''}font:700 13px ${F.sans};color:${C.ink};white-space:nowrap">${x.views !== null ? `${x.views.toLocaleString('en-IN')}<div style="font:400 10.5px ${F.sans};color:#9A9AA0">views</div>` : '<span style="color:#9A9AA0;font-weight:400">–</span>'}</td></tr>`,
+  )
+  .join('')}
+</table>
+${pub.length > MAX_STORIES ? `<div style="padding-top:8px;font:12.5px ${F.sans};color:${C.mute}">+ ${pub.length - MAX_STORIES} more on the website</div>` : ''}
+<div style="padding-top:8px;font:11.5px ${F.sans};color:#9A9AA0">Views are from the website’s counter, updated every hour.</div>`
+    : `<div style="font:14px ${F.sans};color:#A6501A">No stories were published on the website today.</div>`
+}
+</td></tr>`
+
   const logo = `${appUrl}brand/logo_white.png`
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${esc(subject)}</title>
 <style>@media only screen and (max-width:520px){.m{display:inline-block!important;width:50%!important;box-sizing:border-box!important;border-left:0!important;border-bottom:1px solid #2A2A2E!important;padding:16px 14px!important}.m:nth-child(n+3){border-bottom:0!important}.px{padding-left:20px!important;padding-right:20px!important}.hl{font-size:26px!important}}</style></head>
@@ -228,7 +335,7 @@ ${meta}${report}${tasks}
 </tr></table>
 <div style="margin-top:30px;width:36px;height:2px;background:${C.gold};font-size:0;line-height:0">&nbsp;</div>
 <div class="hl" style="margin-top:16px;font:400 30px/1.2 ${F.serif};color:#FFFFFF">Good evening, ${esc(ownerName)}.</div>
-<div style="margin-top:10px;font:15px/1.6 ${F.sans};color:#C9C9CC">${esc(lead)} The team put in <b style="color:#FFFFFF">${hours(teamMin)}</b>.</div>
+<div style="margin-top:10px;font:15px/1.6 ${F.sans};color:#C9C9CC">${esc(lead)} The team put in <b style="color:#FFFFFF">${hours(teamMin)}</b>${site ? ` and published <b style="color:#FFFFFF">${site.stories.length} stor${site.stories.length === 1 ? 'y' : 'ies'}</b> on the website` : ''}.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px;border-top:1px solid #2A2A2E;table-layout:fixed"><tr>
 ${metric('Attendance', `${pct}%`, `${s.present} of ${s.total} in`, delta(pct, prevPct, (n) => `${n} pts`), true)}${metric('On time', String(onTime), `${s.late} late`, delta(s.late, prev?.late, (n) => `${n} late`, true))}${metric('Hours', hours(teamMin), 'whole team', delta(teamMin, prev?.minutes, (n) => hours(n).replace(/^0h /, '')))}${metric('Reports', `${s.reports}/${s.present || s.total}`, noReport.length ? `${noReport.length} pending` : 'all in', delta(s.reports, prev?.reports, (n) => String(n)))}
 </tr></table>
@@ -248,6 +355,7 @@ ${
 }
 </table></td></tr>
 
+${site ? publishedSection : ''}
 ${section('The team', legend)}
 <tr><td class="px" style="padding:0 36px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${people.map(person).join('') || `<tr><td style="padding:16px 0;font:14px ${F.sans};color:${C.mute}">No team members yet.</td></tr>`}</table></td></tr>
 
@@ -268,6 +376,7 @@ ${section('The team', legend)}
     `Good evening, ${ownerName}. ${lead} The team put in ${hours(teamMin)}.`,
     `Attendance ${pct}% (${s.present}/${s.total}) · on time ${onTime} · late ${s.late} · reports ${s.reports} · ${s.onLeave ?? 0} on leave · ${absent.length} absent`,
     ...(items.length ? ['', 'Action items:', ...items.map((it, i) => `${i + 1}. ${it.html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')}`)] : []),
+    ...(site ? ['', `Published on realtynmore.com: ${pub.length} stor${pub.length === 1 ? 'y' : 'ies'}${withViews.length ? `, ${totalViews} views so far` : ''}`, ...pub.map((x) => `- ${clock12(x.time)} · ${x.title} (${x.section}${x.views !== null ? `, ${x.views} views` : ''}) ${x.link}`)] : []),
     '',
     ...people.flatMap((p) => [
       `${p.name}${p.title ? ` (${p.title})` : ''}: ${p.checkIn ? `in ${clock(p.checkIn)}${p.late ? ' late' : ''}${p.inPlace ? ` (${p.inPlace.label})` : ''}, out ${clock(p.checkOut)}${p.outPlace ? ` (${p.outPlace.label})` : ''}, ${hours(workedMin(p))}` : p.leave ? `on leave (${p.leave.kind})` : 'absent'}`,
@@ -303,7 +412,8 @@ export async function sendTeamEmail(env: Env, force = false, now = Date.now()): 
     const p = (await teamDay(env, pd).catch(() => null)) as unknown as TeamDayData | null
     if (p && p.summary.present > 0) prev = { day: pd, present: p.summary.present, total: p.summary.total, late: p.summary.late, reports: p.summary.reports, minutes: p.people.reduce((n, x) => n + (x.checkIn ? x.minutes : 0), 0) }
   }
-  const mail = buildTeamEmail(data, env.APP_URL, now, prev)
+  const site = await publishedOn(env, day, prev?.day ?? new Date(now + IST_MS - 86400000).toISOString().slice(0, 10)).catch(() => null)
+  const mail = buildTeamEmail(data, env.APP_URL, now, prev, site)
   const { sendRaw } = await import('./newsletter.ts')
   const r = await sendRaw(env, { to: s.reportEmail, subject: mail.subject, html: mail.html, text: mail.text, tag: 'team-report' })
   if (r === 'ok') {

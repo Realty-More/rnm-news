@@ -5,6 +5,9 @@
 // times, place, the work report and tasks; and what was published on realtynmore.com that day
 // (count vs the previous day, sections, most read so far, every story with time and views), and
 // what was uploaded on YouTube that day (videos and Shorts with their views and likes).
+// Graphics are built from table cells so they show in Gmail and Outlook: 7-day bars under the
+// headline numbers, a "This week" chart (stories and videos per day), a section split bar and a
+// publishing-rhythm heat strip for the website, view bars per story and video, hours per person.
 // Email-safe HTML only (tables and inline styles; no scripts, SVG or web fonts).
 // Sent through the same Brevo connection as the newsletter.
 import type { Env } from './index.ts'
@@ -180,6 +183,44 @@ export async function youtubeOn(env: Env, day: string, prevDay?: string): Promis
 
 const ytLink = (id: string, short: boolean | null) => (short ? `https://www.youtube.com/shorts/${id}` : `https://www.youtube.com/watch?v=${id}`)
 
+/* ---------- the last 7 days, for the small charts ---------- */
+
+export interface TrendDay {
+  day: string
+  present: number
+  minutes: number
+  reports: number
+  stories: number
+  videos: number
+}
+
+/** Seven days ending on `day`: people in, hours, reports, website stories and YouTube uploads. */
+export async function weekTrend(env: Env, day: string): Promise<TrendDay[]> {
+  const days = Array.from({ length: 7 }, (_, i) => new Date(Date.parse(`${day}T00:00:00Z`) - (6 - i) * 86400000).toISOString().slice(0, 10))
+  const first = days[0]
+  const start = istDayBounds(first).start
+  const end = istDayBounds(day).end
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 19)
+  const [att, rep, web, vids] = await Promise.all([
+    env.DB.prepare(
+      'SELECT day, COUNT(*) AS present, SUM(CASE WHEN check_out IS NOT NULL THEN CAST((julianday(check_out) - julianday(check_in)) * 1440 AS INTEGER) ELSE 0 END) AS minutes FROM attendance WHERE day >= ? AND day <= ? AND check_in IS NOT NULL GROUP BY day',
+    )
+      .bind(first, day)
+      .all<{ day: string; present: number; minutes: number }>(),
+    env.DB.prepare('SELECT day, COUNT(*) AS n FROM reports WHERE day >= ? AND day <= ? GROUP BY day').bind(first, day).all<{ day: string; n: number }>(),
+    env.DB.prepare('SELECT published FROM webposts WHERE published >= ? AND published < ?').bind(iso(start), iso(end)).all<{ published: string }>(),
+    env.DB.prepare('SELECT published FROM yt_videos WHERE published >= ? AND published < ?').bind(iso(start), iso(end)).all<{ published: string }>(),
+  ])
+  const istDay = (t: string) => new Date(Date.parse(t.endsWith('Z') || /[+-]\d\d:\d\d$/.test(t) ? t : `${t}Z`) + IST_MS).toISOString().slice(0, 10)
+  const count = (rows: { published: string }[]) => rows.reduce((m, r) => m.set(istDay(r.published), (m.get(istDay(r.published)) ?? 0) + 1), new Map<string, number>())
+  const stories = count(web.results)
+  const videos = count(vids.results)
+  return days.map((d) => {
+    const a = att.results.find((r) => r.day === d)
+    return { day: d, present: a?.present ?? 0, minutes: a?.minutes ?? 0, reports: rep.results.find((r) => r.day === d)?.n ?? 0, stories: stories.get(d) ?? 0, videos: videos.get(d) ?? 0 }
+  })
+}
+
 /** The previous working day's totals, for "vs yesterday". */
 export interface PrevDay {
   day: string
@@ -193,7 +234,7 @@ export interface PrevDay {
 const F = { sans: 'Arial,Helvetica,sans-serif', serif: "Georgia,'Times New Roman',serif" }
 
 /** The email (pure, for tests). */
-export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(), prev?: PrevDay | null, site?: PublishedDay | null, yt?: YoutubeDay | null, ownerName = 'Palash'): { subject: string; html: string; text: string } {
+export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(), prev?: PrevDay | null, site?: PublishedDay | null, yt?: YoutubeDay | null, trend?: TrendDay[] | null, ownerName = 'Palash'): { subject: string; html: string; text: string } {
   const date = new Date(`${d.day}T00:00:00Z`)
   const dateLabel = new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date)
   const shortDate = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date)
@@ -248,11 +289,32 @@ export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(),
   }
   const prevLabel = prev ? (Date.parse(`${d.day}T00:00:00Z`) - Date.parse(`${prev.day}T00:00:00Z`) === 86400000 ? 'yesterday' : new Intl.DateTimeFormat('en-IN', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${prev.day}T00:00:00Z`))) : ''
   const prevPct = prev && prev.total ? Math.round((prev.present / prev.total) * 100) : undefined
-  const metric = (label: string, value: string, sub: string, deltaHtml: string, first = false) =>
-    `<td class="m" width="25%" valign="top" style="padding:18px 14px 20px;${first ? '' : 'border-left:1px solid #2A2A2E;'}"><div style="font:700 9.5px ${F.sans};letter-spacing:1.2px;text-transform:uppercase;color:#8D8D92">${label}</div><div style="margin-top:8px;font:700 ${value.length > 5 ? 21 : 26}px/1.15 ${F.serif};color:#FFFFFF">${value}</div><div style="margin-top:3px;font:12px ${F.sans};color:#A1A1A6">${sub}</div>${deltaHtml}</td>`
+  // The last 7 days, today's numbers taken from this report (they are newer).
+  const week: TrendDay[] = (trend ?? []).map((t) => (t.day === d.day ? { ...t, present: s.present, minutes: teamMin, reports: s.reports, stories: site ? site.stories.length : t.stories, videos: yt ? yt.uploads.length : t.videos } : t))
+  const dayShort = (day: string) => new Intl.DateTimeFormat('en-IN', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`))
 
-  const section = (title: string, right = '') =>
-    `<tr><td class="px" style="padding:30px 36px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="font:700 11px ${F.sans};letter-spacing:2.2px;text-transform:uppercase;color:#A87412;white-space:nowrap;padding-right:12px">${title}</td><td width="100%" style="border-bottom:1px solid ${C.line};font-size:0;line-height:0">&nbsp;</td>${right ? `<td style="padding-left:12px;white-space:nowrap">${right}</td>` : ''}</tr></table></td></tr>`
+  /** Seven small bars, today in gold. */
+  const spark = (vals: number[], dark = true) => {
+    if (vals.length < 2) return ''
+    const max = Math.max(1, ...vals)
+    return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr>${vals
+      .map((v, i) => `<td valign="bottom" style="padding-right:3px;height:24px"><div style="width:8px;height:${Math.max(2, Math.round((v / max) * 24))}px;background:${i === vals.length - 1 ? C.gold : dark ? '#3A3A40' : '#E3E0D8'};border-radius:1px;font-size:0;line-height:0">&nbsp;</div></td>`)
+      .join('')}</tr></table>`
+  }
+  /** A thin horizontal bar, share = 0..1. */
+  const meter = (share: number, color: string, height = 4) =>
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px"><tr><td style="height:${height}px;background:#F1F0EC;border-radius:2px;font-size:0;line-height:0"><div style="width:${Math.max(2, Math.round(share * 100))}%;height:${height}px;background:${color};border-radius:2px;font-size:0;line-height:0">&nbsp;</div></td></tr></table>`
+
+  const metric = (label: string, value: string, sub: string, deltaHtml: string, first = false, sparkVals: number[] = []) =>
+    `<td class="m" width="25%" valign="top" style="padding:18px 14px 20px;${first ? '' : 'border-left:1px solid #2A2A2E;'}"><div style="font:700 9.5px ${F.sans};letter-spacing:1.2px;text-transform:uppercase;color:#8D8D92">${label}</div><div style="margin-top:8px;font:700 ${value.length > 5 ? 21 : 26}px/1.15 ${F.serif};color:#FFFFFF">${value}</div><div style="margin-top:3px;font:12px ${F.sans};color:#A1A1A6">${sub}</div>${deltaHtml}${spark(sparkVals)}</td>`
+
+  // Sections are numbered 01, 02… in the order they appear.
+  const secOrder = ['action', ...(week.length ? ['week'] : []), ...(site ? ['site'] : []), ...(yt ? ['yt'] : []), 'team']
+  const num = (key: string) => String(secOrder.indexOf(key) + 1).padStart(2, '0')
+  const section = (title: string, right = '', key = '') =>
+    `<tr><td class="px" style="padding:34px 36px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="st" style="font:700 11px ${F.sans};letter-spacing:2.2px;text-transform:uppercase;color:#A87412;white-space:nowrap;padding-right:12px">${key ? `<span style="font:400 18px ${F.serif};letter-spacing:0;color:#D9C9A3;vertical-align:-2px">${num(key)}</span>&nbsp;&nbsp;` : ''}${title}</td><td width="100%" style="border-bottom:1px solid ${C.line};font-size:0;line-height:0">&nbsp;</td>${right ? `<td style="padding-left:12px;white-space:nowrap">${right}</td>` : ''}</tr></table></td></tr>`
+  const PAL = ['#FAA61B', '#3B7DDD', '#2E9D5B', '#C2477A', '#7A5AF8', '#0F9BA8', '#8A6D3B']
+  const dot = (color: string) => `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};vertical-align:0"></span>`
 
   const legend = `<span style="font:11px ${F.sans};color:${C.mute}"><span style="display:inline-block;width:12px;height:4px;border-radius:2px;background:#F2DDB0;vertical-align:middle"></span> Shift&nbsp;&nbsp;<span style="display:inline-block;width:12px;height:4px;border-radius:2px;background:${C.green};vertical-align:middle"></span> Worked&nbsp;&nbsp;<span style="display:inline-block;width:12px;height:4px;border-radius:2px;background:${C.orange};vertical-align:middle"></span> Late</span>`
 
@@ -329,18 +391,40 @@ ${meta}${report}${tasks}
         })()
       : ''
   const MAX_STORIES = 30
-  const publishedSection = `${section('Published on realtynmore.com', `<span style="font:700 11px ${F.sans};color:${C.mute}">${pub.length}</span>`)}
+  const maxViews = Math.max(0, ...withViews.map((x) => x.views ?? 0))
+  // Publishing rhythm: how many stories went up in each hour of the day.
+  const byHour = new Map<number, number>()
+  for (const x of pub) byHour.set(Math.floor(minOf(x.time) / 60), (byHour.get(Math.floor(minOf(x.time) / 60)) ?? 0) + 1)
+  const h0 = Math.min(9, ...byHour.keys())
+  const h1 = Math.max(20, ...byHour.keys())
+  const busiest = [...byHour].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]
+  const heat = (n: number) => (n === 0 ? '#F4F2EC' : n === 1 ? '#FBE3B0' : n === 2 ? '#F7C96A' : n === 3 ? '#F2AE2E' : '#D98C00')
+  const hourName = (h: number) => `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`
+  const rhythm = pub.length
+    ? `<div style="margin-top:18px;font:700 10px ${F.sans};letter-spacing:1.4px;text-transform:uppercase;color:#8D8D92">Publishing rhythm${busiest ? ` <span style="font-weight:400;letter-spacing:0;text-transform:none;color:${C.mute}">· busiest at ${hourName(busiest[0])}m (${busiest[1]} stor${busiest[1] === 1 ? 'y' : 'ies'})</span>` : ''}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;table-layout:fixed"><tr>${Array.from({ length: h1 - h0 + 1 }, (_, i) => h0 + i)
+        .map((h) => {
+          const n = byHour.get(h) ?? 0
+          return `<td style="padding:0 1px"><div style="height:26px;border-radius:3px;background:${heat(n)};font:700 11px/26px ${F.sans};text-align:center;color:${n >= 3 ? '#FFFFFF' : '#7A5A12'}">${n || '&nbsp;'}</div></td>`
+        })
+        .join('')}</tr><tr>${Array.from({ length: h1 - h0 + 1 }, (_, i) => h0 + i)
+        .map((h) => `<td style="padding-top:4px;font:10px ${F.sans};color:#9A9AA0;text-align:center">${(h - h0) % 2 === 0 ? hourName(h) : ''}</td>`)
+        .join('')}</tr></table>`
+    : ''
+  const publishedSection = `${section('Published on realtynmore.com', `<span style="font:700 11px ${F.sans};color:${C.mute}">${pub.length}</span>`, 'site')}
 <tr><td class="px" style="padding:12px 36px 0">
 ${
   pub.length
     ? `<div style="font:14px/1.6 ${F.sans};color:#2A2A2E"><b style="font:700 22px ${F.serif};color:${C.ink}">${pub.length}</b> stor${pub.length === 1 ? 'y' : 'ies'} published${countDelta ? ` &nbsp;·&nbsp; ${countDelta}` : ''}${withViews.length ? ` &nbsp;·&nbsp; <b>${totalViews.toLocaleString('en-IN')}</b> views so far` : ''}</div>
-<div style="margin-top:6px;font:12.5px/1.7 ${F.sans};color:${C.mute}">${sections.map(([name, n]) => `<span style="display:inline-block;margin:0 6px 4px 0;padding:2px 9px;border:1px solid ${C.line};border-radius:999px;color:#55555A">${esc(name)} <b style="color:${C.ink}">${n}</b></span>`).join('')}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-radius:3px;overflow:hidden"><tr>${sections.map(([, n], i) => `<td width="${Math.round((n / pub.length) * 1000) / 10}%" style="height:10px;background:${PAL[i % PAL.length]};font-size:0;line-height:0">&nbsp;</td>`).join('')}</tr></table>
+<div style="margin-top:8px;font:12px/1.8 ${F.sans};color:#55555A">${sections.map(([name, n], i) => `<span style="display:inline-block;margin-right:14px;white-space:nowrap">${dot(PAL[i % PAL.length])}&nbsp; ${esc(name)} <b style="color:${C.ink}">${n}</b></span>`).join('')}</div>
+${rhythm}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px">
 ${pub
   .slice(0, MAX_STORIES)
   .map(
     (x, i) =>
-      `<tr><td width="70" valign="top" style="padding:10px 10px 10px 0;${i ? `border-top:1px solid ${C.line};` : ''}font:12px ${F.sans};color:#9A9AA0;white-space:nowrap">${storyTime(x.time)}</td><td valign="top" style="padding:9px 0;${i ? `border-top:1px solid ${C.line};` : ''}"><a href="${esc(x.link)}" style="font:600 14px/1.45 ${F.sans};color:${C.ink};text-decoration:none">${esc(x.title)}</a><div style="margin-top:2px;font:11.5px ${F.sans};color:${C.mute}">${esc(x.section)}</div></td><td width="56" valign="top" align="right" style="padding:10px 0 10px 10px;${i ? `border-top:1px solid ${C.line};` : ''}font:700 13px ${F.sans};color:${C.ink};white-space:nowrap">${x.views !== null ? `${x.views.toLocaleString('en-IN')}<div style="font:400 10.5px ${F.sans};color:#9A9AA0">views</div>` : '<span style="color:#9A9AA0;font-weight:400">–</span>'}</td></tr>`,
+      `<tr><td width="70" valign="top" style="padding:10px 10px 10px 0;${i ? `border-top:1px solid ${C.line};` : ''}font:12px ${F.sans};color:#9A9AA0;white-space:nowrap">${storyTime(x.time)}</td><td valign="top" style="padding:9px 0;${i ? `border-top:1px solid ${C.line};` : ''}"><a href="${esc(x.link)}" style="font:600 14px/1.45 ${F.sans};color:${C.ink};text-decoration:none">${esc(x.title)}</a><div style="margin-top:2px;font:11.5px ${F.sans};color:${C.mute}">${dot(PAL[Math.max(0, sections.findIndex(([n]) => n === x.section)) % PAL.length])}&nbsp; ${esc(x.section)}</div>${x.views !== null && maxViews ? meter((x.views ?? 0) / maxViews, '#F2C15C') : ''}</td><td width="56" valign="top" align="right" style="padding:10px 0 10px 10px;${i ? `border-top:1px solid ${C.line};` : ''}font:700 13px ${F.sans};color:${C.ink};white-space:nowrap">${x.views !== null ? `${x.views.toLocaleString('en-IN')}<div style="font:400 10.5px ${F.sans};color:#9A9AA0">views</div>` : '<span style="color:#9A9AA0;font-weight:400">–</span>'}</td></tr>`,
   )
   .join('')}
 </table>
@@ -360,15 +444,22 @@ ${pub.length > MAX_STORIES ? `<div style="padding-top:8px;font:12.5px ${F.sans};
         })()
       : ''
   const nShorts = ups.filter((u) => u.short).length
-  const youtubeSection = `${section('Uploaded on YouTube', `<span style="font:700 11px ${F.sans};color:${C.mute}">${ups.length}</span>`)}
+  const maxYt = Math.max(0, ...ups.map((u) => u.views))
+  const youtubeSection = `${section('Uploaded on YouTube', `<span style="font:700 11px ${F.sans};color:${C.mute}">${ups.length}</span>`, 'yt')}
 <tr><td class="px" style="padding:12px 36px 0">
 <div style="font:14px/1.6 ${F.sans};color:#2A2A2E"><b style="font:700 22px ${F.serif};color:${C.ink}">${ups.length}</b> new video${ups.length === 1 ? '' : 's'}${ups.length ? ` (${nShorts} Short${nShorts === 1 ? '' : 's'}, ${ups.length - nShorts} long)` : ''}${upDelta ? ` &nbsp;·&nbsp; ${upDelta}` : ''}${ups.length ? ` &nbsp;·&nbsp; <b>${ups.reduce((n, u) => n + u.views, 0).toLocaleString('en-IN')}</b> views so far` : ''}</div>
+${
+  ups.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;border-radius:3px;overflow:hidden"><tr>${nShorts ? `<td width="${Math.round((nShorts / ups.length) * 1000) / 10}%" style="height:10px;background:#E5484D;font-size:0;line-height:0">&nbsp;</td>` : ''}${ups.length - nShorts ? `<td style="height:10px;background:#2A2A2E;font-size:0;line-height:0">&nbsp;</td>` : ''}</tr></table>
+<div style="margin-top:8px;font:12px/1.8 ${F.sans};color:#55555A"><span style="margin-right:14px">${dot('#E5484D')}&nbsp; Shorts <b style="color:${C.ink}">${nShorts}</b></span><span>${dot('#2A2A2E')}&nbsp; Long videos <b style="color:${C.ink}">${ups.length - nShorts}</b></span></div>`
+    : ''
+}
 ${
   ups.length
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px">${ups
         .map(
           (u, i) =>
-            `<tr><td width="70" valign="top" style="padding:10px 10px 10px 0;${i ? `border-top:1px solid ${C.line};` : ''}font:12px ${F.sans};color:#9A9AA0;white-space:nowrap">${storyTime(u.time)}</td><td valign="top" style="padding:9px 0;${i ? `border-top:1px solid ${C.line};` : ''}"><a href="${esc(ytLink(u.id, u.short))}" style="font:600 14px/1.45 ${F.sans};color:${C.ink};text-decoration:none">${esc(u.title)}</a><div style="margin-top:2px;font:11.5px ${F.sans};color:${C.mute}">${u.short === null ? 'Video' : u.short ? 'Short' : 'Long video'}${u.likes ? ` · ${u.likes.toLocaleString('en-IN')} likes` : ''}</div></td><td width="56" valign="top" align="right" style="padding:10px 0 10px 10px;${i ? `border-top:1px solid ${C.line};` : ''}font:700 13px ${F.sans};color:${C.ink};white-space:nowrap">${u.views.toLocaleString('en-IN')}<div style="font:400 10.5px ${F.sans};color:#9A9AA0">views</div></td></tr>`,
+            `<tr><td width="70" valign="top" style="padding:10px 10px 10px 0;${i ? `border-top:1px solid ${C.line};` : ''}font:12px ${F.sans};color:#9A9AA0;white-space:nowrap">${storyTime(u.time)}</td><td valign="top" style="padding:9px 0;${i ? `border-top:1px solid ${C.line};` : ''}"><a href="${esc(ytLink(u.id, u.short))}" style="font:600 14px/1.45 ${F.sans};color:${C.ink};text-decoration:none">${esc(u.title)}</a><div style="margin-top:2px;font:11.5px ${F.sans};color:${C.mute}">${u.short === null ? 'Video' : u.short ? 'Short' : 'Long video'}${u.likes ? ` · ${u.likes.toLocaleString('en-IN')} likes` : ''}</div>${maxYt ? meter(u.views / maxYt, '#E5484D') : ''}</td><td width="56" valign="top" align="right" style="padding:10px 0 10px 10px;${i ? `border-top:1px solid ${C.line};` : ''}font:700 13px ${F.sans};color:${C.ink};white-space:nowrap">${u.views.toLocaleString('en-IN')}<div style="font:400 10.5px ${F.sans};color:#9A9AA0">views</div></td></tr>`,
         )
         .join('')}</table>`
     : `<div style="margin-top:6px;font:13.5px ${F.sans};color:${C.mute}">No new videos on YouTube today.</div>`
@@ -376,9 +467,42 @@ ${
 <div style="padding-top:8px;font:11.5px ${F.sans};color:#9A9AA0">From the channel’s public numbers, checked every hour.</div>
 </td></tr>`
 
+  // This week at a glance: stories and videos side by side for each day, with attendance under.
+  const wMax = Math.max(1, ...week.map((t) => Math.max(t.stories, t.videos)))
+  const bar = (v: number, color: string, labelColor: string) =>
+    `<td valign="bottom" style="padding:0 2px"><div style="font:700 10px ${F.sans};color:${labelColor};text-align:center;padding-bottom:3px">${v || ''}</div><div style="width:14px;height:${v ? Math.max(3, Math.round((v / wMax) * 84)) : 2}px;background:${v ? color : '#ECEAE4'};border-radius:2px 2px 0 0;font-size:0;line-height:0">&nbsp;</div></td>`
+  const weekSection = week.length
+    ? `${section('This week', `<span style="font:11px ${F.sans};color:${C.mute}">${dot(C.gold)} Stories &nbsp;${dot('#E5484D')} Videos</span>`, 'week')}
+<tr><td class="px" style="padding:16px 36px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed"><tr>${week
+        .map((t) => `<td valign="bottom" align="center" style="height:110px"><table role="presentation" cellpadding="0" cellspacing="0" align="center"><tr>${bar(t.stories, t.day === d.day ? '#E39500' : C.gold, '#A87412')}${bar(t.videos, '#E5484D', '#B3261E')}</tr></table></td>`)
+        .join('')}</tr>
+<tr>${week
+        .map(
+          (t) =>
+            `<td align="center" style="border-top:1px solid #DCD8CE;padding-top:7px"><div style="font:${t.day === d.day ? 700 : 600} 11.5px ${F.sans};color:${t.day === d.day ? C.ink : '#55555A'}">${t.day === d.day ? 'Today' : dayShort(t.day)}</div><div style="margin-top:2px;font:11px ${F.sans};color:#9A9AA0">${t.present ? `${t.present} in` : '–'}</div></td>`,
+        )
+        .join('')}</tr></table>
+<div style="padding-top:10px;font:12px/1.6 ${F.sans};color:${C.mute}">7 days: <b style="color:${C.ink}">${week.reduce((n, t) => n + t.stories, 0)}</b> stories, <b style="color:${C.ink}">${week.reduce((n, t) => n + t.videos, 0)}</b> videos, <b style="color:${C.ink}">${hours(week.reduce((n, t) => n + t.minutes, 0))}</b> worked.</div>
+</td></tr>`
+    : ''
+
+  // Hours worked by each person today, longest first.
+  const worked = present.map((p) => ({ p, m: workedMin(p) })).sort((a, b) => b.m - a.m)
+  const wmax = Math.max(1, ...worked.map((w) => w.m))
+  const hoursChart = worked.length
+    ? `<tr><td class="px" style="padding:14px 36px 4px"><div style="font:700 10px ${F.sans};letter-spacing:1.4px;text-transform:uppercase;color:#8D8D92">Hours worked</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">${worked
+        .map(
+          ({ p, m }) =>
+            `<tr><td width="34%" style="padding:5px 10px 5px 0;font:600 13px ${F.sans};color:${C.ink};white-space:nowrap;overflow:hidden">${esc(p.name)}</td><td style="padding:5px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:12px;background:#F1F0EC;border-radius:3px;font-size:0;line-height:0"><div style="width:${Math.max(3, Math.round((m / wmax) * 100))}%;height:12px;background:${p.late ? 'linear-gradient(90deg,#E0782F 0,#E0782F 18%,#2E9D5B 18%)' : C.green};background-color:${C.green};border-radius:3px;font-size:0;line-height:0">&nbsp;</div></td></tr></table></td><td width="64" align="right" style="padding:5px 0 5px 10px;font:700 13px ${F.sans};color:${C.ink};white-space:nowrap">${hours(m)}</td></tr>`,
+        )
+        .join('')}</table></td></tr>`
+    : ''
+
   const logo = `${appUrl}brand/logo_white.png`
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${esc(subject)}</title>
-<style>@media only screen and (max-width:520px){.m{display:inline-block!important;width:50%!important;box-sizing:border-box!important;border-left:0!important;border-bottom:1px solid #2A2A2E!important;padding:16px 14px!important}.m:nth-child(n+3){border-bottom:0!important}.px{padding-left:20px!important;padding-right:20px!important}.hl{font-size:26px!important}}</style></head>
+<style>@media only screen and (max-width:520px){.m{display:inline-block!important;width:50%!important;box-sizing:border-box!important;border-left:0!important;border-bottom:1px solid #2A2A2E!important;padding:16px 14px!important}.m:nth-child(n+3){border-bottom:0!important}.px{padding-left:20px!important;padding-right:20px!important}.hl{font-size:26px!important}.st{letter-spacing:1px!important;white-space:normal!important}}</style></head>
 <body style="margin:0;padding:0;background:#E9E6DF;-webkit-text-size-adjust:100%">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#E9E6DF">${esc(preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E9E6DF"><tr><td align="center" style="padding:28px 10px">
@@ -393,11 +517,11 @@ ${
 <div class="hl" style="margin-top:16px;font:400 30px/1.2 ${F.serif};color:#FFFFFF">Good evening, ${esc(ownerName)}.</div>
 <div style="margin-top:10px;font:15px/1.6 ${F.sans};color:#C9C9CC">${esc(lead)} The team put in <b style="color:#FFFFFF">${hours(teamMin)}</b>${site ? ` and published <b style="color:#FFFFFF">${site.stories.length} stor${site.stories.length === 1 ? 'y' : 'ies'}</b> on the website` : ''}${yt?.uploads.length ? `${site ? ',' : ' and'} <b style="color:#FFFFFF">${yt.uploads.length} video${yt.uploads.length === 1 ? '' : 's'}</b> on YouTube` : ''}.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px;border-top:1px solid #2A2A2E;table-layout:fixed"><tr>
-${metric('Attendance', `${pct}%`, `${s.present} of ${s.total} in`, delta(pct, prevPct, (n) => `${n} pts`), true)}${metric('On time', String(onTime), `${s.late} late`, delta(s.late, prev?.late, (n) => `${n} late`, true))}${metric('Hours', hours(teamMin), 'whole team', delta(teamMin, prev?.minutes, (n) => hours(n).replace(/^0h /, '')))}${metric('Reports', `${s.reports}/${s.present || s.total}`, noReport.length ? `${noReport.length} pending` : 'all in', delta(s.reports, prev?.reports, (n) => String(n)))}
+${metric('Attendance', `${pct}%`, `${s.present} of ${s.total} in`, delta(pct, prevPct, (n) => `${n} pts`), true, week.map((t) => t.present))}${metric('On time', String(onTime), `${s.late} late`, delta(s.late, prev?.late, (n) => `${n} late`, true))}${metric('Hours', hours(teamMin), 'whole team', delta(teamMin, prev?.minutes, (n) => hours(n).replace(/^0h /, '')), false, week.map((t) => t.minutes))}${metric('Reports', `${s.reports}/${s.present || s.total}`, noReport.length ? `${noReport.length} pending` : 'all in', delta(s.reports, prev?.reports, (n) => String(n)), false, week.map((t) => t.reports))}
 </tr></table>
 </td></tr>
 
-${section('Action items', items.length ? `<span style="font:700 11px ${F.sans};color:${C.mute}">${items.length}</span>` : '')}
+${section('Action items', items.length ? `<span style="font:700 11px ${F.sans};color:${C.mute}">${items.length}</span>` : '', 'action')}
 <tr><td class="px" style="padding:10px 36px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
 ${
   items.length
@@ -411,9 +535,11 @@ ${
 }
 </table></td></tr>
 
+${weekSection}
 ${site ? publishedSection : ''}
 ${yt ? youtubeSection : ''}
-${section('The team', legend)}
+${section('The team', legend, 'team')}
+${hoursChart}
 <tr><td class="px" style="padding:0 36px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${people.map(person).join('') || `<tr><td style="padding:16px 0;font:14px ${F.sans};color:${C.mute}">No team members yet.</td></tr>`}</table></td></tr>
 
 <tr><td class="px" align="center" style="padding:10px 36px 36px">
@@ -433,6 +559,7 @@ ${section('The team', legend)}
     `Good evening, ${ownerName}. ${lead} The team put in ${hours(teamMin)}.`,
     `Attendance ${pct}% (${s.present}/${s.total}) · on time ${onTime} · late ${s.late} · reports ${s.reports} · ${s.onLeave ?? 0} on leave · ${absent.length} absent`,
     ...(items.length ? ['', 'Action items:', ...items.map((it, i) => `${i + 1}. ${it.html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')}`)] : []),
+    ...(week.length ? ['', `This week: ${week.map((t) => `${dayShort(t.day)} ${t.stories} stories/${t.videos} videos/${t.present} in`).join(' · ')}`] : []),
     ...(site ? ['', `Published on realtynmore.com: ${pub.length} stor${pub.length === 1 ? 'y' : 'ies'}${withViews.length ? `, ${totalViews} views so far` : ''}`, ...pub.map((x) => `- ${clock12(x.time)} · ${x.title} (${x.section}${x.views !== null ? `, ${x.views} views` : ''}) ${x.link}`)] : []),
     ...(yt ? ['', `Uploaded on YouTube: ${ups.length} new video${ups.length === 1 ? '' : 's'}`, ...ups.map((u) => `- ${clock12(u.time)} · ${u.title} (${u.short ? 'Short' : 'Video'}, ${u.views} views) ${ytLink(u.id, u.short)}`)] : []),
     '',
@@ -472,7 +599,8 @@ export async function sendTeamEmail(env: Env, force = false, now = Date.now()): 
   }
   const site = await publishedOn(env, day, prev?.day ?? new Date(now + IST_MS - 86400000).toISOString().slice(0, 10)).catch(() => null)
   const yt = await youtubeOn(env, day, prev?.day ?? new Date(now + IST_MS - 86400000).toISOString().slice(0, 10)).catch(() => null)
-  const mail = buildTeamEmail(data, env.APP_URL, now, prev, site, yt)
+  const trend = await weekTrend(env, day).catch(() => null)
+  const mail = buildTeamEmail(data, env.APP_URL, now, prev, site, yt, trend)
   const { sendRaw } = await import('./newsletter.ts')
   const r = await sendRaw(env, { to: s.reportEmail, subject: mail.subject, html: mail.html, text: mail.text, tag: 'team-report' })
   if (r === 'ok') {

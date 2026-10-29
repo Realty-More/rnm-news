@@ -741,7 +741,7 @@ describe('daily team report email', () => {
     expect(mail.html).toContain('Laptop slow')
     expect(mail.html).toContain('Sick leave')
     // Cards: present first, then on leave, then absent.
-    const cards = mail.html.slice(mail.html.indexOf('>The team<'))
+    const cards = mail.html.slice(mail.html.indexOf('The team</td>'))
     expect(cards.indexOf('Neha')).toBeLessThan(cards.indexOf('Asha'))
     expect(cards.indexOf('Asha')).toBeLessThan(cards.indexOf('Ravi'))
     expect(mail.text).toContain('Neha (Writer): in 10:20 late (At Noida Office), out 18:50')

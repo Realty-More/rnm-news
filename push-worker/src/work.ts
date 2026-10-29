@@ -156,7 +156,50 @@ export async function requestLeave(env: Env, who: Who, body: unknown) {
   )
     .bind(id, who.name, kind, b.from, to, half, reason, new Date().toISOString())
     .run()
+  // Tell the owner and everyone with full access (they approve or decline it).
+  await leaveNotice(env, 'request', { person_id: id, name: who.name, kind, from_day: b.from, to_day: to, half, reason }).catch(() => {})
   return { id: r.meta.last_row_id }
+}
+
+const shortDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+const spanOf = (l: { from_day: string; to_day: string; half: number }) => (l.from_day === l.to_day ? `${shortDay(l.from_day)}${l.half ? ' (half day)' : ''}` : `${shortDay(l.from_day)} – ${shortDay(l.to_day)}`)
+
+/** Team ids with full access: admin mobile logins, admin login keys, accounts given Full access. */
+async function fullAccessIds(env: Env): Promise<Set<string>> {
+  const [accts, links, { listEditors }] = await Promise.all([
+    env.DB.prepare("SELECT phone FROM accounts WHERE role = 'admin' AND status = 'active'").all<{ phone: string }>(),
+    env.DB.prepare("SELECT reader_id FROM staff_links WHERE role = 'admin' AND person_id IS NULL").all<{ reader_id: number }>(),
+    import('./owner.ts'),
+  ])
+  const keys = (await listEditors(env)).filter((e) => e.active && e.admin)
+  return new Set([...accts.results.map((a) => `ph:${a.phone}`), ...links.results.map((l) => `rd:${l.reader_id}`), ...keys.map((k) => k.id)])
+}
+
+/**
+ * Leave notifications. A new request goes to the owner's devices and to everyone with full access
+ * (not to the person who asked); a decision goes back to the person who asked.
+ */
+export async function leaveNotice(env: Env, what: 'request' | 'approved' | 'rejected', l: { person_id: string; name: string; kind: Kind; from_day: string; to_day: string; half: number; reason?: string }, by = '') {
+  const { deliver } = await import('./push.ts')
+  const tag = `leave-${l.person_id.slice(-10)}-${l.from_day}`
+  if (what === 'request') {
+    const notice = { title: `Leave request · ${l.name}`, body: `${LEAVE_KINDS[l.kind]} · ${spanOf(l)}${l.reason ? ` · ${l.reason.slice(0, 80)}` : ''}`, url: '#/studio?tab=leave', tag }
+    const fullIds = await fullAccessIds(env)
+    fullIds.delete(l.person_id)
+    const { toOwners } = await import('./owner.ts')
+    await Promise.all([
+      toOwners(env, notice).catch(() => null),
+      fullIds.size ? deliver(env, 'staff-sub:', (st) => (fullIds.has((st as { person?: string }).person ?? '') ? [notice] : [])).catch(() => null) : null,
+    ])
+    return
+  }
+  const notice = {
+    title: what === 'approved' ? 'Leave approved ✓' : 'Leave declined',
+    body: `${LEAVE_KINDS[l.kind]} · ${spanOf(l)}${by ? ` · by ${by}` : ''}`,
+    url: '#/studio?tab=leave',
+    tag,
+  }
+  await deliver(env, 'staff-sub:', (st) => ((st as { person?: string }).person === l.person_id ? [notice] : [])).catch(() => null)
 }
 
 export async function myLeaves(env: Env, who: Who) {
@@ -191,6 +234,9 @@ export async function decideLeave(env: Env, who: Who, body: unknown) {
     .bind(status, who.name, new Date().toISOString(), text(b.note, 300) || null, Number(b.id))
     .run()
   if (!r.meta.changes) throw new Error('Leave request not found.')
+  // Tell the person who asked.
+  const l = await env.DB.prepare('SELECT * FROM leaves WHERE id = ?').bind(Number(b.id)).first<Leave>()
+  if (l) await leaveNotice(env, status, l, who.name).catch(() => {})
   return { ok: true }
 }
 

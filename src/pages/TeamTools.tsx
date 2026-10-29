@@ -1,6 +1,6 @@
 // Team attendance and daily work reports in the Content Studio.
 // Employees: "My day" (check in/out, daily report). Owner: "Team today" and monthly "Attendance" with CSV export.
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
@@ -48,10 +48,121 @@ interface Place {
 /** "📍 At Noida Office" with a map link, or a note that no location was shared. */
 function PlaceTag({ p, missing = 'No location' }: { p: Place | null | undefined; missing?: string }) {
   if (!p) return <span className="place-tag none">{missing}</span>
+  // Green at an office, amber when away from one, plain when no office is set up.
   return (
-    <a className={`place-tag ${p.office ? 'in' : 'away'}`} href={mapLink(p)} target="_blank" rel="noopener noreferrer" title={`Accuracy about ${p.acc} m. Open in Google Maps`}>
+    <a className={`place-tag ${p.office ? 'in' : p.meters === null ? 'plain' : 'away'}`} href={mapLink(p)} target="_blank" rel="noopener noreferrer" title={`Accuracy about ${p.acc} m. Open in Google Maps`}>
       📍 {p.label}
     </a>
+  )
+}
+
+/* ---------- shared: times and the shift bar ---------- */
+
+/** "11:00" → minutes after midnight. */
+const toMin = (hhmm: string | undefined, fallback = 0) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm ?? '')
+  return m ? Number(m[1]) * 60 + Number(m[2]) : fallback
+}
+/** Minutes after midnight in IST for a timestamp (or now). */
+const istMin = (iso?: string | null) => {
+  const d = new Date((iso ? Date.parse(iso) : Date.now()) + 5.5 * 3600000)
+  return d.getUTCHours() * 60 + d.getUTCMinutes()
+}
+const hm = (min: number) => `${Math.floor(Math.abs(min) / 60)}h ${String(Math.abs(min) % 60).padStart(2, '0')}m`
+const label12 = (min: number) => {
+  const h = Math.floor(min / 60) % 24
+  return `${h % 12 || 12}${min % 60 ? `:${String(min % 60).padStart(2, '0')}` : ''} ${h < 12 ? 'AM' : 'PM'}`
+}
+const greeting = () => {
+  const h = Math.floor(istMin() / 60)
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+}
+const longDay = (day: string) => new Date(`${day}T06:00:00Z`).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', timeZone: IST })
+const shiftDay = (day: string, by: number) => new Date(Date.parse(`${day}T06:00:00Z`) + by * 86400000).toISOString().slice(0, 10)
+
+/** A number that counts up to its value when it first shows (skipped if the phone asks for less motion). */
+function useCountUp(target: number, ms = 900): number {
+  const [v, setV] = useState(0)
+  useEffect(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return setV(target)
+    let raf = 0
+    const t0 = performance.now()
+    const from = 0
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms)
+      setV(Math.round(from + (target - from) * (1 - Math.pow(1 - k, 3))))
+      if (k < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target, ms])
+  return v
+}
+const Count = ({ n, fmt }: { n: number; fmt?: (v: number) => string }) => {
+  const v = useCountUp(n)
+  return <>{fmt ? fmt(v) : v}</>
+}
+
+/** One day on a strip: the shift (light), time worked (green; the late part orange) and, today, a "now" line. */
+function ShiftBar({ from, to, start, end, inAt, outAt, now, grace = 0, hours = true }: { from: number; to: number; start: number; end: number; inAt: number | null; outAt: number | null; now: number | null; grace?: number; hours?: boolean }) {
+  const span = Math.max(60, to - from)
+  const x = (m: number) => `${Math.max(0, Math.min(100, ((m - from) / span) * 100))}%`
+  const w = (a: number, b: number) => `${Math.max(0, Math.min(100, ((Math.min(b, to) - Math.max(a, from)) / span) * 100))}%`
+  const workedTo = outAt ?? now
+  const ticks: number[] = []
+  for (let t = Math.ceil(from / 60) * 60; t <= to; t += 60) ticks.push(t)
+  const lateStart = inAt !== null && inAt > start + grace
+  return (
+ <div className={`sb ${inAt !== null && outAt === null && now !== null ? 'live' : ''}`} role="img" aria-label={`Shift ${label12(start)} to ${label12(end)}${inAt !== null ? `, checked in ${label12(inAt)}` : ', not checked in'}${outAt !== null ? `, checked out ${label12(outAt)}` : ''}`}>
+      <div className="sb-track">
+        {ticks.map((t) => (
+          <i key={t} className="sb-tick" style={{ left: x(t) }} />
+        ))}
+        <span className="sb-shift" style={{ left: x(start), width: w(start, end) }} />
+        {inAt !== null && workedTo !== null && workedTo > inAt && (
+          <>
+            <span className="sb-work" style={{ left: x(inAt), width: w(inAt, workedTo) }} />
+            {lateStart && <span className="sb-late" style={{ left: x(start), width: w(start, inAt) }} />}
+          </>
+        )}
+        {inAt !== null && <b className="sb-dot in" style={{ left: x(inAt) }} title={`In ${label12(inAt)}`} />}
+        {outAt !== null && <b className="sb-dot out" style={{ left: x(outAt) }} title={`Out ${label12(outAt)}`} />}
+        {now !== null && now >= from && now <= to && <em className="sb-now" style={{ left: x(now) }} title={`Now ${label12(now)}`} />}
+      </div>
+      {hours && (
+        <div className="sb-hours" aria-hidden="true">
+          {ticks
+            .filter((_, i) => i % (span > 600 ? 2 : 1) === 0)
+            .map((t) => (
+              <span key={t} style={{ left: x(t) }}>
+                {label12(t).replace(':00', '')}
+              </span>
+            ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** A ring that fills as the shift's hours are worked. */
+function Ring({ value, total, children }: { value: number; total: number; children: ReactNode }) {
+  const r = 52
+  const c = 2 * Math.PI * r
+  const pct = total > 0 ? Math.min(1, value / total) : 0
+  // Starts empty and fills, so the ring sweeps round when the page opens.
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setShown(true))
+    return () => cancelAnimationFrame(t)
+  }, [])
+  return (
+    <div className="md-ring">
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r={r} className="md-ring-bg" />
+        <circle cx="60" cy="60" r={r} className="md-ring-fg" strokeDasharray={c} strokeDashoffset={shown ? c * (1 - pct) : c} />
+      </svg>
+      <div className="md-ring-text">{children}</div>
+    </div>
   )
 }
 
@@ -98,27 +209,55 @@ export function MyDayTab() {
   if (!res.data) return <SkeletonList count={3} />
   const d = res.data
   const a = d.attendance
+  const isToday = d.day === todayIst()
+  const now = isToday ? istMin() : null
   const live = a?.check_in && !a.check_out ? Math.round((Date.now() - Date.parse(a.check_in)) / 60000) : d.minutes
+  const start = toMin(d.settings.startTime, 600)
+  const end = toMin(d.settings.endTime, start + 480)
+  const shiftLen = Math.max(60, end - start)
+  const inAt = a?.check_in ? istMin(a.check_in) : null
+  const outAt = a?.check_out ? istMin(a.check_out) : null
+  const from = Math.max(0, Math.floor((Math.min(start, inAt ?? start) - 60) / 60) * 60)
+  const to = Math.min(24 * 60, Math.ceil((Math.max(end, outAt ?? end, now ?? 0) + 60) / 60) * 60)
+  const lateBy = inAt !== null ? inAt - start : 0
+  const left = end - (now ?? end)
+  const reminder = toMin(d.settings.reminderTime, end + 30)
+
+  // This week, Monday to Sunday, from the last 30 days.
+  const days = hist.data?.days ?? []
+  const byDay = new Map(days.map((h) => [h.day, h]))
+  const todayDate = new Date(`${d.day}T06:00:00Z`)
+  const monday = shiftDay(d.day, -((todayDate.getUTCDay() + 6) % 7))
+  const week = Array.from({ length: 7 }, (_, i) => shiftDay(monday, i)).map((day) => ({ day, h: day === d.day ? { day, checkIn: a?.check_in ?? null, checkOut: a?.check_out ?? null, late: d.late, minutes: live, report: d.report ? 'yes' : null } : byDay.get(day) }))
+  const worked = week.filter((w) => w.h?.checkIn)
+  const avg = worked.length ? Math.round(worked.reduce((n, w) => n + (w.h?.minutes ?? 0), 0) / worked.length) : 0
+  const weekOff = d.settings.weekOff ?? [0]
+  const maxBar = Math.max(shiftLen, ...worked.map((w) => w.h?.minutes ?? 0))
 
   return (
     <>
-      <section className="day-card">
-        <div className="day-head">
-          <div>
-            <span className="owner-badge">{formatDate(`${d.day}T06:00:00Z`)}</span>
-            <h2>Hi {d.name}</h2>
-            <p className="panel-note">
-              Your office time {d.settings.startTime}{d.settings.endTime ? ` to ${d.settings.endTime}` : ''} (grace {d.settings.graceMin} min). Report reminder at {d.settings.reminderTime}.
+      <section className="md-hero">
+        <div className="md-top">
+          <div className="md-hello">
+            <span className="md-date">{longDay(d.day)}</span>
+            <h2>
+              {greeting()}, {d.name.split(' ')[0]}
+            </h2>
+            <p>
+              Shift {d.settings.startTime}–{d.settings.endTime ?? '–'} · grace {d.settings.graceMin} min · report reminder {d.settings.reminderTime}
             </p>
           </div>
-          <div className="day-timer">
-            <b>{a?.check_in ? `${Math.floor(live / 60)}h ${String(live % 60).padStart(2, '0')}m` : '–'}</b>
-            <span>{a?.check_in ? (a.check_out ? 'worked today' : 'working') : 'not checked in'}</span>
-          </div>
+          <Ring value={live} total={shiftLen}>
+            <b>{a?.check_in ? hm(live) : '0h 00m'}</b>
+            <span>of {hm(shiftLen)}</span>
+          </Ring>
         </div>
 
+        <ShiftBar from={from} to={to} start={start} end={end} inAt={inAt} outAt={outAt} now={now} grace={d.settings.graceMin} />
+
         {!a?.check_in ? (
-          <div className="checkin-box">
+          <div className="md-checkin">
+            <p className="md-hint">{now !== null && now > start + d.settings.graceMin ? `Your shift started at ${d.settings.startTime}. Check in now.` : `Your shift starts at ${d.settings.startTime}.`}</p>
             <div className="segmented" role="radiogroup" aria-label="Work mode">
               {Object.entries(MODE_LABEL).map(([k, v]) => (
                 <button key={k} role="radio" aria-checked={mode === k} className={mode === k ? 'on' : ''} onClick={() => setMode(k)}>
@@ -140,26 +279,29 @@ export function MyDayTab() {
             >
               <Icon name="clock" size={20} /> {busy ? 'Getting location…' : 'Check in'}
             </button>
-            <p className="meta loc-note">📍 Your location is saved only at the moment you check in and check out, never in between. Only the owner sees it.</p>
+            <p className="md-fine">📍 Your location is saved only when you check in and check out, never in between. Only the owner sees it.</p>
           </div>
         ) : (
-          <div className="att-row">
+          <div className="md-facts">
             <div>
-              <span className="meta">Check in</span>
-              <b>
-                {clock(a.check_in)} {d.late && <em className="late">Late</em>}
-              </b>
-              <span className="meta">{MODE_LABEL[a.mode ?? 'office']}</span>
+              <small>Checked in</small>
+              <b>{clock(a.check_in)}</b>
+              <span className={`md-chip ${d.late ? 'warn' : 'ok'}`}>{d.late ? `Late by ${hm(lateBy)}` : 'On time'}</span>
+            </div>
+            <div>
+              <small>Working from</small>
+              <b>{MODE_LABEL[a.mode ?? 'office']}</b>
               <PlaceTag p={d.place?.in} missing="Location not shared" />
             </div>
             <div>
-              <span className="meta">Check out</span>
-              <b>{clock(a.check_out)}</b>
+              <small>{a.check_out ? 'Checked out' : 'Shift ends'}</small>
+              <b>{a.check_out ? clock(a.check_out) : d.settings.endTime ?? '–'}</b>
+              {!a.check_out && now !== null && <span className="md-chip">{left > 0 ? `${hm(left)} to go` : `${hm(-left)} over`}</span>}
               {a.check_out && <PlaceTag p={d.place?.out} missing="Location not shared" />}
             </div>
             {!a.check_out && (
               <button
-                className="btn"
+                className="btn md-out"
                 disabled={busy}
                 onClick={async () => {
                   setBusy(true)
@@ -169,35 +311,71 @@ export function MyDayTab() {
                   void act('me/checkout', { loc }, d.report ? 'Checked out. Have a good evening!' : 'Checked out. Please add your report.')
                 }}
               >
-                <Icon name="clock" size={18} /> Check out
+                <Icon name="clock" size={18} /> {busy ? 'Getting location…' : 'Check out'}
               </button>
             )}
           </div>
         )}
       </section>
 
+      <section className="panel md-week" aria-label="This week">
+        <div className="panel-head">
+          <h2>This week</h2>
+          <span className="md-week-sum">
+            {worked.length} day{worked.length === 1 ? '' : 's'} · avg {hm(avg)} · {worked.filter((w) => w.h?.late).length} late · {worked.filter((w) => w.h?.report).length}/{worked.length} reports
+          </span>
+        </div>
+        <div className="md-bars">
+          {week.map(({ day, h }, i) => {
+            const off = weekOff.includes(new Date(`${day}T06:00:00Z`).getUTCDay())
+            const future = day > d.day
+            return (
+              <div key={day} className={`md-bar ${day === d.day ? 'today' : ''} ${future ? 'future' : ''}`} style={{ '--i': i } as CSSProperties}>
+                <div className="md-bar-col">
+                  <span className={`md-bar-fill ${h?.late ? 'late' : ''}`} style={{ height: h?.checkIn ? `${Math.max(6, ((h.minutes ?? 0) / maxBar) * 100)}%` : 0 }} />
+                </div>
+                <b>{h?.checkIn ? `${Math.floor((h.minutes ?? 0) / 60)}:${String((h.minutes ?? 0) % 60).padStart(2, '0')}` : off ? 'Off' : future ? '' : '–'}</b>
+                <span>
+                  {new Date(`${day}T06:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', timeZone: IST })}
+                  {h?.report ? ' ✓' : ''}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
       <MyTasksPanel />
-      <Panel title={d.report ? 'Today’s report (saved, you can edit)' : 'Today’s work report'} note="Your report goes only to the owner.">
-        <form className="form-grid one" onSubmit={sendReport}>
+      <Panel
+        title="Today’s work report"
+        note="Your report goes only to the owner."
+        actions={<span className={`md-chip solid ${d.report ? 'ok' : now !== null && now >= reminder ? 'warn' : ''}`}>{d.report ? `Submitted ${clock(d.report.submitted_at)}` : `Due by ${d.settings.reminderTime}`}</span>}
+      >
+        <form className="form-grid one md-report" onSubmit={sendReport}>
           <label>
             What did you work on today?
-            <textarea rows={4} value={form.done} onChange={(e) => setForm({ ...form, done: e.target.value })} placeholder="e.g. Wrote 3 RERA stories, edited the DLF interview, posted 2 reels" />
+            <textarea rows={4} value={form.done} onChange={(e) => setForm({ ...form, done: e.target.value })} placeholder="e.g. Wrote 3 RERA stories, edited the DLF interview, posted 2 reels" maxLength={2000} />
+            <small className="md-count">{form.done.length}/2000</small>
           </label>
-          <label>
-            Plan for tomorrow <small>optional</small>
-            <textarea rows={2} value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} />
-          </label>
-          <label>
-            Anything blocking you? <small>optional</small>
-            <input value={form.blockers} onChange={(e) => setForm({ ...form, blockers: e.target.value })} />
-          </label>
+          <div className="md-two">
+            <label>
+              Plan for tomorrow <small>optional</small>
+              <textarea rows={2} value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} />
+            </label>
+            <label>
+              Anything blocking you? <small>optional</small>
+              <textarea rows={2} value={form.blockers} onChange={(e) => setForm({ ...form, blockers: e.target.value })} />
+            </label>
+          </div>
           <label>
             Links to your work <small>optional</small>
             <input value={form.links} onChange={(e) => setForm({ ...form, links: e.target.value })} placeholder="Story or video links, separated by spaces" />
           </label>
-          <button className="btn" disabled={busy || form.done.trim().length < 3}>
-            {d.report ? 'Update report' : 'Submit report'}
-          </button>
+          <div className="action-row">
+            <button className="btn" disabled={busy || form.done.trim().length < 3}>
+              {d.report ? 'Update report' : 'Submit report'}
+            </button>
+          </div>
         </form>
       </Panel>
 
@@ -260,7 +438,7 @@ export function MyDayTab() {
 /* ---------- owner: Team today ---------- */
 interface TeamDay {
   day: string
-  settings: { startTime: string; graceMin: number; reminderTime: string; weekOff?: number[] }
+  settings: { startTime: string; endTime?: string; graceMin: number; reminderTime: string; weekOff?: number[] }
   summary: { total: number; present: number; late: number; reports: number; onLeave?: number }
   people: {
     id: string
@@ -284,131 +462,268 @@ interface TeamDay {
     tasks?: { done: string[]; open: number; overdue: number }
   }[]
 }
+type Person = TeamDay['people'][number]
+type Filter = 'all' | 'working' | 'missing' | 'late' | 'pending'
+
+/** Where a person stands today, in words and a colour. */
+function standing(p: Person, isToday: boolean, now: number, start: number, grace: number): { label: string; tone: 'live' | 'done' | 'wait' | 'warn' | 'leave' | 'off' } {
+  if (p.checkIn && !p.checkOut) return { label: isToday ? 'Working now' : 'No check-out', tone: isToday ? 'live' : 'warn' }
+  if (p.checkIn) return { label: 'Done for the day', tone: 'done' }
+  if (p.leave) return { label: `On leave${p.leave.half ? ' · half day' : ''}`, tone: 'leave' }
+  if (!isToday) return { label: 'Absent', tone: 'warn' }
+  if (now < start) return { label: `Starts ${label12(start)}`, tone: 'wait' }
+  if (now <= start + grace) return { label: 'Due now', tone: 'wait' }
+  return { label: `Not in · ${hm(now - start)} past start`, tone: 'warn' }
+}
+
 export function TeamTodayTab() {
   const [date, setDate] = useState(todayIst)
+  const [filter, setFilter] = useState<Filter>('all')
+  const [, tick] = useState(0)
   const res = useAsync(`studio:teamday:${date}`, (s) => studio<TeamDay>(`team/day?date=${date}`, undefined, s))
   const d = res.data
   const [adding, setAdding] = useState(false)
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 60000)
+    return () => clearInterval(t)
+  }, [])
+  const isToday = date === todayIst()
+  const now = istMin()
+  const officeStart = toMin(d?.settings.startTime, 600)
+  const officeEnd = toMin(d?.settings.endTime, officeStart + 480)
+  const grace = d?.settings.graceMin ?? 15
+
+  const rows = (d?.people ?? []).map((p) => {
+    const start = toMin(p.start, officeStart)
+    const end = toMin(p.end, officeEnd)
+    const inAt = p.checkIn ? istMin(p.checkIn) : null
+    const outAt = p.checkOut ? istMin(p.checkOut) : null
+    const minutes = p.checkIn && !p.checkOut && isToday ? Math.round((Date.now() - Date.parse(p.checkIn)) / 60000) : p.minutes
+    return { p, start, end, inAt, outAt, minutes, st: standing(p, isToday, now, start, grace) }
+  })
+  const from = Math.max(0, Math.floor((Math.min(...rows.flatMap((r) => [r.start, r.inAt ?? r.start]), officeStart) - 30) / 60) * 60)
+  const to = Math.min(24 * 60, Math.ceil((Math.max(...rows.flatMap((r) => [r.end, r.outAt ?? r.end]), officeEnd, isToday ? now : 0) + 30) / 60) * 60)
+  const count = {
+    working: rows.filter((r) => r.p.checkIn && !r.p.checkOut).length,
+    missing: rows.filter((r) => !r.p.checkIn && !r.p.leave).length,
+    late: rows.filter((r) => r.p.late).length,
+    pending: rows.filter((r) => r.p.checkIn && !r.p.report).length,
+  }
+  const shown = rows.filter((r) => (filter === 'working' ? r.p.checkIn && !r.p.checkOut : filter === 'missing' ? !r.p.checkIn && !r.p.leave : filter === 'late' ? r.p.late : filter === 'pending' ? r.p.checkIn && !r.p.report : true))
+  const present = d?.summary.present ?? 0
+  const total = d?.summary.total ?? 0
+  const teamMinutes = rows.reduce((n, r) => n + (r.p.checkIn ? r.minutes : 0), 0)
+
   return (
     <>
-      {adding && <AddEmployeeDialog onAdded={res.reload} onClose={() => setAdding(false)} office={d ? { start: d.settings.startTime, end: (d.settings as { endTime?: string }).endTime ?? '' } : undefined} />}
-      <div className="team-bar">
-        <button className="btn small" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>
-          + Add employee
-        </button>
-        <input type="date" value={date} max={todayIst()} onChange={(e) => setDate(e.target.value || todayIst())} aria-label="Day" />
-        <button className="mini-btn" onClick={() => setDate(todayIst())}>
-          Today
-        </button>
-        <button className="mini-btn" onClick={res.reload}>
-          <Icon name="refresh" size={13} /> Refresh
-        </button>
+      {adding && <AddEmployeeDialog onAdded={res.reload} onClose={() => setAdding(false)} office={d ? { start: d.settings.startTime, end: d.settings.endTime ?? '' } : undefined} />}
+      <div className="tm-bar">
+        <div className="tm-date">
+          <button className="icon-btn" onClick={() => setDate(shiftDay(date, -1))} aria-label="Previous day">
+            ‹
+          </button>
+          <label className="tm-day">
+            <strong>{isToday ? 'Today' : longDay(date).split(',')[0]}</strong>
+            <span>{longDay(date).split(', ').slice(1).join(', ')}</span>
+            <input type="date" value={date} max={todayIst()} onChange={(e) => setDate(e.target.value || todayIst())} aria-label="Pick a day" />
+          </label>
+          <button className="icon-btn" onClick={() => setDate(shiftDay(date, 1))} disabled={isToday} aria-label="Next day">
+            ›
+          </button>
+          {!isToday && (
+            <button className="mini-btn" onClick={() => setDate(todayIst())}>
+              Back to today
+            </button>
+          )}
+        </div>
+        <div className="tm-actions">
+          <button className="btn ghost small" onClick={res.reload}>
+            <Icon name="refresh" size={14} /> Refresh
+          </button>
+          <button className="btn small" onClick={() => setAdding((a) => !a)} aria-expanded={adding}>
+            + Add employee
+          </button>
+        </div>
       </div>
       {res.error && !d ? (
         <ErrorState error={res.error} onRetry={res.reload} />
       ) : !d ? (
         <SkeletonList count={3} />
       ) : d.people.length === 0 ? (
-        <p className="empty">No team members yet. Create editor keys in the Team tab; each person checks in with their own key.</p>
+        <p className="empty">No team members yet. Use “+ Add employee” to add someone; they log in with their mobile number.</p>
       ) : (
         <>
-          <div className="kpis">
-            <div className="kpi">
+          <div className="tm-kpis">
+            <div className="tm-kpi tm-kpi-main">
+              <span>Present</span>
               <b>
-                {d.summary.present}/{d.summary.total}
+                <Count n={present} />
+                <small>/{total}</small>
               </b>
-              <span>Checked in</span>
+              <i className="tm-meter">
+                <i style={{ width: `${total ? (present / total) * 100 : 0}%` }} />
+              </i>
             </div>
-            <div className={`kpi ${d.summary.late ? 'warn' : ''}`}>
-              <b>{d.summary.late}</b>
-              <span>Late (after {d.settings.startTime} + {d.settings.graceMin} min)</span>
-            </div>
-            <div className="kpi">
+            <div className="tm-kpi">
+              <span>On time</span>
               <b>
-                {d.summary.reports}/{d.summary.total}
+                <Count n={present - d.summary.late} />
               </b>
+            </div>
+            <div className={`tm-kpi ${d.summary.late ? 'warn' : ''}`}>
+              <span>Late</span>
+              <b>
+                <Count n={d.summary.late} />
+              </b>
+            </div>
+            <div className="tm-kpi">
+              <span>On leave</span>
+              <b>
+                <Count n={d.summary.onLeave ?? 0} />
+              </b>
+            </div>
+            <div className="tm-kpi">
               <span>Reports</span>
+              <b>
+                <Count n={d.summary.reports} />
+                <small>/{present || total}</small>
+              </b>
+            </div>
+            <div className="tm-kpi">
+              <span>Team hours</span>
+              <b>
+                <Count n={teamMinutes} fmt={hm} />
+              </b>
             </div>
           </div>
-          {d.people.map((p) => (
-            <section key={p.id} className={`person ${p.checkIn ? '' : 'absent'} ${p.leave && !p.checkIn ? 'on-leave' : ''}`}>
-              <div className="person-head">
-                <PersonAvatar name={p.name} photo={p.photo} avatar={p.avatar} size={40} />
-                <strong>
-                  {p.name}
-                  {p.title && <small className="person-title">{p.title}</small>}
-                </strong>
-                <span className={`status ${p.checkIn ? (p.checkOut ? 'out' : 'in') : p.leave ? 'leave' : 'none'}`}>
-                  {p.checkIn ? (p.checkOut ? 'Checked out' : 'Working') : p.leave ? `On leave${p.leave.half ? ' (half day)' : ''}` : 'Not checked in'}
-                </span>
-              </div>
-              {p.leave && <p className="panel-note">{p.leave.kind}{p.leave.half ? ', half day' : ''}</p>}
-              {p.tasks && (p.tasks.done.length > 0 || p.tasks.open > 0) && (
-                <p className="person-tasks">
-                  <b>Tasks:</b> {p.tasks.done.length} done today · {p.tasks.open} open
-                  {p.tasks.overdue > 0 && <em className="late">{p.tasks.overdue} overdue</em>}
-                  {p.tasks.done.length > 0 && <span className="person-tasks-done">✓ {p.tasks.done.join(' · ')}</span>}
-                </p>
-              )}
-              <div className="person-times">
-                {p.start && (
-                  <span className="meta">
-                    Shift {p.start}–{p.end}
-                  </span>
-                )}
-                <span>
-                  In <b>{clock(p.checkIn)}</b> {p.late && <em className="late">Late</em>} {p.checkIn && <PlaceTag p={p.inPlace} />}
-                </span>
-                <span>
-                  Out <b>{clock(p.checkOut)}</b> {p.checkOut && <PlaceTag p={p.outPlace} />}
-                </span>
-                <span>
-                  Hours <b>{hours(p.minutes)}</b>
-                </span>
-                {p.mode && <span>{MODE_LABEL[p.mode] ?? p.mode}</span>}
-              </div>
-              {p.note && <p className="panel-note">Note: {p.note}</p>}
-              {p.report ? (
-                <div className="person-report">
-                  <p>
-                    <b>Worked on:</b> {p.report.done}
-                  </p>
-                  {p.report.plan && (
-                    <p>
-                      <b>Tomorrow:</b> {p.report.plan}
-                    </p>
-                  )}
-                  {p.report.blockers && (
-                    <p className="blocker">
-                      <b>Blocked by:</b> {p.report.blockers}
-                    </p>
-                  )}
-                  {p.report.links && (
-                    <p className="links">
-                      {p.report.links
-                        .split(/\s+/)
-                        .filter((l) => /^https?:\/\//.test(l))
-                        .map((l) => (
-                          <a key={l} href={l} target="_blank" rel="noopener noreferrer">
-                            {l.replace(/^https?:\/\/(www\.)?/, '').slice(0, 50)}
-                          </a>
-                        ))}
-                    </p>
-                  )}
-                  <span className="meta">Submitted {clock(p.report.submittedAt)}</span>
+
+          <div className="tm-filters chips" role="tablist" aria-label="Show">
+            {(
+              [
+                ['all', 'Everyone', rows.length],
+                ['working', 'Working now', count.working],
+                ['missing', 'Not in', count.missing],
+                ['late', 'Late', count.late],
+                ['pending', 'Report pending', count.pending],
+              ] as [Filter, string, number][]
+            ).map(([k, label, n]) => (
+              <button key={k} role="tab" aria-selected={filter === k} className={`chip ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>
+                {label} <span className="tm-n">{n}</span>
+              </button>
+            ))}
+          </div>
+
+          <p className="tm-legend" aria-hidden="true">
+            <i className="l-shift" /> Shift <i className="l-work" /> Worked <i className="l-late" /> Late start {isToday && <><i className="l-now" /> Now</>}
+          </p>
+
+          {shown.length === 0 && <p className="empty">Nobody here.</p>}
+          <div className="tm-list">
+            {shown.map(({ p, start, end, inAt, outAt, minutes, st }, i) => (
+              <article key={p.id} className={`tm-row ${st.tone}`} style={{ '--i': Math.min(i, 12) } as CSSProperties}>
+                <div className="tm-who">
+                  <PersonAvatar name={p.name} photo={p.photo} avatar={p.avatar} size={46} />
+                  <div>
+                    <strong>{p.name}</strong>
+                    <span>{p.title || 'Team member'}</span>
+                  </div>
                 </div>
-              ) : (
-                <p className="empty">{p.checkIn ? 'No report yet.' : '—'}</p>
-              )}
-              {p.activity.length > 0 && (
-                <ul className="activity">
-                  {p.activity.map((a, i) => (
-                    <li key={i}>{a}</li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))}
+                <div className="tm-mid">
+                  <ShiftBar from={from} to={to} start={start} end={end} inAt={inAt} outAt={outAt} now={isToday ? now : null} grace={grace} />
+                  <dl className="tm-facts">
+                    <div>
+                      <dt>Shift</dt>
+                      <dd>
+                        {p.start ?? d.settings.startTime}–{p.end ?? d.settings.endTime ?? '–'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>In</dt>
+                      <dd>
+                        {clock(p.checkIn)}
+                        {p.late && inAt !== null && <em className="tm-late">+{hm(inAt - start).replace('0h ', '')}</em>}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Out</dt>
+                      <dd>{clock(p.checkOut)}</dd>
+                    </div>
+                    <div>
+                      <dt>Hours</dt>
+                      <dd>{p.checkIn ? hm(minutes) : '–'}</dd>
+                    </div>
+                    {p.mode && (
+                      <div>
+                        <dt>Mode</dt>
+                        <dd>{MODE_LABEL[p.mode] ?? p.mode}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  {(p.checkIn || p.tasks?.open || p.note) && (
+                    <div className="tm-tags">
+                      {p.checkIn && <PlaceTag p={p.inPlace} missing="No location at check-in" />}
+                      {p.checkOut && <PlaceTag p={p.outPlace} missing="No location at check-out" />}
+                      {p.tasks && (p.tasks.done.length > 0 || p.tasks.open > 0) && (
+                        <span className={`tm-tag ${p.tasks.overdue ? 'warn' : ''}`}>
+                          ✓ {p.tasks.done.length} task{p.tasks.done.length === 1 ? '' : 's'} done · {p.tasks.open} open{p.tasks.overdue ? ` · ${p.tasks.overdue} overdue` : ''}
+                        </span>
+                      )}
+                      {p.note && <span className="tm-tag">“{p.note}”</span>}
+                    </div>
+                  )}
+                </div>
+                <div className="tm-side">
+                  <span className={`tm-pill ${st.tone}`}>{st.label}</span>
+                  {p.checkIn && <span className={`tm-rep ${p.report ? 'ok' : ''}`}>{p.report ? `Report ✓ ${clock(p.report.submittedAt)}` : 'Report pending'}</span>}
+                </div>
+                {p.report && (
+                  <details className="tm-report">
+                    <summary>
+                      <b>Report</b> <span>{p.report.done.replace(/\s+/g, ' ').slice(0, 120)}{p.report.done.length > 120 ? '…' : ''}</span>
+                    </summary>
+                    <div className="tm-report-body">
+                      <p>
+                        <b>Worked on</b>
+                        {p.report.done}
+                      </p>
+                      {p.report.plan && (
+                        <p>
+                          <b>Tomorrow</b>
+                          {p.report.plan}
+                        </p>
+                      )}
+                      {p.report.blockers && (
+                        <p className="blocker">
+                          <b>Blocked by</b>
+                          {p.report.blockers}
+                        </p>
+                      )}
+                      {p.report.links && (
+                        <p className="links">
+                          {p.report.links
+                            .split(/\s+/)
+                            .filter((l) => /^https?:\/\//.test(l))
+                            .map((l) => (
+                              <a key={l} href={l} target="_blank" rel="noopener noreferrer">
+                                {l.replace(/^https?:\/\/(www\.)?/, '').slice(0, 50)}
+                              </a>
+                            ))}
+                        </p>
+                      )}
+                      {p.tasks && p.tasks.done.length > 0 && <p className="tm-done">✓ {p.tasks.done.join(' · ')}</p>}
+                    </div>
+                  </details>
+                )}
+                {p.activity.length > 0 && (
+                  <ul className="tm-activity">
+                    {p.activity.map((a, i) => (
+                      <li key={i}>{a}</li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            ))}
+          </div>
         </>
       )}
       <TeamSettingsPanel />

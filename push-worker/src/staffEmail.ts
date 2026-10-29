@@ -104,5 +104,56 @@ export async function staffReset(env: Env, req: Request, body: unknown) {
     env.DB.prepare('INSERT INTO sessions (token_hash, phone, created_at, expires_at) VALUES (?, ?, ?, ?)').bind(await sha256hex(token), a.phone, new Date(now).toISOString(), new Date(now + SESSION_DAYS * DAY).toISOString()),
   ])
   void req
-  return { token, role: a.role, name: a.name }
+  const reader = await import('./staffAccess.ts').then((m) => m.readerForStaff(env, a.phone)).catch(() => null)
+  return { token, role: a.role, name: a.name, reader }
+}
+
+/* ---------- the owner's own mobile login ---------- */
+// Palash sir has always used the owner key. While logged in with it, My profile lets him add a mobile
+// number, an email (optional) and his own password; after that he can sign in with the number (or the
+// email) like the team, and "Forgot password?" sends a code to the email. The key keeps working.
+// Only a key login can set this up: the key itself proves it is the owner.
+
+interface OwnerRow {
+  phone: string
+  email: string | null
+}
+
+export async function ownerLogin(env: Env, who: Who) {
+  if (who.role !== 'owner') return { can: false }
+  const r = await env.DB.prepare("SELECT phone, email FROM accounts WHERE role = 'owner' ORDER BY created_at LIMIT 1").first<OwnerRow>()
+  return { can: true, viaKey: !who.phone, phone: r?.phone ?? '', email: r?.email ?? '' }
+}
+
+export async function setOwnerLogin(env: Env, who: Who, body: unknown) {
+  if (who.role !== 'owner') throw new Error('Only the owner can do this.')
+  if (who.phone) throw new Error('You already sign in with your mobile number. Change your password or email from the Account menu.')
+  const b = (body ?? {}) as { phone?: unknown; email?: unknown; password?: unknown }
+  const phone = normPhone(b.phone)
+  if (!phone) throw new Error('Enter a valid 10-digit Indian mobile number.')
+  const raw = String(b.email ?? '').trim()
+  const email = raw ? normEmail(raw) : null
+  if (raw && !email) throw new Error('Enter a valid email address.')
+  const problem = passwordProblem(b.password)
+  if (problem) throw new Error(problem)
+  const cur = await env.DB.prepare("SELECT phone, email FROM accounts WHERE role = 'owner' ORDER BY created_at LIMIT 1").first<OwnerRow>()
+  const taken = await env.DB.prepare("SELECT name FROM accounts WHERE phone = ? AND role != 'owner'").bind(phone).first<{ name: string }>()
+  if (taken) throw new Error(`This number is already ${taken.name}’s team login. Use another number.`)
+  if (email && (await env.DB.prepare("SELECT name FROM accounts WHERE email = ? AND role != 'owner'").bind(email).first())) throw new Error('This email is already used by a team login.')
+  const { salt, hash } = await hashPassword(b.password as string, pepperOf(env))
+  const now = new Date().toISOString()
+  const { OWNER_NAME } = await import('./owner.ts')
+  if (cur)
+    await env.DB.batch([
+      // A new number or password signs the old mobile logins out.
+      env.DB.prepare('DELETE FROM sessions WHERE phone = ?').bind(cur.phone),
+      env.DB.prepare("UPDATE accounts SET phone = ?, email = ?, salt = ?, hash = ?, status = 'active', must_change = 0 WHERE phone = ? AND role = 'owner'").bind(phone, email, salt, hash, cur.phone),
+      env.DB.prepare('DELETE FROM auth_fail WHERE k = ?').bind(`login:${phone}`),
+    ])
+  else
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO accounts (phone, name, role, status, salt, hash, email, created_at, approved_at, must_change) VALUES (?, ?, 'owner', 'active', ?, ?, ?, ?, ?, 0)").bind(phone, OWNER_NAME, salt, hash, email, now, now),
+      env.DB.prepare('DELETE FROM auth_fail WHERE k = ?').bind(`login:${phone}`),
+    ])
+  return { ok: true, phone, email: email ?? '' }
 }

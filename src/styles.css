@@ -9410,3 +9410,44 @@ button.mk-cover:focus-visible {
     width: 100%;
   }
 }
+
+/* Give Newsroom access: same person as a team login? */
+.grant-same {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: rgb(251 165 25 / 0.1);
+  border: 1px solid rgb(245 130 32 / 0.35);
+}
+.grant-same p {
+  margin: 0 0 2px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.grant-same-opt {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  cursor: pointer;
+}
+.grant-same-opt.on {
+  border-color: var(--accent-deep);
+}
+.grant-same-opt input {
+  margin-top: 3px;
+  accent-color: var(--accent-deep);
+}
+.grant-same-opt span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.grant-same-opt small {
+  color: var(--mute);
+  font-size: 12px;
+}

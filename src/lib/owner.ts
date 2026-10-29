@@ -45,8 +45,8 @@ export function forgetOwner() {
   const key = ownerKey()
   if (key?.startsWith('s_') && PUSH_API) void fetch(`${PUSH_API}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
   dropNewsroom()
-  // A Realtynmore account with Newsroom access is one login: logging out ends both.
-  if (key?.startsWith('r_')) void import('./reader.ts').then((m) => m.readerSignOut())
+  // One login for both: logging out of the Newsroom also signs out of the Realtynmore app account.
+  void import('./reader.ts').then((m) => m.readerSignOut())
 }
 
 /** Closes the Newsroom on this device only (access was taken away); a reader account stays signed in. */
@@ -119,16 +119,19 @@ async function auth<T>(path: 'login' | 'signup' | 'delete' | 'forgot' | 'reset',
   return data
 }
 
-function remember(token: string, role: Role, name: string) {
+type StaffOut = { token: string; role: Role; name: string; reader?: { token: string; me: unknown } | null }
+function remember(token: string, role: Role, name: string, reader?: StaffOut['reader']) {
   localStorage.setItem(KEY, token)
   localStorage.setItem(ROLE, JSON.stringify({ role, name }))
+  // The same sign-in opens their Realtynmore app account too (saved stories, feed, My account).
+  if (reader?.token) void import('./reader.ts').then((m) => m.adoptReader(reader))
 }
 
 /** Mobile number (or the email added in My profile) + password. */
 export async function passwordLogin(phoneOrEmail: string, password: string): Promise<{ role: Role; name: string }> {
   const id = phoneOrEmail.includes('@') ? { email: phoneOrEmail.trim() } : { phone: phoneOrEmail }
-  const r = await auth<{ token: string; role: Role; name: string }>('login', { ...id, password })
-  remember(r.token, r.role, r.name)
+  const r = await auth<StaffOut>('login', { ...id, password })
+  remember(r.token, r.role, r.name, r.reader)
   return r
 }
 
@@ -137,8 +140,8 @@ export const staffForgot = (id: string) => auth<{ matched: boolean; sent: boolea
 
 /** Sets a new team password with the emailed code and logs in here. */
 export async function staffReset(id: string, code: string, password: string): Promise<{ role: Role; name: string }> {
-  const r = await auth<{ token: string; role: Role; name: string }>('reset', { id, code, password })
-  remember(r.token, r.role, r.name)
+  const r = await auth<StaffOut>('reset', { id, code, password })
+  remember(r.token, r.role, r.name, r.reader)
   return r
 }
 

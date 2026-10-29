@@ -19,7 +19,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      // A new version takes over at once (skipWaiting + clientsClaim): one normal refresh, or the app
+      // reloading itself, shows it. No more "close every tab" before an update appears.
+      registerType: 'autoUpdate',
       includeManifestIcons: false,
       injectRegister: false,
       manifest: {
@@ -55,6 +57,8 @@ export default defineConfig({
         globIgnores: ['**/*{cyrillic,greek,vietnamese,latin-ext}*', '**/pdf-*.js', '**/pdf.worker*'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         // Breaking-news notifications (push and notificationclick handlers).
         importScripts: ['push-sw.js'],
         runtimeCaching: [

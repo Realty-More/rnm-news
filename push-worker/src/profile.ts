@@ -57,6 +57,7 @@ export async function saveProfile(env: Env, who: Who, body: unknown) {
     if (who.role === 'owner') throw new Error('The owner’s name stays Palash Roy.')
     if (who.phone) await env.DB.prepare('UPDATE accounts SET name = ? WHERE phone = ?').bind(p.name, who.phone).run()
     else if (id.startsWith('rd:')) await env.DB.prepare('UPDATE readers SET name = ? WHERE id = ?').bind(p.name, Number(id.slice(3))).run()
+    else if (id.startsWith('ph:')) await env.DB.prepare('UPDATE accounts SET name = ? WHERE phone = ?').bind(p.name, id.slice(3)).run()
     else {
       const { renameEditor } = await import('./owner.ts')
       await renameEditor(env, id, p.name)

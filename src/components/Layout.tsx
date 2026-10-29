@@ -108,13 +108,69 @@ function InstallBanner() {
   )
 }
 
+/** Someone is typing (daily report, story, form): reloading now would lose their words. */
+function busyTyping(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  if (!el) return false
+  if (el.isContentEditable) return true
+  if (el instanceof HTMLTextAreaElement) return true
+  if (el instanceof HTMLInputElement && !['button', 'checkbox', 'radio', 'submit', 'range', 'color', 'file'].includes(el.type)) return !!el.value
+  return false
+}
+
+/**
+ * New versions arrive by themselves: the app checks when it opens or comes back to the screen (and every
+ * 30 minutes), and the new version takes over at once. The page then reloads itself, unless someone is
+ * typing: then a small bar offers "Refresh", and the reload happens next time the app is opened.
+ */
 function UpdatePrompt() {
+  const [needRefresh, setNeedRefresh] = useState(false)
   const {
-    needRefresh: [needRefresh, setNeedRefresh],
     offlineReady: [offlineReady, setOfflineReady],
-    updateServiceWorker,
-  } = useRegisterSW({ immediate: true })
+  } = useRegisterSW({
+    immediate: true,
+    onNeedReload() {
+      if (document.visibilityState === 'hidden' || !busyTyping()) window.location.reload()
+      else setNeedRefresh(true)
+    },
+    onRegisteredSW(_url, reg) {
+      if (!reg) return
+      const check = () => {
+        if (navigator.onLine) void reg.update().catch(() => {})
+      }
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') check()
+      })
+      setInterval(check, 30 * 60000)
+    },
+  })
   const t = useT()
+  // Waiting because they were typing: reload when they leave and come back (nothing to lose then).
+  useEffect(() => {
+    if (!needRefresh) return
+    const on = () => {
+      if (document.visibilityState === 'visible') window.location.reload()
+    }
+    document.addEventListener('visibilitychange', on)
+    return () => document.removeEventListener('visibilitychange', on)
+  }, [needRefresh])
+  // A screen from the old version can't be found after an update: load the new version instead.
+  useEffect(() => {
+    const on = (e: Event) => {
+      // Once a minute at most, so a phone that is offline doesn't keep reloading.
+      try {
+        const last = Number(sessionStorage.getItem('rnm-chunk-reload') ?? 0)
+        if (Date.now() - last < 60000) return
+        sessionStorage.setItem('rnm-chunk-reload', String(Date.now()))
+      } catch {
+        /* private mode */
+      }
+      e.preventDefault()
+      window.location.reload()
+    }
+    window.addEventListener('vite:preloadError', on)
+    return () => window.removeEventListener('vite:preloadError', on)
+  }, [])
   useEffect(() => {
     if (!offlineReady) return
     const t = setTimeout(() => setOfflineReady(false), 3500)
@@ -125,7 +181,7 @@ function UpdatePrompt() {
     return (
       <div className="update-bar" role="status">
         <span>{t('update.ready')}</span>
-        <button className="btn small" onClick={() => updateServiceWorker(true)}>
+        <button className="btn small" onClick={() => window.location.reload()}>
           {t('update.reload')}
         </button>
         <button className="icon-btn" onClick={() => setNeedRefresh(false)} aria-label="Later">

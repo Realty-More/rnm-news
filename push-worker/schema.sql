@@ -64,4 +64,5 @@ CREATE TABLE IF NOT EXISTS readers (id INTEGER PRIMARY KEY AUTOINCREMENT, email 
 CREATE TABLE IF NOT EXISTS reader_sessions (token_hash TEXT PRIMARY KEY, reader_id INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS reader_sessions_reader ON reader_sessions (reader_id);
 -- Normal accounts the owner gave R&M Newsroom access (role editor = Employee, admin = Full access).
-CREATE TABLE IF NOT EXISTS staff_links (reader_id INTEGER PRIMARY KEY, role TEXT NOT NULL DEFAULT 'editor', by_name TEXT, granted_at TEXT NOT NULL, last_seen TEXT);
+CREATE TABLE IF NOT EXISTS staff_links (reader_id INTEGER PRIMARY KEY, role TEXT NOT NULL DEFAULT 'editor', by_name TEXT, granted_at TEXT NOT NULL, last_seen TEXT, person_id TEXT);
+-- person_id: "ph:<mobile>" when the account is the same person as an existing team login.

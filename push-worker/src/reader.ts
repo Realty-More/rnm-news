@@ -76,7 +76,7 @@ export function readId(v: unknown): { email: string } | { phone: string } | null
 }
 const cleanName = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 50) : '')
 
-async function newSession(env: Env, id: number): Promise<string> {
+export async function newSession(env: Env, id: number): Promise<string> {
   const token = `r_${b64(crypto.getRandomValues(new Uint8Array(32))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
   const now = Date.now()
   await env.DB.batch([
@@ -87,7 +87,7 @@ async function newSession(env: Env, id: number): Promise<string> {
   return token
 }
 
-const publicMe = (r: Reader, newsroom: 'admin' | 'editor' | null = null) => ({ newsroom, name: r.name, email: r.email ?? '', phone: r.phone ?? '', created: r.created_at, google: !!r.google_sub, hasPassword: !!r.hash, sync: parseSync(r.sync) })
+export const publicMe = (r: Reader, newsroom: 'admin' | 'editor' | null = null) => ({ newsroom, name: r.name, email: r.email ?? '', phone: r.phone ?? '', created: r.created_at, google: !!r.google_sub, hasPassword: !!r.hash, sync: parseSync(r.sync) })
 
 function parseSync(s: string | null): SyncState {
   try {

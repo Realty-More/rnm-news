@@ -270,8 +270,97 @@ export function ProfilePanel({ onClose, onSaved }: { onClose: () => void; onSave
           Cancel
         </button>
       </div>
+      <OwnerLogin />
       <LoginEmail />
     </Panel>
+  )
+}
+
+/**
+ * The owner, logged in with the owner key: add a mobile number, email (optional) and his own password,
+ * then sign in with the number like the team. The key keeps working too.
+ */
+function OwnerLogin() {
+  const res = useAsync('studio:owner-login', (s) => studio<{ can: boolean; viaKey?: boolean; phone?: string; email?: string }>('me/owner-login', undefined, s))
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ phone: '', email: '', password: '', again: '' })
+  const [busy, setBusy] = useState(false)
+  const d = res.data
+  if (!d?.can || !d.viaKey) return null
+  const has = !!d.phone
+  const shown = d.phone ? `+91 ${d.phone.slice(0, 5)} ${d.phone.slice(5)}` : ''
+  const mismatch = !!f.again && f.again !== f.password
+  const start = () => {
+    setF({ phone: d.phone ?? '', email: d.email ?? '', password: '', again: '' })
+    setOpen((o) => !o)
+  }
+  const save = async () => {
+    setBusy(true)
+    try {
+      const r = await studioPost<{ phone: string; email: string }>('me/owner-login', { phone: f.phone, email: f.email, password: f.password })
+      toast(`Saved. Next time sign in with ${r.email ? 'your mobile number or email' : 'your mobile number'} and this password.`)
+      setOpen(false)
+      res.reload()
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="profile-email owner-login">
+      <div className="profile-email-head">
+        <span>
+          <b>Mobile login</b>
+          <small>
+            {has
+              ? `${shown}${d.email ? ` · ${d.email}` : ''} · sign in with it and your password on the Sign in page. Your owner key still works.`
+              : 'You sign in with the owner key. Add your mobile number, email and a password to sign in with your number instead.'}
+          </small>
+        </span>
+        <button className={`btn small ${has ? 'ghost' : ''}`} onClick={start} aria-expanded={open}>
+          {has ? 'Change' : 'Add mobile & password'}
+        </button>
+      </div>
+      {open && (
+        <form
+          className="profile-email-form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void save()
+          }}
+        >
+          <label>
+            Mobile number
+            <span className="phone-field">
+              <span>+91</span>
+              <input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value.replace(/[^\d ]/g, '').slice(0, 12) })} placeholder="10-digit mobile" inputMode="numeric" autoComplete="tel-national" required />
+            </span>
+          </label>
+          <label>
+            Email <small>(optional, for “Forgot password?” codes)</small>
+            <input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="you@realtynmore.com" autoComplete="email" />
+          </label>
+          <label>
+            {has ? 'New password' : 'Choose a password'} <small>(8+ characters, letters and numbers)</small>
+            <input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="new-password" minLength={8} required />
+          </label>
+          <label>
+            Type it again
+            <input type="password" value={f.again} onChange={(e) => setF({ ...f, again: e.target.value })} autoComplete="new-password" required />
+          </label>
+          {mismatch && <p className="meta warn-text">The two passwords are not the same.</p>}
+          <div className="action-row">
+            <button className="btn small" disabled={busy || mismatch || f.password.length < 8 || f.phone.replace(/\D/g, '').length < 10}>
+              {busy ? 'Saving…' : 'Save mobile login'}
+            </button>
+            <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
   )
 }
 

@@ -3,7 +3,7 @@
 // unless the owner gives it Newsroom access (Employees → Give Newsroom access): then the same sign-in
 // also opens R&M Newsroom (`me.newsroom`), and the server checks that access on every Newsroom call.
 import { useEffect, useState } from 'react'
-import { dropNewsroom, ownerKey, rememberNewsroom } from './owner.ts'
+import { dropNewsroom, forgetOwner, ownerKey, rememberNewsroom } from './owner.ts'
 import { PUSH_API } from './push.ts'
 import { readPrefs, writePrefs } from './prefs.ts'
 import { applySaved, fillSaved, listSaved, onSavedEdited, removedIds, type SavedPost } from './saved.ts'
@@ -98,6 +98,9 @@ const signedIn = async (out: { token: string; me: ReaderMe }) => {
   await syncNow().catch(() => {})
 }
 
+/** The app account that came with a team sign-in (one login for both). */
+export const adoptReader = (out: { token: string; me: unknown }) => signedIn(out as { token: string; me: ReaderMe })
+
 /** Fresh account details (name, contacts, Newsroom access). */
 export async function refreshReader(): Promise<ReaderMe | null> {
   const s = readerState()
@@ -118,8 +121,9 @@ export const readerReset = async (id: string, code: string, password: string) =>
 
 export async function readerSignOut() {
   const s = readerState()
-  if (s && ownerKey() === s.token) dropNewsroom()
   keep(null)
+  // One login for both: signing out of the app account also logs out of the Newsroom on this device.
+  if (s && ownerKey()) forgetOwner()
   if (s) await call('logout', {}, s.token).catch(() => {})
 }
 export async function readerRename(name: string) {

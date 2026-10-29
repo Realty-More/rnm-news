@@ -124,7 +124,9 @@ export async function login(env: Env, req: Request, body: unknown) {
   }
   if (a.status === 'pending') throw new Error('Your account is waiting for the owner’s approval.')
   if (a.status !== 'active') throw new Error('This account is not active. Please contact the owner.')
-  return { token: await newSession(env, phone), role: a.role, name: a.name }
+  // Also signs in to their Realtynmore app account (one login for both).
+  const reader = await import('./staffAccess.ts').then((m) => m.readerForStaff(env, phone!)).catch(() => null)
+  return { token: await newSession(env, phone), role: a.role, name: a.name, reader }
 }
 
 export async function logout(env: Env, token: string) {
@@ -334,29 +336,36 @@ export async function mergeKeyIntoAccount(env: Env, body: unknown, who: Who) {
   if (!key) throw new Error('That login key no longer exists.')
   const acc = await env.DB.prepare("SELECT name FROM accounts WHERE phone = ? AND status = 'active'").bind(phone).first<{ name: string }>()
   if (!acc) throw new Error('That account is not active.')
-  const to = `ph:${phone}`
-  const r = await env.DB.batch([
-    env.DB.prepare('DELETE FROM attendance WHERE person_id = ?1 AND day IN (SELECT day FROM attendance WHERE person_id = ?2)').bind(keyId, to),
-    env.DB.prepare('UPDATE attendance SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(keyId, to, acc.name),
-    env.DB.prepare('DELETE FROM reports WHERE person_id = ?1 AND day IN (SELECT day FROM reports WHERE person_id = ?2)').bind(keyId, to),
-    env.DB.prepare('UPDATE reports SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(keyId, to, acc.name),
-    env.DB.prepare('UPDATE tasks SET assignee_id = ?2, assignee_name = ?3 WHERE assignee_id = ?1').bind(keyId, to, acc.name),
-    env.DB.prepare('UPDATE leaves SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(keyId, to, acc.name),
-    env.DB.prepare('UPDATE profiles SET person_id = ?2 WHERE person_id = ?1 AND NOT EXISTS (SELECT 1 FROM profiles WHERE person_id = ?2)').bind(keyId, to),
-    env.DB.prepare('DELETE FROM profiles WHERE person_id = ?1').bind(keyId),
-  ])
-  const moved = r.reduce((n, x) => n + (x.meta.changes ?? 0), 0)
-  // Their own office hours move too, unless the account already has some.
-  const { teamSettings } = await import('./team.ts')
-  const s = await teamSettings(env)
-  if (s.people?.[keyId]) {
-    const people = { ...s.people }
-    if (!people[to]) people[to] = people[keyId]
-    delete people[keyId]
-    await env.SUBS.put('team:settings', JSON.stringify({ ...s, people }))
-  }
+  const moved = await movePersonRecords(env, keyId, `ph:${phone}`, acc.name)
   await env.SUBS.delete(`editor:${keyId}`)
   return { ok: true, moved, name: acc.name }
+}
+
+/**
+ * The same person under two team ids: moves attendance, reports, tasks, leave, profile and office hours
+ * from `from` to `to`. A day both ids have keeps the `to` entry (the earlier login).
+ */
+export async function movePersonRecords(env: Env, from: string, to: string, name: string): Promise<number> {
+  const r = await env.DB.batch([
+    env.DB.prepare('DELETE FROM attendance WHERE person_id = ?1 AND day IN (SELECT day FROM attendance WHERE person_id = ?2)').bind(from, to),
+    env.DB.prepare('UPDATE attendance SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(from, to, name),
+    env.DB.prepare('DELETE FROM reports WHERE person_id = ?1 AND day IN (SELECT day FROM reports WHERE person_id = ?2)').bind(from, to),
+    env.DB.prepare('UPDATE reports SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(from, to, name),
+    env.DB.prepare('UPDATE tasks SET assignee_id = ?2, assignee_name = ?3 WHERE assignee_id = ?1').bind(from, to, name),
+    env.DB.prepare('UPDATE leaves SET person_id = ?2, name = ?3 WHERE person_id = ?1').bind(from, to, name),
+    env.DB.prepare('UPDATE profiles SET person_id = ?2 WHERE person_id = ?1 AND NOT EXISTS (SELECT 1 FROM profiles WHERE person_id = ?2)').bind(from, to),
+    env.DB.prepare('DELETE FROM profiles WHERE person_id = ?1').bind(from),
+  ])
+  // Their own office hours move too, unless the target already has some.
+  const { teamSettings } = await import('./team.ts')
+  const s = await teamSettings(env)
+  if (s.people?.[from]) {
+    const people = { ...s.people }
+    if (!people[to]) people[to] = people[from]
+    delete people[from]
+    await env.SUBS.put('team:settings', JSON.stringify({ ...s, people }))
+  }
+  return r.reduce((n, x) => n + (x.meta.changes ?? 0), 0)
 }
 
 /**

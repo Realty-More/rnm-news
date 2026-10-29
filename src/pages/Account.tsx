@@ -12,7 +12,7 @@ import { toast } from '../components/Toast.tsx'
 import { usePageTitle } from './usePageTitle.ts'
 import { usePrefs } from '../lib/prefs.ts'
 import { GOOGLE_CLIENT_ID } from '../lib/config.ts'
-import { passwordLogin, staffForgot, staffReset, unlock } from '../lib/owner.ts'
+import { ownerKey, ownerRole, passwordLogin, staffForgot, staffReset, unlock } from '../lib/owner.ts'
 import {
   isMobile,
   readerChangePassword,
@@ -463,14 +463,16 @@ function SignedIn() {
         </div>
       </section>
 
-      {s.me.newsroom && (
+      {(s.me.newsroom || ownerKey()) && (
         <section className="acct-newsroom">
           <span className="acct-newsroom-icon" aria-hidden="true">
             <Icon name="sparkle" size={20} />
           </span>
           <div>
             <b>R&amp;M Newsroom</b>
-            <small>{s.me.newsroom === 'admin' ? 'Full access' : 'Employee'} · given by Realtynmore. This account opens the Newsroom.</small>
+            <small>
+              {ownerRole()?.role === 'owner' ? 'Founder & Editor' : (s.me.newsroom ?? ownerRole()?.role) === 'admin' ? 'Full access' : 'Employee'} · you are signed in to the Newsroom too.
+            </small>
           </div>
           <button className="btn small" onClick={() => navigate('/studio')}>
             Open Newsroom

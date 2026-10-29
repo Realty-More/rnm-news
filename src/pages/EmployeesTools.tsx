@@ -39,6 +39,8 @@ interface Linked {
   by: string
   granted: string
   lastSeen: string
+  /** "ph:<mobile>" when this account signs in as an existing team login (same person). */
+  sameAs?: string
   title?: string
   photo?: string
   avatar?: string
@@ -51,6 +53,12 @@ interface Found {
   google: boolean
   created: string
   access: 'admin' | 'editor' | null
+  sameAs?: string
+}
+interface SameName {
+  personId: string
+  name: string
+  phone: string
 }
 interface Settings {
   startTime: string
@@ -220,9 +228,12 @@ export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: 
     edit ? { readerId: edit.readerId, name: edit.name, email: edit.email, phone: edit.phone, google: edit.google, created: edit.granted, access: edit.role } : null,
   )
   const [miss, setMiss] = useState<{ team?: string } | null>(null)
+  // Team logins with the same name: probably the same person, so link instead of a second entry.
+  const [same, setSame] = useState<SameName[]>([])
+  const [linkTo, setLinkTo] = useState('')
   const [f, setF] = useState({ role: (edit?.role ?? 'editor') as 'admin' | 'editor', title: edit?.title ?? '', start: '', end: '' })
   const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState<{ name: string; how: string; phone: string } | null>(null)
+  const [done, setDone] = useState<{ name: string; how: string; phone: string; linked?: boolean } | null>(null)
   const endBeforeStart = !!f.end && f.end <= (f.start || office?.start || '00:00')
   const digits = id.replace(/\D/g, '')
   const find = async (e: FormEvent) => {
@@ -230,11 +241,16 @@ export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: 
     setBusy(true)
     setMiss(null)
     setFound(null)
+    setSame([])
+    setLinkTo('')
     try {
-      const r = await studioPost<{ found: boolean; team?: string; account?: Found }>('access/find', { id })
+      const r = await studioPost<{ found: boolean; team?: string; account?: Found; sameName?: SameName[] }>('access/find', { id })
       if (r.found && r.account) {
         const acc = r.account
         setFound(acc)
+        const matches = (r.sameName ?? []).filter((x) => x.personId !== acc.sameAs)
+        setSame(acc.sameAs ? [] : matches)
+        setLinkTo(acc.sameAs ? '' : (matches[0]?.personId ?? ''))
         if (acc.access) setF((x) => ({ ...x, role: acc.access ?? x.role }))
       } else setMiss({ team: r.team })
     } catch (err) {
@@ -247,12 +263,19 @@ export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: 
     if (!found) return
     setBusy(true)
     try {
-      const r = await studioPost<{ name: string; role: string; changed: boolean }>('access/grant', { readerId: found.readerId, role: f.role, title: f.title, start: f.start || undefined, end: f.end || undefined })
+      const r = await studioPost<{ name: string; role: string; changed: boolean; linked?: boolean }>('access/grant', {
+        readerId: found.readerId,
+        role: f.role,
+        title: f.title,
+        start: f.start || undefined,
+        end: f.end || undefined,
+        ...(linkTo ? { sameAs: linkTo } : {}),
+      })
       onDone()
       if (edit) {
         toast(`${r.name}: ${f.role === 'admin' ? 'Full access' : 'Employee access'} saved`)
         onClose()
-      } else setDone({ name: r.name, how: signInWith(found), phone: found.phone })
+      } else setDone({ name: r.name, how: signInWith(found), phone: found.phone, linked: !!r.linked })
     } catch (err) {
       toast((err as Error).message)
     } finally {
@@ -264,14 +287,18 @@ export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: 
     return (
       <Dialog title="Newsroom access given" onClose={onClose}>
         <div className="login-card">
-          <p className="login-card-ok">✓ {done.name} can now open R&amp;M Newsroom</p>
+          <p className="login-card-ok">{done.linked ? `✓ Linked: one person, ${done.name}` : `✓ ${done.name} can now open R&M Newsroom`}</p>
           <dl>
-            <dt>They sign in with</dt>
+            <dt>{done.linked ? 'Also signs in with' : 'They sign in with'}</dt>
             <dd>{done.how}</dd>
             <dt>Access</dt>
-            <dd>{f.role === 'admin' ? 'Full access' : 'Employee'}</dd>
+            <dd>{done.linked ? 'Same as their team login' : f.role === 'admin' ? 'Full access' : 'Employee'}</dd>
           </dl>
-          <p className="meta">No new password: they use their own account. Take access away any time from the ⋯ menu.</p>
+          <p className="meta">
+            {done.linked
+              ? 'Both logins open the same Newsroom entry: one row in Team today, one attendance, same tasks. Any check-in made with this account today was merged.'
+              : 'No new password: they use their own account. Take access away any time from the ⋯ menu.'}
+          </p>
           <div className="action-row">
             {done.phone && (
               <a className="btn small" href={`https://wa.me/91${done.phone}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer">
@@ -350,6 +377,31 @@ export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: 
             </div>
             {found.access && <span className="acct-tag">{found.access === 'admin' ? 'Full access' : 'Employee'}</span>}
           </div>
+          {same.length > 0 && (
+            <div className="grant-same" role="radiogroup" aria-label="Same person?">
+              <p>
+                <b>Same person?</b> {same.length === 1 ? `${same[0].name} already has a team login (${showPhone(same[0].phone)}).` : 'These team logins have the same name.'} Linking keeps one person in Team today and
+                attendance.
+              </p>
+              {same.map((x) => (
+                <label key={x.personId} className={`grant-same-opt ${linkTo === x.personId ? 'on' : ''}`}>
+                  <input type="radio" name="same" checked={linkTo === x.personId} onChange={() => setLinkTo(x.personId)} />
+                  <span>
+                    <b>Yes, link to {x.name}’s login</b>
+                    <small>{showPhone(x.phone)} · keeps that login’s access, history and office time</small>
+                  </span>
+                </label>
+              ))}
+              <label className={`grant-same-opt ${!linkTo ? 'on' : ''}`}>
+                <input type="radio" name="same" checked={!linkTo} onChange={() => setLinkTo('')} />
+                <span>
+                  <b>No, a different person</b>
+                  <small>Give this account its own Newsroom access</small>
+                </span>
+              </label>
+            </div>
+          )}
+          {!linkTo && (
           <div className="grant-roles" role="radiogroup" aria-label="Access">
             {(
               [
@@ -363,6 +415,8 @@ export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: 
               </button>
             ))}
           </div>
+          )}
+          {!linkTo && (
           <div className="emp-form">
             <label>
               Designation <small>(optional)</small>
@@ -386,9 +440,10 @@ export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: 
               </>
             )}
           </div>
+          )}
           <div className="action-row">
             <button className="btn" disabled={busy || endBeforeStart} onClick={() => void grant()}>
-              {busy ? 'Saving…' : edit ? 'Save access' : found.access ? 'Update access' : 'Give Newsroom access'}
+              {busy ? 'Saving…' : linkTo ? `Link to ${same.find((x) => x.personId === linkTo)?.name.split(' ')[0] ?? 'team'}’s login` : edit ? 'Save access' : found.access ? 'Update access' : 'Give Newsroom access'}
             </button>
             <button type="button" className="btn ghost" onClick={onClose}>
               Cancel
@@ -454,8 +509,15 @@ export function EmployeesTab() {
   }, [res.data, q])
   const linked = useMemo(() => {
     const t = q.trim().toLowerCase()
-    return (res.data?.linked ?? []).filter((a) => !t || a.name.toLowerCase().includes(t) || a.phone.includes(t) || a.email.includes(t) || a.title?.toLowerCase().includes(t))
+    return (res.data?.linked ?? []).filter((a) => !a.sameAs && (!t || a.name.toLowerCase().includes(t) || a.phone.includes(t) || a.email.includes(t) || a.title?.toLowerCase().includes(t)))
   }, [res.data, q])
+  // Own accounts that sign in as a team login (same person), shown on that login's row.
+  const alsoBy = useMemo(() => {
+    const m = new Map<string, Linked[]>()
+    // The app account made automatically at team sign-in (same number) is not worth showing.
+    for (const l of res.data?.linked ?? []) if (l.sameAs && l.sameAs !== `ph:${l.phone}`) m.set(l.sameAs, [...(m.get(l.sameAs) ?? []), l])
+    return m
+  }, [res.data])
   const pending = (res.data?.accounts ?? []).filter((a) => a.status === 'pending')
   const actLinked = (a: Linked, action: 'revoke' | 'signout') =>
     run(async () => {
@@ -609,7 +671,9 @@ export function EmployeesTab() {
                 <strong>
                   {a.name} {a.role === 'admin' && <span className="acct-tag">Full access</span>}
                 </strong>
-                <span className="meta">{[a.title, showPhone(a.phone), a.email].filter(Boolean).join(' · ')}</span>
+                <span className="meta">
+                  {[a.title, showPhone(a.phone), a.email, ...(alsoBy.get(`ph:${a.phone}`) ?? []).map((l) => `also ${signInWith(l)}`)].filter(Boolean).join(' · ')}
+                </span>
               </div>
               <div className="emp-cols">
                 <span>
@@ -671,6 +735,16 @@ export function EmployeesTab() {
                         },
                       ]
                     : []),
+                  ...(alsoBy.get(`ph:${a.phone}`) ?? []).map((l) => ({
+                    label: `Stop sign-in with ${l.email || (l.phone ? showPhone(l.phone) : 'own account')}`,
+                    onClick: () =>
+                      setConfirm({
+                        title: 'Stop this sign-in?',
+                        text: `${a.name} will no longer open the Newsroom with ${signInWith(l)}. Their mobile login keeps working.`,
+                        action: 'Stop sign-in',
+                        run: () => actLinked(l, 'revoke'),
+                      }),
+                  })),
                   {
                     label: 'Remove employee',
                     danger: true,

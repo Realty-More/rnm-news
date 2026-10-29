@@ -25,6 +25,8 @@ import {
   readerSignIn,
   readerSignOut,
   readerSignUp,
+  readerState,
+  refreshReader,
   syncNow,
   useReader,
 } from '../lib/reader.ts'
@@ -162,6 +164,13 @@ function SignedOut() {
     setError('')
   }
   const done = (welcome: string) => {
+    // An account the owner gave Newsroom access goes straight to R&M Newsroom.
+    const me = readerState()?.me
+    if (me?.newsroom) {
+      toast(`Welcome, ${me.name.split(' ')[0]}`)
+      navigate('/studio', { replace: true })
+      return
+    }
     toast(welcome)
     navigate('/account', { replace: true })
   }
@@ -382,6 +391,8 @@ function SignedIn() {
   const [, tick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30000)
+    // Newsroom access given or taken away since this device last checked.
+    void refreshReader().catch(() => {})
     return () => clearInterval(t)
   }, [])
   const hasPw = s.me.hasPassword !== false
@@ -451,6 +462,21 @@ function SignedIn() {
           </small>
         </div>
       </section>
+
+      {s.me.newsroom && (
+        <section className="acct-newsroom">
+          <span className="acct-newsroom-icon" aria-hidden="true">
+            <Icon name="sparkle" size={20} />
+          </span>
+          <div>
+            <b>R&amp;M Newsroom</b>
+            <small>{s.me.newsroom === 'admin' ? 'Full access' : 'Employee'} · given by Realtynmore. This account opens the Newsroom.</small>
+          </div>
+          <button className="btn small" onClick={() => navigate('/studio')}>
+            Open Newsroom
+          </button>
+        </section>
+      )}
 
       <section className="acct-sync">
         <span className={`acct-sync-dot ${syncing ? 'busy' : ''}`} aria-hidden="true" />

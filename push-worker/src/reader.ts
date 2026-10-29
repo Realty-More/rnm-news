@@ -13,6 +13,7 @@
 import type { Env } from './index.ts'
 import { addFail, b64, fails, hashPassword, ipOf, normPhone, passwordProblem, pepperOf, unb64 } from './accounts.ts'
 import { sameKey, sha256hex } from './owner.ts'
+import { accessOf } from './staffAccess.ts'
 
 const SESSION_DAYS = 365
 const DAY = 86400000
@@ -86,7 +87,7 @@ async function newSession(env: Env, id: number): Promise<string> {
   return token
 }
 
-const publicMe = (r: Reader) => ({ name: r.name, email: r.email ?? '', phone: r.phone ?? '', created: r.created_at, google: !!r.google_sub, hasPassword: !!r.hash, sync: parseSync(r.sync) })
+const publicMe = (r: Reader, newsroom: 'admin' | 'editor' | null = null) => ({ newsroom, name: r.name, email: r.email ?? '', phone: r.phone ?? '', created: r.created_at, google: !!r.google_sub, hasPassword: !!r.hash, sync: parseSync(r.sync) })
 
 function parseSync(s: string | null): SyncState {
   try {
@@ -134,7 +135,7 @@ export async function readerSignup(env: Env, req: Request, body: unknown) {
     .run()
   await addFail(env, ipKey)
   const row = (await env.DB.prepare('SELECT * FROM readers WHERE id = ?').bind(Number(r.meta.last_row_id)).first<Reader>())!
-  return { token: await newSession(env, row.id), me: publicMe(row) }
+  return { token: await newSession(env, row.id), me: publicMe(row, await accessOf(env, row.id)) }
 }
 
 async function checkPassword(env: Env, pw: string, r: Reader) {
@@ -156,7 +157,7 @@ export async function readerLogin(env: Env, req: Request, body: unknown) {
     await Promise.all([addFail(env, k), addFail(env, ipKey)])
     throw new Error(r ? 'Password is not right. Passwords are case-sensitive.' : `No account with this ${'email' in id ? 'email' : 'number'}. Tap “Create account”.`)
   }
-  return { token: await newSession(env, r.id), me: publicMe(r) }
+  return { token: await newSession(env, r.id), me: publicMe(r, await accessOf(env, r.id)) }
 }
 
 /* ---------- Sign in with Google ---------- */
@@ -232,7 +233,7 @@ export async function readerGoogle(env: Env, req: Request, body: unknown) {
       r = await env.DB.prepare('SELECT * FROM readers WHERE id = ?').bind(Number(ins.meta.last_row_id)).first<Reader>()
     }
   }
-  return { token: await newSession(env, r!.id), me: publicMe({ ...r!, google_sub: c.sub }) }
+  return { token: await newSession(env, r!.id), me: publicMe({ ...r!, google_sub: c.sub }, await accessOf(env, r!.id)) }
 }
 
 /* ---------- account ---------- */
@@ -246,7 +247,7 @@ export async function readerLogout(env: Env, req: Request) {
 export async function readerMe(env: Env, req: Request) {
   const r = await readerOf(env, req)
   if (!r) throw new Error('Please sign in again.')
-  return publicMe(r)
+  return publicMe(r, await accessOf(env, r.id))
 }
 
 const cleanSaved = (v: unknown): SavedLite[] =>
@@ -342,7 +343,7 @@ export async function readerDelete(env: Env, req: Request, body: unknown) {
   // Accounts made with Google have no password: they type DELETE instead.
   if (r.hash ? typeof b.password !== 'string' || !(await checkPassword(env, b.password, r)) : String(b.confirm ?? '').trim().toUpperCase() !== 'DELETE')
     throw new Error(r.hash ? 'Your password is not right.' : 'Type DELETE to confirm.')
-  await env.DB.batch([env.DB.prepare('DELETE FROM reader_sessions WHERE reader_id = ?').bind(r.id), env.DB.prepare('DELETE FROM readers WHERE id = ?').bind(r.id)])
+  await env.DB.batch([env.DB.prepare('DELETE FROM reader_sessions WHERE reader_id = ?').bind(r.id), env.DB.prepare('DELETE FROM staff_links WHERE reader_id = ?').bind(r.id), env.DB.prepare('DELETE FROM readers WHERE id = ?').bind(r.id)])
   return { ok: true }
 }
 
@@ -387,5 +388,5 @@ export async function readerReset(env: Env, req: Request, body: unknown) {
     env.DB.prepare('UPDATE readers SET salt = ?, hash = ?, reset_hash = NULL, reset_expires = NULL, reset_tries = 0 WHERE id = ?').bind(salt, hash, r.id),
     env.DB.prepare('DELETE FROM reader_sessions WHERE reader_id = ?').bind(r.id),
   ])
-  return { token: await newSession(env, r.id), me: publicMe({ ...r, salt, hash }) }
+  return { token: await newSession(env, r.id), me: publicMe({ ...r, salt, hash }, await accessOf(env, r.id)) }
 }

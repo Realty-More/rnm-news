@@ -44,6 +44,13 @@ export function forgetOwner() {
   // A password login also ends its session on the server.
   const key = ownerKey()
   if (key?.startsWith('s_') && PUSH_API) void fetch(`${PUSH_API}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
+  dropNewsroom()
+  // A Realtynmore account with Newsroom access is one login: logging out ends both.
+  if (key?.startsWith('r_')) void import('./reader.ts').then((m) => m.readerSignOut())
+}
+
+/** Closes the Newsroom on this device only (access was taken away); a reader account stays signed in. */
+export function dropNewsroom() {
   try {
     localStorage.removeItem(KEY)
     localStorage.removeItem(ROLE)
@@ -51,6 +58,19 @@ export function forgetOwner() {
     /* ignore */
   }
 }
+
+/** A Realtynmore account the owner gave Newsroom access: its own sign-in opens the Newsroom. */
+export function rememberNewsroom(token: string, role: Role, name: string) {
+  try {
+    localStorage.setItem(KEY, token)
+    localStorage.setItem(ROLE, JSON.stringify({ role, name }))
+  } catch {
+    /* private mode */
+  }
+}
+
+/** True when this device's Newsroom login is the person's own Realtynmore account. */
+export const isOwnAccountLogin = () => !!ownerKey()?.startsWith('r_')
 
 async function call<T>(path: string, init: RequestInit = {}, key = ownerKey()): Promise<T> {
   if (!PUSH_API) throw new Error('App server is not set up.')
@@ -144,13 +164,21 @@ export async function registerOwnerDevice(): Promise<'ok' | 'denied' | 'unsuppor
   return 'ok'
 }
 
-/** Keys saved before roles existed get their role on the next Studio visit. */
-export async function refreshRole(): Promise<void> {
-  if (!ownerKey()) return
+/**
+ * Keys saved before roles existed get their role on the next Studio visit. Returns 'ended' when a
+ * Realtynmore account's Newsroom access was taken away (the Newsroom then closes on this device).
+ */
+export async function refreshRole(): Promise<'ok' | 'ended' | 'offline'> {
+  if (!ownerKey()) return 'ended'
   try {
     const me = await studio<Me>('ping')
     localStorage.setItem(ROLE, JSON.stringify({ role: me.role, name: me.name, mustChange: !!me.mustChange, photo: me.photo ?? '', avatar: me.avatar ?? '', title: me.title ?? '' }))
-  } catch {
-    /* keep what we have */
+    return 'ok'
+  } catch (e) {
+    if (isOwnAccountLogin() && /login has ended/.test((e as Error).message)) {
+      dropNewsroom()
+      return 'ended'
+    }
+    return 'offline'
   }
 }

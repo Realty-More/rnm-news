@@ -51,6 +51,8 @@ export function sameKey(a: string, b: string) {
 export async function authenticate(key: string, env: Env, ctx: ExecutionContext): Promise<Who | null> {
   if (sameKey(key, env.STATS_KEY ?? '')) return { role: 'owner', name: OWNER_NAME }
   if (key.startsWith('s_')) return sessionWho(env, key)
+  // A normal Realtynmore account the owner gave Newsroom access (others get null → 401).
+  if (key.startsWith('r_')) return (await import('./staffAccess.ts')).linkedWho(env, key)
   if (key.length < 24 || key.length > 64) return null
   const id = await sha256hex(key)
   const ed = await env.SUBS.get<Editor>(`editor:${id}`, 'json')

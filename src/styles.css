@@ -9258,3 +9258,155 @@ button.mk-cover:focus-visible {
   color: var(--ink);
   font: 500 14.5px var(--sans);
 }
+
+/* Employees → Give Newsroom access */
+.emp-head-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.grant-steps {
+  margin: 4px 0 14px;
+  padding: 12px 14px 12px 34px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.grant-steps li::marker {
+  color: var(--accent-deep);
+  font-weight: 700;
+}
+.grant-find-row {
+  display: flex;
+  gap: 8px;
+}
+.grant-find-row input {
+  flex: 1;
+}
+.grant-miss {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--line);
+  font-size: 14px;
+}
+.grant-miss p {
+  margin: 0 0 8px;
+}
+.grant-pick {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  animation: grant-in 0.28s ease-out both;
+}
+@keyframes grant-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grant-pick {
+    animation: none;
+  }
+}
+.grant-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.grant-who > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.grant-who .meta {
+  overflow-wrap: anywhere;
+}
+.grant-roles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.grant-role {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.grant-role small {
+  color: var(--mute);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.grant-role.on {
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 3px rgb(251 165 25 / 0.18);
+}
+@media (max-width: 520px) {
+  .grant-roles {
+    grid-template-columns: 1fr;
+  }
+  .emp-head {
+    flex-wrap: wrap;
+  }
+  .emp-head-btns {
+    justify-content: flex-start;
+  }
+}
+
+/* My account: this account has Newsroom access */
+.acct-newsroom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(120deg, rgb(251 165 25 / 0.14), rgb(245 130 32 / 0.06));
+  border: 1px solid rgb(245 130 32 / 0.35);
+}
+.acct-newsroom > div {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.acct-newsroom small {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+.acct-newsroom-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  flex: none;
+}
+@media (max-width: 420px) {
+  .acct-newsroom {
+    flex-wrap: wrap;
+  }
+  .acct-newsroom .btn {
+    width: 100%;
+  }
+}

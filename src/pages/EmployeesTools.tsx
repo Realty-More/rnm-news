@@ -1,5 +1,9 @@
-// Studio → Manage → Employees (owner and full access): everyone with a mobile login, their role,
-// shift and status; add an employee, reset a password, give or remove full access, remove.
+// Studio → Manage → Employees (owner and full access): everyone who can open the Newsroom, their role,
+// shift and status. Two ways in:
+//   • Give Newsroom access (recommended): the person makes a normal Realtynmore account (email, mobile or
+//     Google) and the owner gives that account Employee or Full access. No passwords change hands.
+//   • + Add employee (backup): a mobile login with a temporary password, as before.
+// Reset a password, give or remove full access, log out everywhere, remove.
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
@@ -22,6 +26,31 @@ interface Account {
   title?: string
   photo?: string
   avatar?: string
+}
+/** A normal Realtynmore account with Newsroom access. */
+interface Linked {
+  readerId: number
+  personId: string
+  name: string
+  email: string
+  phone: string
+  google: boolean
+  role: 'admin' | 'editor'
+  by: string
+  granted: string
+  lastSeen: string
+  title?: string
+  photo?: string
+  avatar?: string
+}
+interface Found {
+  readerId: number
+  name: string
+  email: string
+  phone: string
+  google: boolean
+  created: string
+  access: 'admin' | 'editor' | null
 }
 interface Settings {
   startTime: string
@@ -174,6 +203,203 @@ export function AddEmployeeDialog({ onClose, onAdded, office }: { onClose: () =>
   )
 }
 
+const SIGNIN = 'https://realty-more.github.io/rnm-news/#/account'
+const inviteMessage = () =>
+  `Hi, please make your Realtynmore account so I can give you R&M Newsroom access:\n1. Open ${SIGNIN}\n2. Tap "Create account" (email, mobile number or Google)\n3. Send me the email or number you used.`
+const accessMessage = (name: string, how: string) =>
+  `Hi ${name.split(' ')[0]}, you now have R&M Newsroom access in the Realtynmore app.\nSign in with your own account (${how}) at ${SIGNIN}\nThe Newsroom opens by itself. Menu → Open Newsroom also works.`
+const signInWith = (a: { email: string; phone: string; google: boolean }) => (a.google ? `Google · ${a.email}` : a.email || (a.phone ? showPhone(a.phone) : ''))
+
+/**
+ * Give Newsroom access to an account the person made themself: find it by email or mobile, choose
+ * Employee or Full access, designation and office hours. Their own login then opens the Newsroom.
+ */
+export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: () => void; onDone: () => void; office?: { start: string; end: string }; edit?: Linked }) {
+  const [id, setId] = useState('')
+  const [found, setFound] = useState<Found | null>(
+    edit ? { readerId: edit.readerId, name: edit.name, email: edit.email, phone: edit.phone, google: edit.google, created: edit.granted, access: edit.role } : null,
+  )
+  const [miss, setMiss] = useState<{ team?: string } | null>(null)
+  const [f, setF] = useState({ role: (edit?.role ?? 'editor') as 'admin' | 'editor', title: edit?.title ?? '', start: '', end: '' })
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState<{ name: string; how: string; phone: string } | null>(null)
+  const endBeforeStart = !!f.end && f.end <= (f.start || office?.start || '00:00')
+  const digits = id.replace(/\D/g, '')
+  const find = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setMiss(null)
+    setFound(null)
+    try {
+      const r = await studioPost<{ found: boolean; team?: string; account?: Found }>('access/find', { id })
+      if (r.found && r.account) {
+        const acc = r.account
+        setFound(acc)
+        if (acc.access) setF((x) => ({ ...x, role: acc.access ?? x.role }))
+      } else setMiss({ team: r.team })
+    } catch (err) {
+      toast((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const grant = async () => {
+    if (!found) return
+    setBusy(true)
+    try {
+      const r = await studioPost<{ name: string; role: string; changed: boolean }>('access/grant', { readerId: found.readerId, role: f.role, title: f.title, start: f.start || undefined, end: f.end || undefined })
+      onDone()
+      if (edit) {
+        toast(`${r.name}: ${f.role === 'admin' ? 'Full access' : 'Employee access'} saved`)
+        onClose()
+      } else setDone({ name: r.name, how: signInWith(found), phone: found.phone })
+    } catch (err) {
+      toast((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (done) {
+    const msg = accessMessage(done.name, done.how)
+    return (
+      <Dialog title="Newsroom access given" onClose={onClose}>
+        <div className="login-card">
+          <p className="login-card-ok">✓ {done.name} can now open R&amp;M Newsroom</p>
+          <dl>
+            <dt>They sign in with</dt>
+            <dd>{done.how}</dd>
+            <dt>Access</dt>
+            <dd>{f.role === 'admin' ? 'Full access' : 'Employee'}</dd>
+          </dl>
+          <p className="meta">No new password: they use their own account. Take access away any time from the ⋯ menu.</p>
+          <div className="action-row">
+            {done.phone && (
+              <a className="btn small" href={`https://wa.me/91${done.phone}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer">
+                Tell them on WhatsApp
+              </a>
+            )}
+            <button className="btn ghost small" onClick={() => void navigator.clipboard?.writeText(msg).then(() => toast('Message copied'))}>
+              Copy message
+            </button>
+            <button className="btn ghost small" onClick={onClose}>
+              Done
+            </button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
+  return (
+    <Dialog title={edit ? `Change access · ${edit.name}` : 'Give Newsroom access'} onClose={onClose}>
+      {!edit && (
+        <>
+          <ol className="grant-steps">
+            <li>They make a Realtynmore account (Sign in → Create account, or Google).</li>
+            <li>Search the email or mobile number they used.</li>
+            <li>Choose their access. Their own login now opens the Newsroom.</li>
+          </ol>
+          <form className="emp-form grant-find" onSubmit={find}>
+            <label>
+              Their email or mobile number
+              <span className="grant-find-row">
+                <input value={id} onChange={(e) => setId(e.target.value)} placeholder="name@gmail.com or 98xxxxxxxx" autoFocus autoComplete="off" required />
+                <button className="btn" disabled={busy || id.trim().length < 5}>
+                  {busy && !found ? 'Finding…' : 'Find'}
+                </button>
+              </span>
+            </label>
+          </form>
+        </>
+      )}
+      {miss && (
+        <div className="grant-miss" role="status">
+          {miss.team ? (
+            <p>
+              <strong>{miss.team}</strong> already has a team login with this number or email. They can sign in with it; nothing else is needed.
+            </p>
+          ) : (
+            <>
+              <p>
+                <strong>No account yet</strong> with this email or number. Ask them to create one first, then search again.
+              </p>
+              <div className="action-row">
+                <button className="btn ghost small" onClick={() => void navigator.clipboard?.writeText(inviteMessage()).then(() => toast('Invite copied'))}>
+                  Copy invite message
+                </button>
+                {!id.includes('@') && digits.length >= 10 && (
+                  <a className="btn ghost small" href={`https://wa.me/91${digits.slice(-10)}?text=${encodeURIComponent(inviteMessage())}`} target="_blank" rel="noopener noreferrer">
+                    Send invite on WhatsApp
+                  </a>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {found && (
+        <div className="grant-pick">
+          <div className="grant-who">
+            <PersonAvatar name={found.name} size={44} />
+            <div>
+              <strong>{found.name}</strong>
+              <span className="meta">
+                {signInWith(found)}
+                {found.phone && found.email ? ` · ${showPhone(found.phone)}` : ''}
+                {!edit && found.created ? ` · account since ${formatDateTime(found.created)}` : ''}
+              </span>
+            </div>
+            {found.access && <span className="acct-tag">{found.access === 'admin' ? 'Full access' : 'Employee'}</span>}
+          </div>
+          <div className="grant-roles" role="radiogroup" aria-label="Access">
+            {(
+              [
+                ['editor', 'Employee', 'My day, check-in, daily report, tasks and the content tools.'],
+                ['admin', 'Full access', 'Everything you see: business numbers, ad sales, media kit, team and settings.'],
+              ] as const
+            ).map(([v, label, text]) => (
+              <button key={v} type="button" role="radio" aria-checked={f.role === v} className={`grant-role ${f.role === v ? 'on' : ''}`} onClick={() => setF({ ...f, role: v })}>
+                <strong>{label}</strong>
+                <small>{text}</small>
+              </button>
+            ))}
+          </div>
+          <div className="emp-form">
+            <label>
+              Designation <small>(optional)</small>
+              <input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="e.g. Video Editor" maxLength={60} />
+            </label>
+            {!edit && (
+              <>
+                <div className="emp-times">
+                  <label>
+                    Office starts
+                    <input type="time" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} />
+                  </label>
+                  <label>
+                    Office ends
+                    <input type="time" value={f.end} onChange={(e) => setF({ ...f, end: e.target.value })} />
+                  </label>
+                </div>
+                <p className={`meta ${endBeforeStart ? 'warn-text' : ''}`}>
+                  {endBeforeStart ? 'End time is before start time. For 6 in the evening choose 6:00 PM (18:00).' : `Leave empty to use the office time${office ? ` (${office.start}–${office.end})` : ''}.`}
+                </p>
+              </>
+            )}
+          </div>
+          <div className="action-row">
+            <button className="btn" disabled={busy || endBeforeStart} onClick={() => void grant()}>
+              {busy ? 'Saving…' : edit ? 'Save access' : found.access ? 'Update access' : 'Give Newsroom access'}
+            </button>
+            <button type="button" className="btn ghost" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </Dialog>
+  )
+}
+
 /** The "⋯" menu on each employee row. */
 export function RowMenu({ items }: { items: { label: string; danger?: boolean; onClick: () => void }[] }) {
   const [open, setOpen] = useState(false)
@@ -211,9 +437,10 @@ export function RowMenu({ items }: { items: { label: string; danger?: boolean; o
 }
 
 export function EmployeesTab() {
-  const res = useAsync('studio:accounts', (s) => studio<{ accounts: Account[] }>('accounts', undefined, s))
+  const res = useAsync('studio:accounts', (s) => studio<{ accounts: Account[]; linked?: Linked[] }>('accounts', undefined, s))
   const settings = useAsync('studio:team-settings', (s) => studio<{ settings: Settings }>('team/settings', undefined, s))
   const [adding, setAdding] = useState(false)
+  const [granting, setGranting] = useState<Linked | true | null>(null)
   const [q, setQ] = useState('')
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: string; danger?: boolean; run: () => Promise<void> } | null>(null)
   const [newPw, setNewPw] = useState<{ name: string; phone: string; password: string } | null>(null)
@@ -225,7 +452,17 @@ export function EmployeesTab() {
     const t = q.trim().toLowerCase()
     return (res.data?.accounts ?? []).filter((a) => a.role !== 'owner' && a.status !== 'pending' && (!t || a.name.toLowerCase().includes(t) || a.phone.includes(t) || a.title?.toLowerCase().includes(t)))
   }, [res.data, q])
+  const linked = useMemo(() => {
+    const t = q.trim().toLowerCase()
+    return (res.data?.linked ?? []).filter((a) => !t || a.name.toLowerCase().includes(t) || a.phone.includes(t) || a.email.includes(t) || a.title?.toLowerCase().includes(t))
+  }, [res.data, q])
   const pending = (res.data?.accounts ?? []).filter((a) => a.status === 'pending')
+  const actLinked = (a: Linked, action: 'revoke' | 'signout') =>
+    run(async () => {
+      await studioPost(`access/${action}`, { readerId: a.readerId })
+      toast(action === 'revoke' ? `${a.name} can no longer open the Newsroom` : `${a.name} is logged out everywhere`)
+      res.reload()
+    })
 
   const act = (a: Account, action: string) =>
     run(async () => {
@@ -245,9 +482,9 @@ export function EmployeesTab() {
       setConfirm(null)
     }
   }
-  const shift = (a: Account) => {
+  const shift = (a: Account | Linked) => {
     if (!s) return ''
-    const p = s.people?.[`ph:${a.phone}`]
+    const p = s.people?.['personId' in a ? a.personId : `ph:${a.phone}`]
     return `${p?.start ?? s.startTime}–${p?.end ?? s.endTime}`
   }
 
@@ -260,12 +497,19 @@ export function EmployeesTab() {
         <div>
           <h2>Employees</h2>
           <p className="meta">
-            {list.filter((a) => a.status === 'active').length} active · {list.filter((a) => a.devices && seenLabel(a.lastSeen) === 'Online now').length} online now · {list.filter((a) => a.devices).length} logged in
+            {list.filter((a) => a.status === 'active').length + linked.length} active ·{' '}
+            {list.filter((a) => a.devices && seenLabel(a.lastSeen) === 'Online now').length + linked.filter((a) => seenLabel(a.lastSeen) === 'Online now').length} online now ·{' '}
+            {list.filter((a) => a.devices).length + linked.length} with a login
           </p>
         </div>
-        <button className="btn" onClick={() => setAdding(true)}>
-          + Add employee
-        </button>
+        <div className="emp-head-btns">
+          <button className="btn" onClick={() => setGranting(true)}>
+            Give Newsroom access
+          </button>
+          <button className="btn ghost" onClick={() => setAdding(true)} title="Mobile number login with a temporary password">
+            + Add employee
+          </button>
+        </div>
       </div>
 
       {pending.length > 0 && (
@@ -295,10 +539,69 @@ export function EmployeesTab() {
 
       <input className="emp-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, mobile or designation" aria-label="Search employees" />
 
-      {list.length === 0 ? (
-        <p className="empty">{res.data.accounts.length ? 'Nobody matches.' : 'No employees yet. Tap “+ Add employee”.'}</p>
+      {list.length + linked.length === 0 ? (
+        <p className="empty">{res.data.accounts.length || res.data.linked?.length ? 'Nobody matches.' : 'No employees yet. Tap “Give Newsroom access”.'}</p>
       ) : (
         <div className="emp-list">
+          {linked.map((a) => (
+            <div key={a.personId} className="emp-row">
+              <PersonAvatar name={a.name} photo={a.photo} avatar={a.avatar} size={44} />
+              <div className="emp-main">
+                <strong>
+                  {a.name} {a.role === 'admin' && <span className="acct-tag">Full access</span>}
+                </strong>
+                <span className="meta">{[a.title, signInWith(a)].filter(Boolean).join(' · ')}</span>
+              </div>
+              <div className="emp-cols">
+                <span>
+                  <small>Shift</small>
+                  {shift(a) || '–'}
+                </span>
+                <span>
+                  <small>Status</small>
+                  <em className="emp-status ok">Active</em>
+                </span>
+                <span>
+                  <small>Login</small>
+                  {seenLabel(a.lastSeen) === 'Online now' ? <em className="emp-status online">● Online now</em> : <em className="emp-status ok">Own account</em>}
+                </span>
+                <span>
+                  <small>Last seen</small>
+                  {a.lastSeen ? seenLabel(a.lastSeen) : 'Not yet'}
+                </span>
+              </div>
+              <RowMenu
+                items={[
+                  a.role === 'admin'
+                    ? { label: 'Change to Employee access', onClick: () => setGranting({ ...a, role: 'editor' }) }
+                    : { label: 'Give full access', onClick: () => setGranting({ ...a, role: 'admin' }) },
+                  { label: 'Change designation', onClick: () => setGranting(a) },
+                  {
+                    label: 'Log out from all devices',
+                    onClick: () =>
+                      setConfirm({
+                        title: `Log ${a.name} out everywhere?`,
+                        text: 'They will need to sign in again with their own account. Use this if a phone is lost.',
+                        action: 'Log out everywhere',
+                        run: () => actLinked(a, 'signout'),
+                      }),
+                  },
+                  {
+                    label: 'Remove Newsroom access',
+                    danger: true,
+                    onClick: () =>
+                      setConfirm({
+                        title: `Remove ${a.name}’s Newsroom access?`,
+                        text: 'The Newsroom closes for them at once. Their Realtynmore account stays as a normal reader account. Past attendance, reports and leave stay in the records.',
+                        action: 'Remove access',
+                        danger: true,
+                        run: () => actLinked(a, 'revoke'),
+                      }),
+                  },
+                ]}
+              />
+            </div>
+          ))}
           {list.map((a) => (
             <div key={a.phone} className={`emp-row ${a.status === 'rejected' ? 'off' : ''}`}>
               <PersonAvatar name={a.name} photo={a.photo} avatar={a.avatar} size={44} />
@@ -387,6 +690,9 @@ export function EmployeesTab() {
         </div>
       )}
 
+      {granting && (
+        <GrantAccessDialog onClose={() => setGranting(null)} onDone={res.reload} office={s ? { start: s.startTime, end: s.endTime } : undefined} edit={granting === true ? undefined : granting} />
+      )}
       {adding && <AddEmployeeDialog onClose={() => setAdding(false)} onAdded={res.reload} office={s ? { start: s.startTime, end: s.endTime } : undefined} />}
       {confirm && (
         <Dialog title={confirm.title} onClose={() => setConfirm(null)}>

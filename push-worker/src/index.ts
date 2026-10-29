@@ -51,6 +51,7 @@ import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, news
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
 import { myEmail, setMyEmail, staffForgot, staffReset } from './staffEmail.ts'
+import { findAccount, grantAccess, revokeAccess, signOutLinked } from './staffAccess.ts'
 import { readerDelete, readerForgot, readerGoogle, readerLogin, readerLogout, readerMe, readerProfile, readerReset, readerSignup, readerSync } from './reader.ts'
 import { getDraft, listDrafts, pressImage, pressToStory, removeDraft, savePressImage, setImageRole } from './press.ts'
 import { changeLink, createLink, kitAsset, kitBook, kitPage, kitPdf, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
@@ -272,6 +273,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await saveProfile(env, who, body), 200, headers)
       case '/editor/me/email':
         return json(await setMyEmail(env, who, body), 200, { ...headers, 'Cache-Control': 'no-store' })
+      case '/editor/access/find':
+        return json(await findAccount(env, who, body), 200, { ...headers, 'Cache-Control': 'no-store' })
+      case '/editor/access/grant':
+        return json(await grantAccess(env, who, body), 200, headers)
+      case '/editor/access/revoke':
+        return json(await revokeAccess(env, who, body), 200, headers)
+      case '/editor/access/signout':
+        return json(await signOutLinked(env, who, body), 200, headers)
       case '/editor/accounts/add':
         return json(await addStaffLogin(env, body, who), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/team/email-now':

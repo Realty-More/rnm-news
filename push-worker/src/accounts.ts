@@ -153,8 +153,12 @@ export async function sessionWho(env: Env, token: string): Promise<Who | null> {
 
 /** Staff with an active account, in the shape the team lists use. */
 export async function accountStaff(env: Env): Promise<{ id: string; name: string; active: boolean; created: string }[]> {
-  const { results } = await env.DB.prepare("SELECT phone, name, COALESCE(approved_at, created_at) AS since FROM accounts WHERE role IN ('editor', 'admin') AND status = 'active' ORDER BY name").all<{ phone: string; name: string; since: string }>()
-  return results.map((r) => ({ id: `ph:${r.phone}`, name: r.name, active: true, created: r.since }))
+  const [{ results }, linked] = await Promise.all([
+    env.DB.prepare("SELECT phone, name, COALESCE(approved_at, created_at) AS since FROM accounts WHERE role IN ('editor', 'admin') AND status = 'active' ORDER BY name").all<{ phone: string; name: string; since: string }>(),
+    // Normal accounts the owner gave Newsroom access ("rd:<id>").
+    import('./staffAccess.ts').then((m) => m.linkedStaff(env)),
+  ])
+  return [...results.map((r) => ({ id: `ph:${r.phone}`, name: r.name, active: true, created: r.since })), ...linked]
 }
 
 /* ---------- owner: requests and accounts ---------- */
@@ -165,10 +169,11 @@ export async function listAccounts(env: Env) {
       .all<{ phone: string; name: string; mustChange: number | null }>(),
     import('./profile.ts'),
   ])
-  const [profiles, devices] = await Promise.all([
+  const [profiles, devices, linked] = await Promise.all([
     allProfiles(env),
     // Devices still logged in (sessions not ended or expired).
     env.DB.prepare('SELECT phone, COUNT(*) AS n FROM sessions WHERE expires_at > ? GROUP BY phone').bind(new Date().toISOString()).all<{ phone: string; n: number }>(),
+    import('./staffAccess.ts').then((m) => m.listLinked(env)),
   ])
   const devicesBy = new Map(devices.results.map((d) => [d.phone, d.n]))
   // Picture and designation for the Employees list.
@@ -177,6 +182,8 @@ export async function listAccounts(env: Env) {
       const p = profiles.get(`ph:${a.phone}`)
       return { ...a, mustChange: a.mustChange === 1, devices: devicesBy.get(a.phone) ?? 0, title: p?.title ?? '', photo: p?.photo ?? '', avatar: p?.avatar ?? '' }
     }),
+    // Normal accounts with Newsroom access (Employees → Give Newsroom access).
+    linked,
   }
 }
 

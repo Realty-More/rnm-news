@@ -1,7 +1,9 @@
-// Reader account on this device ("My Realty & More"): sign in with email and password, and keep
-// saved stories and feed choices the same on every device. Completely separate from the team's
-// R&M Newsroom login (lib/owner.ts): a reader account never opens the Newsroom.
+// Reader account on this device ("My Realty & More"): sign in with email, mobile or Google, and keep
+// saved stories and feed choices the same on every device. A normal account never opens the Newsroom,
+// unless the owner gives it Newsroom access (Employees → Give Newsroom access): then the same sign-in
+// also opens R&M Newsroom (`me.newsroom`), and the server checks that access on every Newsroom call.
 import { useEffect, useState } from 'react'
+import { dropNewsroom, ownerKey, rememberNewsroom } from './owner.ts'
 import { PUSH_API } from './push.ts'
 import { readPrefs, writePrefs } from './prefs.ts'
 import { applySaved, fillSaved, listSaved, onSavedEdited, removedIds, type SavedPost } from './saved.ts'
@@ -18,6 +20,8 @@ export interface ReaderMe {
   created: string
   google?: boolean
   hasPassword?: boolean
+  /** Newsroom access the owner gave this account. */
+  newsroom?: 'admin' | 'editor' | null
 }
 export interface ReaderState {
   token: string
@@ -81,9 +85,28 @@ async function call<T>(path: string, body: unknown = {}, token?: string): Promis
   return j
 }
 
+/** Opens (or closes) the Newsroom on this device to match the account's access. */
+function matchNewsroom(token: string, me: ReaderMe) {
+  const key = ownerKey()
+  if (me.newsroom && (!key || key.startsWith('r_'))) rememberNewsroom(token, me.newsroom, me.name)
+  else if (!me.newsroom && key === token) dropNewsroom()
+}
+
 const signedIn = async (out: { token: string; me: ReaderMe }) => {
   keep({ token: out.token, me: out.me })
+  matchNewsroom(out.token, out.me)
   await syncNow().catch(() => {})
+}
+
+/** Fresh account details (name, contacts, Newsroom access). */
+export async function refreshReader(): Promise<ReaderMe | null> {
+  const s = readerState()
+  if (!s) return null
+  const me = await call<ReaderMe>('me', {}, s.token)
+  const now = readerState()
+  if (now?.token === s.token) keep({ ...now, me: { ...now.me, ...me } })
+  matchNewsroom(s.token, me)
+  return me
 }
 
 /** `id` is an email address or a mobile number. */
@@ -95,6 +118,7 @@ export const readerReset = async (id: string, code: string, password: string) =>
 
 export async function readerSignOut() {
   const s = readerState()
+  if (s && ownerKey() === s.token) dropNewsroom()
   keep(null)
   if (s) await call('logout', {}, s.token).catch(() => {})
 }
@@ -121,6 +145,7 @@ export async function readerDeleteAccount(password: string, confirm = '') {
   const s = readerState()
   if (!s) return
   await call('delete', { password, confirm }, s.token)
+  if (ownerKey() === s.token) dropNewsroom()
   keep(null)
 }
 
@@ -196,6 +221,8 @@ export function startReaderSync() {
     if (document.visibilityState === 'visible' && s && (!s.syncedAt || Date.now() - Date.parse(s.syncedAt) > 10 * 60000)) soon(300)
   })
   soon(2000)
+  // Access given or taken away since last time: open or close the Newsroom on this device.
+  if (readerState()) setTimeout(() => void refreshReader().catch(() => {}), 2500)
 }
 
 /** Looks like a mobile number rather than an email. */

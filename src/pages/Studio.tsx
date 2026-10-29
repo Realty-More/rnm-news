@@ -117,6 +117,11 @@ export function Studio() {
         forgetOwner()
         setKey(null)
       }}
+      onEnded={() => {
+        // Newsroom access was taken away from this account: back to the login, reader account kept.
+        setKey(null)
+        toast('Newsroom access has ended for this account.')
+      }}
     />
   )
 }
@@ -127,14 +132,14 @@ function greeting(now = new Date()): string {
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
 
-function StudioHome({ onLock }: { onLock: () => void }) {
+function StudioHome({ onLock, onEnded }: { onLock: () => void; onEnded: () => void }) {
   const [params, setParams] = useSearchParams()
   const [me, setMe] = useState(ownerRole)
   const [pwOpen, setPwOpen] = useState(false)
   const [delOpen, setDelOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   useEffect(() => {
-    void refreshRole().then(() => setMe(ownerRole()))
+    void refreshRole().then((r) => (r === 'ended' ? onEnded() : setMe(ownerRole())))
   }, [])
   // Owner tools (business numbers, traffic, team, notifications) only for the owner's login;
   // staff tools (check-in and daily report) only for team logins. Palash Roy is not tracked as staff.

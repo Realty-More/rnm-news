@@ -137,8 +137,7 @@ export function NavMenu({ open, onClose }: { open: boolean; onClose: () => void 
   )
 }
 
-/** The owner's or team member's R&M Newsroom entry and log out. Readers see nothing here: team members
- *  open the Newsroom from the link in their login message (or Settings → tap the version 5 times). */
+/** Log in / log out for the owner and team. After login it shows who is in and opens R&M Newsroom. */
 function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT()
   const navigate = useNavigate()
@@ -158,7 +157,7 @@ function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
   }
   return (
     <>
-      {who && <h2 className="nav-h">{who.role === 'owner' ? t('menu.owner') : t('menu.team')}</h2>}
+      <h2 className="nav-h">{who?.role === 'owner' ? t('menu.owner') : t('menu.team')}</h2>
       {who ? (
         <div className="nav-login">
           <Link to="/studio" onClick={onClose} className="nav-login-who">
@@ -178,7 +177,18 @@ function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
             {t('menu.logout')}
           </button>
         </div>
-      ) : null}
+      ) : (
+        <ul className="nav-list">
+          <li>
+            <NavLink to="/studio" onClick={onClose}>
+              <span className="nav-li-icon">
+                <Icon name="settings" size={18} /> {t('menu.login')}
+              </span>
+              <Icon name="chevron" size={16} />
+            </NavLink>
+          </li>
+        </ul>
+      )}
     </>
   )
 }

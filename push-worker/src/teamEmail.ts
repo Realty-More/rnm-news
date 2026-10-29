@@ -309,7 +309,8 @@ export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(),
     `<td class="m" width="25%" valign="top" style="padding:18px 14px 20px;${first ? '' : 'border-left:1px solid #2A2A2E;'}"><div style="font:700 9.5px ${F.sans};letter-spacing:1.2px;text-transform:uppercase;color:#8D8D92">${label}</div><div style="margin-top:8px;font:700 ${value.length > 5 ? 21 : 26}px/1.15 ${F.serif};color:#FFFFFF">${value}</div><div style="margin-top:3px;font:12px ${F.sans};color:#A1A1A6">${sub}</div>${deltaHtml}${spark(sparkVals)}</td>`
 
   // Sections are numbered 01, 02… in the order they appear.
-  const secOrder = ['action', ...(week.length ? ['week'] : []), ...(site ? ['site'] : []), ...(yt ? ['yt'] : []), 'team']
+  // Team first, then the week's chart, then the website and YouTube.
+  const secOrder = ['action', 'team', ...(week.length ? ['week'] : []), ...(site ? ['site'] : []), ...(yt ? ['yt'] : [])]
   const num = (key: string) => String(secOrder.indexOf(key) + 1).padStart(2, '0')
   const section = (title: string, right = '', key = '') =>
     `<tr><td class="px" style="padding:34px 36px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="st" style="font:700 11px ${F.sans};letter-spacing:2.2px;text-transform:uppercase;color:#A87412;white-space:nowrap;padding-right:12px">${key ? `<span style="font:400 18px ${F.serif};letter-spacing:0;color:#D9C9A3;vertical-align:-2px">${num(key)}</span>&nbsp;&nbsp;` : ''}${title}</td><td width="100%" style="border-bottom:1px solid ${C.line};font-size:0;line-height:0">&nbsp;</td>${right ? `<td style="padding-left:12px;white-space:nowrap">${right}</td>` : ''}</tr></table></td></tr>`
@@ -535,12 +536,12 @@ ${
 }
 </table></td></tr>
 
-${weekSection}
-${site ? publishedSection : ''}
-${yt ? youtubeSection : ''}
 ${section('The team', legend, 'team')}
 ${hoursChart}
 <tr><td class="px" style="padding:0 36px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${people.map(person).join('') || `<tr><td style="padding:16px 0;font:14px ${F.sans};color:${C.mute}">No team members yet.</td></tr>`}</table></td></tr>
+${weekSection}
+${site ? publishedSection : ''}
+${yt ? youtubeSection : ''}
 
 <tr><td class="px" align="center" style="padding:10px 36px 36px">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#141416;border-radius:2px"><a href="${esc(appUrl)}#/studio?tab=teamday" style="display:inline-block;padding:14px 30px;font:700 12px ${F.sans};letter-spacing:1.6px;text-transform:uppercase;color:${C.gold};text-decoration:none">Open the full report &rarr;</a></td></tr></table>

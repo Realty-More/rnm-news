@@ -759,13 +759,33 @@ describe('daily team report email', () => {
     const mail = buildTeamEmail(day, 'https://realty-more.github.io/rnm-news/', Date.parse('2026-10-28T14:00:00Z'), null, site)
     expect(mail.subject).toContain('· 2 stories published')
     expect(mail.html).toContain('Published on realtynmore.com')
-    expect(mail.html).toContain('Most read so far · 63 views')
+    expect(mail.html).not.toContain('Most read')
     expect(mail.html).toContain('L&amp;T Reports 33% Surge in Q2 PAT')
     expect(mail.html).toContain('▼ 13 vs yesterday')
     expect(mail.html).toContain('78</b> views so far')
     expect(mail.text).toContain('- 11:38 am · L&T Reports 33% Surge in Q2 PAT (News, 63 views)')
     const none = buildTeamEmail(day, 'https://realty-more.github.io/rnm-news/', Date.parse('2026-10-28T14:00:00Z'), null, { stories: [] })
     expect(none.html).toContain('<b>No stories published</b> on realtynmore.com today')
+  })
+  it('lists only the videos uploaded on YouTube that day', async () => {
+    const { buildTeamEmail } = await import('./teamEmail.ts')
+    const day = { day: '2026-10-28', summary: { total: 1, present: 1, late: 0, reports: 1 }, people: [] }
+    const yt = {
+      prevUploads: 2,
+      uploads: [
+        { id: '1LOybnZ7tJM', title: 'How “Status Symbols” Flipped in Indian Real Estate', time: '2026-10-28T05:30:25.000Z', short: true, views: 876, likes: 6 },
+        { id: 'ppT8pm46Wcc', title: 'Retail Meets Hospitality', time: '2026-10-28T10:30:39.000Z', short: false, views: 77, likes: 15 },
+      ],
+    }
+    const mail = buildTeamEmail(day, 'https://realty-more.github.io/rnm-news/', Date.parse('2026-10-28T14:00:00Z'), null, null, yt)
+    expect(mail.subject).toContain('· 2 videos')
+    expect(mail.html).toContain('Uploaded on YouTube')
+    expect(mail.html).toContain('(1 Short, 1 long)')
+    expect(mail.html).toContain('same as yesterday')
+    expect(mail.html).toContain('https://www.youtube.com/shorts/1LOybnZ7tJM')
+    expect(mail.html).toContain('https://www.youtube.com/watch?v=ppT8pm46Wcc')
+    expect(mail.html).toContain('953</b> views so far')
+    expect(mail.text).toContain('- 11:00 am · How “Status Symbols” Flipped in Indian Real Estate (Short, 876 views)')
   })
 })
 

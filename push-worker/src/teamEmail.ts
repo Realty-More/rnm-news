@@ -3,7 +3,8 @@
 // the change since the previous working day, numbered action items (absent, blocked, overdue, late,
 // missing reports, not checked out), then each person with a day timeline (shift, worked, late start),
 // times, place, the work report and tasks; and what was published on realtynmore.com that day
-// (count vs the previous day, sections, most read so far, every story with time and views).
+// (count vs the previous day, sections, most read so far, every story with time and views), and
+// what was uploaded on YouTube that day (videos and Shorts with their views and likes).
 // Email-safe HTML only (tables and inline styles; no scripts, SVG or web fonts).
 // Sent through the same Brevo connection as the newsletter.
 import type { Env } from './index.ts'
@@ -144,6 +145,41 @@ export async function publishedOn(env: Env, day: string, prevDay?: string): Prom
   return { stories, prevCount }
 }
 
+/* ---------- YouTube that day ---------- */
+
+export interface YtUpload {
+  id: string
+  title: string
+  time: string // ISO
+  short: boolean | null
+  views: number
+  likes: number | null
+}
+export interface YoutubeDay {
+  uploads: YtUpload[]
+  prevUploads?: number
+}
+
+/** Videos and Shorts uploaded that day, with their views and likes from the hourly snapshots. */
+export async function youtubeOn(env: Env, day: string, prevDay?: string): Promise<YoutubeDay> {
+  const { start, end } = istDayBounds(day)
+  const iso = (ms: number) => new Date(ms).toISOString().slice(0, 19)
+  const [{ results: uploads }, prev] = await Promise.all([
+    env.DB.prepare('SELECT id, title, published AS time, short, views, likes FROM yt_videos WHERE published >= ? AND published < ? ORDER BY published').bind(iso(start), iso(end)).all<{ id: string; title: string; time: string; short: number | null; views: number; likes: number | null }>(),
+    prevDay
+      ? env.DB.prepare('SELECT COUNT(*) AS n FROM yt_videos WHERE published >= ? AND published < ?')
+          .bind(iso(istDayBounds(prevDay).start), iso(istDayBounds(prevDay).end))
+          .first<{ n: number }>()
+      : Promise.resolve(null),
+  ])
+  return {
+    uploads: uploads.map((u) => ({ ...u, time: new Date(Date.parse(u.time)).toISOString(), short: u.short === null ? null : u.short === 1 })),
+    prevUploads: prev?.n ?? undefined,
+  }
+}
+
+const ytLink = (id: string, short: boolean | null) => (short ? `https://www.youtube.com/shorts/${id}` : `https://www.youtube.com/watch?v=${id}`)
+
 /** The previous working day's totals, for "vs yesterday". */
 export interface PrevDay {
   day: string
@@ -157,7 +193,7 @@ export interface PrevDay {
 const F = { sans: 'Arial,Helvetica,sans-serif', serif: "Georgia,'Times New Roman',serif" }
 
 /** The email (pure, for tests). */
-export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(), prev?: PrevDay | null, site?: PublishedDay | null, ownerName = 'Palash'): { subject: string; html: string; text: string } {
+export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(), prev?: PrevDay | null, site?: PublishedDay | null, yt?: YoutubeDay | null, ownerName = 'Palash'): { subject: string; html: string; text: string } {
   const date = new Date(`${d.day}T00:00:00Z`)
   const dateLabel = new Intl.DateTimeFormat('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date)
   const shortDate = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date)
@@ -170,7 +206,7 @@ export function buildTeamEmail(d: TeamDayData, appUrl: string, now = Date.now(),
   const workedMin = (p: DayPerson) => (p.checkIn && !p.checkOut && isToday ? Math.max(p.minutes, nowMin - minOf(p.checkIn)) : p.minutes)
   const teamMin = present.reduce((n, p) => n + workedMin(p), 0)
   const onTime = Math.max(0, s.present - s.late)
-  const subject = `Daily Team Report · ${shortDate} · ${s.present}/${s.total} in${s.late ? ` · ${s.late} late` : ''}${absent.length ? ` · ${absent.length} absent` : ''}${noReport.length ? ` · ${noReport.length} report${noReport.length === 1 ? '' : 's'} pending` : ''}${site ? ` · ${site.stories.length} stor${site.stories.length === 1 ? 'y' : 'ies'} published` : ''}`
+  const subject = `Daily Team Report · ${shortDate} · ${s.present}/${s.total} in${s.late ? ` · ${s.late} late` : ''}${absent.length ? ` · ${absent.length} absent` : ''}${noReport.length ? ` · ${noReport.length} report${noReport.length === 1 ? '' : 's'} pending` : ''}${site ? ` · ${site.stories.length} stor${site.stories.length === 1 ? 'y' : 'ies'} published` : ''}${yt?.uploads.length ? ` · ${yt.uploads.length} video${yt.uploads.length === 1 ? '' : 's'}` : ''}`
   const order = (p: DayPerson) => (p.checkIn ? 0 : p.leave ? 1 : 2)
   const people = [...d.people].sort((a, b) => order(a) - order(b) || (a.checkIn ?? '').localeCompare(b.checkIn ?? '') || a.name.localeCompare(b.name))
   const grace = 15
@@ -284,7 +320,6 @@ ${meta}${report}${tasks}
   const withViews = pub.filter((x) => x.views !== null)
   const totalViews = withViews.reduce((n, x) => n + (x.views ?? 0), 0)
   const sections = [...pub.reduce((m, x) => m.set(x.section, (m.get(x.section) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1])
-  const top = [...withViews].sort((a, b) => (b.views ?? 0) - (a.views ?? 0))[0]
   const storyTime = (iso: string) => clock12(iso).replace(' ', ' ')
   const countDelta =
     site?.prevCount !== undefined
@@ -300,11 +335,6 @@ ${
   pub.length
     ? `<div style="font:14px/1.6 ${F.sans};color:#2A2A2E"><b style="font:700 22px ${F.serif};color:${C.ink}">${pub.length}</b> stor${pub.length === 1 ? 'y' : 'ies'} published${countDelta ? ` &nbsp;·&nbsp; ${countDelta}` : ''}${withViews.length ? ` &nbsp;·&nbsp; <b>${totalViews.toLocaleString('en-IN')}</b> views so far` : ''}</div>
 <div style="margin-top:6px;font:12.5px/1.7 ${F.sans};color:${C.mute}">${sections.map(([name, n]) => `<span style="display:inline-block;margin:0 6px 4px 0;padding:2px 9px;border:1px solid ${C.line};border-radius:999px;color:#55555A">${esc(name)} <b style="color:${C.ink}">${n}</b></span>`).join('')}</div>
-${
-  top && (top.views ?? 0) > 0
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;background:#FBF6EA;border-radius:4px"><tr><td style="padding:14px 16px"><div style="font:700 10px ${F.sans};letter-spacing:1.4px;text-transform:uppercase;color:#A87412">Most read so far · ${(top.views ?? 0).toLocaleString('en-IN')} views</div><a href="${esc(top.link)}" style="display:block;margin-top:4px;font:700 16px/1.4 ${F.serif};color:${C.ink};text-decoration:none">${esc(top.title)}</a></td></tr></table>`
-    : ''
-}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px">
 ${pub
   .slice(0, MAX_STORIES)
@@ -318,6 +348,32 @@ ${pub.length > MAX_STORIES ? `<div style="padding-top:8px;font:12.5px ${F.sans};
 <div style="padding-top:8px;font:11.5px ${F.sans};color:#9A9AA0">Views are from the website’s counter, updated every hour.</div>`
     : `<div style="font:14px ${F.sans};color:#A6501A">No stories were published on the website today.</div>`
 }
+</td></tr>`
+
+  // YouTube that day.
+  const ups = yt?.uploads ?? []
+  const upDelta =
+    yt?.prevUploads !== undefined
+      ? (() => {
+          const diff = ups.length - yt.prevUploads!
+          return diff ? `<span style="color:${diff > 0 ? '#1F7A45' : '#B23F20'}">${diff > 0 ? '▲' : '▼'} ${Math.abs(diff)} vs ${prevLabel || 'yesterday'}</span>` : `<span style="color:${C.mute}">same as ${prevLabel || 'yesterday'}</span>`
+        })()
+      : ''
+  const nShorts = ups.filter((u) => u.short).length
+  const youtubeSection = `${section('Uploaded on YouTube', `<span style="font:700 11px ${F.sans};color:${C.mute}">${ups.length}</span>`)}
+<tr><td class="px" style="padding:12px 36px 0">
+<div style="font:14px/1.6 ${F.sans};color:#2A2A2E"><b style="font:700 22px ${F.serif};color:${C.ink}">${ups.length}</b> new video${ups.length === 1 ? '' : 's'}${ups.length ? ` (${nShorts} Short${nShorts === 1 ? '' : 's'}, ${ups.length - nShorts} long)` : ''}${upDelta ? ` &nbsp;·&nbsp; ${upDelta}` : ''}${ups.length ? ` &nbsp;·&nbsp; <b>${ups.reduce((n, u) => n + u.views, 0).toLocaleString('en-IN')}</b> views so far` : ''}</div>
+${
+  ups.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px">${ups
+        .map(
+          (u, i) =>
+            `<tr><td width="70" valign="top" style="padding:10px 10px 10px 0;${i ? `border-top:1px solid ${C.line};` : ''}font:12px ${F.sans};color:#9A9AA0;white-space:nowrap">${storyTime(u.time)}</td><td valign="top" style="padding:9px 0;${i ? `border-top:1px solid ${C.line};` : ''}"><a href="${esc(ytLink(u.id, u.short))}" style="font:600 14px/1.45 ${F.sans};color:${C.ink};text-decoration:none">${esc(u.title)}</a><div style="margin-top:2px;font:11.5px ${F.sans};color:${C.mute}">${u.short === null ? 'Video' : u.short ? 'Short' : 'Long video'}${u.likes ? ` · ${u.likes.toLocaleString('en-IN')} likes` : ''}</div></td><td width="56" valign="top" align="right" style="padding:10px 0 10px 10px;${i ? `border-top:1px solid ${C.line};` : ''}font:700 13px ${F.sans};color:${C.ink};white-space:nowrap">${u.views.toLocaleString('en-IN')}<div style="font:400 10.5px ${F.sans};color:#9A9AA0">views</div></td></tr>`,
+        )
+        .join('')}</table>`
+    : `<div style="margin-top:6px;font:13.5px ${F.sans};color:${C.mute}">No new videos on YouTube today.</div>`
+}
+<div style="padding-top:8px;font:11.5px ${F.sans};color:#9A9AA0">From the channel’s public numbers, checked every hour.</div>
 </td></tr>`
 
   const logo = `${appUrl}brand/logo_white.png`
@@ -335,7 +391,7 @@ ${pub.length > MAX_STORIES ? `<div style="padding-top:8px;font:12.5px ${F.sans};
 </tr></table>
 <div style="margin-top:30px;width:36px;height:2px;background:${C.gold};font-size:0;line-height:0">&nbsp;</div>
 <div class="hl" style="margin-top:16px;font:400 30px/1.2 ${F.serif};color:#FFFFFF">Good evening, ${esc(ownerName)}.</div>
-<div style="margin-top:10px;font:15px/1.6 ${F.sans};color:#C9C9CC">${esc(lead)} The team put in <b style="color:#FFFFFF">${hours(teamMin)}</b>${site ? ` and published <b style="color:#FFFFFF">${site.stories.length} stor${site.stories.length === 1 ? 'y' : 'ies'}</b> on the website` : ''}.</div>
+<div style="margin-top:10px;font:15px/1.6 ${F.sans};color:#C9C9CC">${esc(lead)} The team put in <b style="color:#FFFFFF">${hours(teamMin)}</b>${site ? ` and published <b style="color:#FFFFFF">${site.stories.length} stor${site.stories.length === 1 ? 'y' : 'ies'}</b> on the website` : ''}${yt?.uploads.length ? `${site ? ',' : ' and'} <b style="color:#FFFFFF">${yt.uploads.length} video${yt.uploads.length === 1 ? '' : 's'}</b> on YouTube` : ''}.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px;border-top:1px solid #2A2A2E;table-layout:fixed"><tr>
 ${metric('Attendance', `${pct}%`, `${s.present} of ${s.total} in`, delta(pct, prevPct, (n) => `${n} pts`), true)}${metric('On time', String(onTime), `${s.late} late`, delta(s.late, prev?.late, (n) => `${n} late`, true))}${metric('Hours', hours(teamMin), 'whole team', delta(teamMin, prev?.minutes, (n) => hours(n).replace(/^0h /, '')))}${metric('Reports', `${s.reports}/${s.present || s.total}`, noReport.length ? `${noReport.length} pending` : 'all in', delta(s.reports, prev?.reports, (n) => String(n)))}
 </tr></table>
@@ -356,6 +412,7 @@ ${
 </table></td></tr>
 
 ${site ? publishedSection : ''}
+${yt ? youtubeSection : ''}
 ${section('The team', legend)}
 <tr><td class="px" style="padding:0 36px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${people.map(person).join('') || `<tr><td style="padding:16px 0;font:14px ${F.sans};color:${C.mute}">No team members yet.</td></tr>`}</table></td></tr>
 
@@ -377,6 +434,7 @@ ${section('The team', legend)}
     `Attendance ${pct}% (${s.present}/${s.total}) · on time ${onTime} · late ${s.late} · reports ${s.reports} · ${s.onLeave ?? 0} on leave · ${absent.length} absent`,
     ...(items.length ? ['', 'Action items:', ...items.map((it, i) => `${i + 1}. ${it.html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')}`)] : []),
     ...(site ? ['', `Published on realtynmore.com: ${pub.length} stor${pub.length === 1 ? 'y' : 'ies'}${withViews.length ? `, ${totalViews} views so far` : ''}`, ...pub.map((x) => `- ${clock12(x.time)} · ${x.title} (${x.section}${x.views !== null ? `, ${x.views} views` : ''}) ${x.link}`)] : []),
+    ...(yt ? ['', `Uploaded on YouTube: ${ups.length} new video${ups.length === 1 ? '' : 's'}`, ...ups.map((u) => `- ${clock12(u.time)} · ${u.title} (${u.short ? 'Short' : 'Video'}, ${u.views} views) ${ytLink(u.id, u.short)}`)] : []),
     '',
     ...people.flatMap((p) => [
       `${p.name}${p.title ? ` (${p.title})` : ''}: ${p.checkIn ? `in ${clock(p.checkIn)}${p.late ? ' late' : ''}${p.inPlace ? ` (${p.inPlace.label})` : ''}, out ${clock(p.checkOut)}${p.outPlace ? ` (${p.outPlace.label})` : ''}, ${hours(workedMin(p))}` : p.leave ? `on leave (${p.leave.kind})` : 'absent'}`,
@@ -413,7 +471,8 @@ export async function sendTeamEmail(env: Env, force = false, now = Date.now()): 
     if (p && p.summary.present > 0) prev = { day: pd, present: p.summary.present, total: p.summary.total, late: p.summary.late, reports: p.summary.reports, minutes: p.people.reduce((n, x) => n + (x.checkIn ? x.minutes : 0), 0) }
   }
   const site = await publishedOn(env, day, prev?.day ?? new Date(now + IST_MS - 86400000).toISOString().slice(0, 10)).catch(() => null)
-  const mail = buildTeamEmail(data, env.APP_URL, now, prev, site)
+  const yt = await youtubeOn(env, day, prev?.day ?? new Date(now + IST_MS - 86400000).toISOString().slice(0, 10)).catch(() => null)
+  const mail = buildTeamEmail(data, env.APP_URL, now, prev, site, yt)
   const { sendRaw } = await import('./newsletter.ts')
   const r = await sendRaw(env, { to: s.reportEmail, subject: mail.subject, html: mail.html, text: mail.text, tag: 'team-report' })
   if (r === 'ok') {

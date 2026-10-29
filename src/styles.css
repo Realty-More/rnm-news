@@ -8015,3 +8015,609 @@ button.mk-cover:focus-visible {
     animation: none !important;
   }
 }
+
+/* =====================================================================
+   Content Studio: premium look and motion (applies to every Studio tab)
+   ===================================================================== */
+.studio {
+  --fx-gold: #f5a524;
+  --fx-gold-2: #ffcf5c;
+  --fx-glow: color-mix(in srgb, var(--accent) 28%, transparent);
+  --fx-card: var(--bg);
+  --fx-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  position: relative;
+}
+
+/* Header: a soft gold hero with a dotted texture and a glowing photo ring. */
+.studio .studio-head {
+  position: relative;
+  margin-bottom: 18px;
+  padding: 22px 22px 20px;
+  border-radius: 20px;
+  background:
+    radial-gradient(60% 120% at 100% 0%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 60%),
+    radial-gradient(40% 80% at 0% 100%, color-mix(in srgb, #3b7ddd 10%, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, var(--bg)) 0%, var(--bg) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+  overflow: hidden;
+  isolation: isolate;
+  animation: fx-rise 0.6s var(--fx-ease) both;
+}
+.studio .studio-head::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px);
+  background-size: 18px 18px;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 55%, #000 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 55%, #000 100%);
+  opacity: 0.7;
+}
+.studio .studio-head::after {
+  content: "";
+  position: absolute;
+  top: -40%;
+  bottom: -40%;
+  width: 26%;
+  left: 0;
+  z-index: -1;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  transform: translateX(-120%) rotate(10deg);
+  animation: fx-sweep 9s ease-in-out 1.2s infinite;
+  pointer-events: none;
+}
+.studio .owner-hello h1 {
+  font-size: clamp(26px, 3.6vw, 38px);
+  letter-spacing: -0.01em;
+}
+.studio .owner-badge {
+  background: linear-gradient(90deg, var(--fx-gold), var(--fx-gold-2));
+  box-shadow: 0 4px 14px var(--fx-glow);
+}
+.studio .avatar-btn {
+  position: relative;
+  border-radius: 50%;
+}
+.studio .avatar-btn::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--fx-gold), #fff3cf, var(--accent-deep), var(--fx-gold));
+  animation: fx-spin 6s linear infinite;
+  z-index: 0;
+}
+.studio .avatar-btn::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  background: var(--bg);
+  z-index: 0;
+}
+.studio .avatar-btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Section tabs: a gold underline that slides in; tool chips that lift. */
+.studio .studio-groups {
+  gap: 4px;
+}
+.studio .studio-groups button {
+  transition: color 0.2s ease;
+}
+.studio .studio-groups button:hover {
+  color: var(--ink);
+}
+.studio .studio-groups button::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, var(--fx-gold), var(--accent-deep));
+  transform: scaleX(0);
+  transition: transform 0.3s var(--fx-ease);
+}
+.studio .studio-groups button.on::after {
+  transform: scaleX(1);
+}
+.studio .studio-tools .chip {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+.studio .studio-tools .chip:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 6px 16px rgb(0 0 0 / 0.06);
+}
+.studio .chip.active {
+  background: linear-gradient(135deg, var(--fx-gold-2), var(--fx-gold) 55%, var(--accent-deep));
+  border-color: transparent;
+  box-shadow: 0 6px 18px var(--fx-glow);
+}
+
+/* A tab fades and rises in when chosen; its cards follow one by one. */
+.studio-body {
+  animation: fx-rise 0.45s var(--fx-ease) both;
+}
+.studio-body > .panel,
+.studio-body > .kpis,
+.studio-body > section,
+.studio-body > div {
+  animation: fx-rise 0.55s var(--fx-ease) both;
+}
+.studio-body > :nth-child(2) {
+  animation-delay: 0.06s;
+}
+.studio-body > :nth-child(3) {
+  animation-delay: 0.12s;
+}
+.studio-body > :nth-child(4) {
+  animation-delay: 0.18s;
+}
+.studio-body > :nth-child(5) {
+  animation-delay: 0.24s;
+}
+.studio-body > :nth-child(n + 6) {
+  animation-delay: 0.3s;
+}
+
+/* KPI tiles: deep card with a gold glow, a light sweep and a lift on hover. */
+.studio .kpis {
+  gap: 12px;
+}
+.studio .kpi {
+  position: relative;
+  padding: 16px 16px 15px;
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--accent) 18%, transparent) 0%, transparent 55%),
+    linear-gradient(160deg, #26262b 0%, #17171a 100%);
+  color: #f4f4f2;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.14);
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 0.25s var(--fx-ease),
+    box-shadow 0.25s ease;
+}
+.studio .kpi::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.07), transparent);
+  transform: translateX(-120%);
+  animation: fx-sweep-x 1.4s var(--fx-ease) 0.3s both;
+}
+.studio .kpi:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 34px rgb(0 0 0 / 0.2);
+}
+.studio .kpi b {
+  font-size: 32px;
+  letter-spacing: -0.01em;
+  background: linear-gradient(180deg, #ffd978 0%, var(--fx-gold) 70%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.studio .kpi.warn b {
+  background: linear-gradient(180deg, #ffb59a, #ff7a4a);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.studio .kpi span {
+  color: #b9b9bd;
+}
+
+/* Panels: clean cards with a gold accent beside the title. */
+.studio .panel {
+  padding: 18px 18px 16px;
+  border-radius: 16px;
+  background: var(--fx-card);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.03), 0 10px 30px rgb(0 0 0 / 0.04);
+  transition:
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.studio .panel:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.03), 0 16px 40px rgb(0 0 0 / 0.07);
+}
+.studio .panel > .panel-head h2,
+.studio .panel > h2 {
+  position: relative;
+  padding-left: 12px;
+}
+.studio .panel > .panel-head h2::before,
+.studio .panel > h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 4px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--fx-gold-2), var(--accent-deep));
+}
+
+/* Lists and tables: soft row hover, tidy headers. */
+.studio .task-list li,
+.studio .idea-list li,
+.studio .rank li,
+.studio .fresh-list li {
+  transition: background 0.18s ease;
+  border-radius: 8px;
+}
+.studio .task-list li:hover,
+.studio .idea-list li:hover,
+.studio .fresh-list li:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.studio .score-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.studio .score-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.studio .score-table tbody tr {
+  transition: background 0.15s ease;
+}
+.studio .score-table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.studio .tag {
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
+}
+.studio .tag:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+
+/* Buttons and fields: a little depth, a gold focus ring. */
+.studio .btn {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+.studio .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.12);
+}
+.studio .btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.studio .mini-btn {
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.studio .mini-btn:hover {
+  border-color: var(--accent);
+}
+.studio input:focus-visible,
+.studio textarea:focus-visible,
+.studio select:focus-visible {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--fx-glow);
+}
+
+/* ---------- Overview graphics ---------- */
+.fx-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 150px;
+}
+.fx-ico {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.07);
+  color: var(--fx-gold);
+}
+.studio .fx-kpi span:not(.fx-ico) {
+  font-size: 13px;
+}
+.fx-kpi-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #8d8d92;
+}
+.fx-delta {
+  margin-top: 6px;
+  font: 700 12px var(--sans);
+  font-style: normal;
+}
+.fx-delta small {
+  font-weight: 500;
+  color: #8d8d92;
+}
+.fx-delta.up {
+  color: #6fd39b;
+}
+.fx-delta.down {
+  color: #ff8a5c;
+}
+.fx-spark {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+.fx-draw {
+  clip-path: inset(0 100% 0 0);
+  animation: fx-reveal 1.4s var(--fx-ease) 0.2s forwards;
+}
+.fx-fill {
+  opacity: 0;
+  animation: fx-fade 0.9s ease 0.7s forwards;
+}
+.fx-area {
+  position: relative;
+}
+.fx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--mute);
+}
+.fx-legend i,
+.fx-tip i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+.fx-legend b {
+  color: var(--ink);
+}
+.fx-area-box {
+  position: relative;
+}
+.fx-area svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  touch-action: pan-y;
+}
+.fx-grid {
+  stroke: var(--line);
+  stroke-dasharray: 3 4;
+}
+.fx-axis {
+  font: 500 9.5px var(--sans);
+  fill: var(--mute);
+}
+.fx-cursor {
+  stroke: color-mix(in srgb, var(--ink) 35%, transparent);
+  stroke-dasharray: 3 3;
+}
+.fx-tip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--band);
+  color: var(--band-ink);
+  font-size: 12.5px;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.2);
+  pointer-events: none;
+}
+.fx-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.fx-two > div {
+  min-width: 0;
+}
+.fx-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.fx-bars li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 6px;
+  border-radius: 10px;
+  transition: background 0.18s ease;
+}
+.fx-bars li:hover {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.fx-rank {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+  font: 700 12px var(--sans);
+  color: var(--mute);
+}
+.fx-bars li:nth-child(-n + 3) .fx-rank {
+  background: linear-gradient(135deg, var(--fx-gold-2), var(--fx-gold));
+  color: #141416;
+}
+.fx-bar-label {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.fx-bar-label a {
+  text-decoration: none;
+}
+.fx-bar-label a:hover {
+  text-decoration: underline;
+}
+.fx-bar {
+  display: block;
+  height: 5px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--fx-gold), var(--accent-deep));
+  width: var(--w);
+  transform-origin: left;
+  animation: fx-grow-x 0.9s var(--fx-ease) both;
+  animation-delay: calc(0.2s + var(--i, 0) * 0.05s);
+}
+.fx-bars b {
+  font: 700 16px var(--serif);
+  color: var(--accent-deep);
+  font-variant-numeric: tabular-nums;
+}
+.fx-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+}
+.fx-word {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) calc(var(--k, 0) * 18%), var(--bg));
+  color: var(--ink);
+  line-height: 1.3;
+  transition: transform 0.15s ease;
+}
+.fx-word:hover {
+  transform: translateY(-2px) scale(1.03);
+}
+.fx-word b {
+  font-size: 11.5px;
+  color: var(--accent-deep);
+}
+.fx-word.warn {
+  border-color: color-mix(in srgb, #e0782f 50%, var(--line));
+  background: color-mix(in srgb, #e0782f calc(var(--k, 0) * 16%), var(--bg));
+}
+
+/* ---------- keyframes ---------- */
+@keyframes fx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fx-fade {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fx-reveal {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes fx-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes fx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes fx-sweep {
+  0%,
+  70% {
+    transform: translateX(-120%) rotate(10deg);
+  }
+  100% {
+    transform: translateX(480%) rotate(10deg);
+  }
+}
+@keyframes fx-sweep-x {
+  to {
+    transform: translateX(320%);
+  }
+}
+
+@media (max-width: 760px) {
+  .fx-two {
+    grid-template-columns: 1fr;
+  }
+  .studio .studio-head {
+    padding: 16px;
+    border-radius: 16px;
+  }
+  .studio .kpi b {
+    font-size: 27px;
+  }
+  .fx-kpi {
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio .studio-head,
+  .studio .studio-head::after,
+  .studio .avatar-btn::before,
+  .studio-body,
+  .studio-body > *,
+  .studio .kpi::after,
+  .fx-draw,
+  .fx-fill,
+  .fx-bar {
+    animation: none !important;
+  }
+  .fx-draw {
+    clip-path: none;
+  }
+  .fx-fill {
+    opacity: 1;
+  }
+}

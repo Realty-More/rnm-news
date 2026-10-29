@@ -17,13 +17,18 @@ const strip = (html: string) => decode(html.replace(/<[^>]*>/g, ' ')).replace(/\
 /* ---------- 1. Overview: what readers do in the app ---------- */
 export async function overview(env: Env) {
   const one = async <T,>(sql: string) => (await env.DB.prepare(sql).all<T>()).results
-  const [views, opens, top, searches, zero] = await Promise.all([
+  const [views, opens, top, searches, zero, dailyViews, dailyOpens] = await Promise.all([
     one<{ n: number }>("SELECT COALESCE(SUM(n),0) AS n FROM pages WHERE day >= date('now','-6 day')"),
     one<{ n: number }>("SELECT COALESCE(SUM(n),0) AS n FROM opens WHERE day >= date('now','-6 day')"),
     one<{ id: number; opens: number }>("SELECT post_id AS id, SUM(n) AS opens FROM opens WHERE day >= date('now','-6 day') GROUP BY post_id ORDER BY opens DESC LIMIT 10"),
     one<{ q: string; n: number }>("SELECT q, SUM(n) AS n FROM searches WHERE day >= date('now','-29 day') GROUP BY q ORDER BY n DESC LIMIT 20"),
     one<{ q: string; n: number }>("SELECT q, SUM(zero) AS n FROM searches WHERE day >= date('now','-29 day') GROUP BY q HAVING SUM(zero) > 0 ORDER BY n DESC LIMIT 20"),
+    // Day by day for the last 14 days, for the Overview charts.
+    one<{ day: string; n: number }>("SELECT day, SUM(n) AS n FROM pages WHERE day >= date('now','-13 day') GROUP BY day"),
+    one<{ day: string; n: number }>("SELECT day, SUM(n) AS n FROM opens WHERE day >= date('now','-13 day') GROUP BY day"),
   ])
+  const days = Array.from({ length: 14 }, (_, i) => new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10))
+  const daily = days.map((day) => ({ day, views: dailyViews.find((r) => r.day === day)?.n ?? 0, opens: dailyOpens.find((r) => r.day === day)?.n ?? 0 }))
   const posts = await fetchByIds(env.SITE_API, top.map((t) => t.id)).catch(() => [])
   const byId = new Map(posts.map((p) => [p.id, p]))
   return {
@@ -33,6 +38,7 @@ export async function overview(env: Env) {
     topArticles: top.map((t) => ({ id: t.id, opens: t.opens, title: byId.get(t.id)?.title ?? `Post ${t.id}`, link: byId.get(t.id)?.link })),
     searches,
     zeroSearches: zero,
+    daily,
   }
 }
 

@@ -11,6 +11,7 @@ import { forgetOwner, isAccountLogin, ownerKey, ownerRole, refreshRole, studio }
 import { AdsTab } from './AdsTools.tsx'
 import { PressTab } from './PressTools.tsx'
 import { MediaKitTab } from './MediaKitTools.tsx'
+import { OverviewTab, StudioBody } from './StudioFx.tsx'
 import { Dialog, EmployeesTab } from './EmployeesTools.tsx'
 import { ProfilePanel } from './ProfileTools.tsx'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
@@ -29,14 +30,6 @@ import { smartLink } from '../lib/stats.ts'
 import { loadFeed } from '../lib/videos.ts'
 import { fetchPosts } from '../lib/wp.ts'
 
-interface Overview {
-  subscribers: number
-  views7: number
-  opens7: number
-  topArticles: { id: number; opens: number; title: string; link?: string }[]
-  searches: { q: string; n: number }[]
-  zeroSearches: { q: string; n: number }[]
-}
 interface Ideas {
   notCovered: { source: string; title: string; link: string; date: string }[]
   trends: { title: string; traffic: string; news: string[]; realEstate: boolean }[]
@@ -239,6 +232,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
             ))}
         </div>
       </nav>
+      <StudioBody tab={tab}>
       {tab === 'overview' && <OverviewTab />}
       {tab === 'ideas' && <IdeasTab />}
       {tab === 'rivals' && <RivalsTab />}
@@ -271,6 +265,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
       {tab === 'newsletter' && <NewsletterTab />}
       {tab === 'reels' && <ReelsTab />}
       {tab === 'ai' && <AiWriterTab />}
+      </StudioBody>
     </div>
   )
 }
@@ -282,53 +277,6 @@ function Panel({ title, note, children }: { title: string; note?: string; childr
       {note && <p className="panel-note">{note}</p>}
       {children}
     </section>
-  )
-}
-
-function OverviewTab() {
-  const res = useAsync('studio:overview', (s) => studio<Overview>('overview', undefined, s))
-  if (res.error && !res.data) return <ErrorState error={res.error} onRetry={res.reload} />
-  if (!res.data) return <SkeletonList count={3} />
-  const d = res.data
-  return (
-    <>
-      <div className="kpis">
-        <div className="kpi">
-          <b>{d.subscribers}</b>
-          <span>Alert subscribers</span>
-        </div>
-        <div className="kpi">
-          <b>{d.views7.toLocaleString('en-IN')}</b>
-          <span>Screen views · 7 days</span>
-        </div>
-        <div className="kpi">
-          <b>{d.opens7.toLocaleString('en-IN')}</b>
-          <span>Stories read · 7 days</span>
-        </div>
-      </div>
-      <Panel title="Most read in the app · 7 days" note="Write more on topics like these.">
-        {d.topArticles.length ? (
-          <ol className="rank">
-            {d.topArticles.map((a) => (
-              <li key={a.id}>
-                <a href={a.link} target="_blank" rel="noopener noreferrer">
-                  {a.title}
-                </a>
-                <span>{a.opens}</span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="empty">No reads recorded yet.</p>
-        )}
-      </Panel>
-      <Panel title="What readers search for · 30 days">
-        {d.searches.length ? <TagList items={d.searches} /> : <p className="empty">No searches yet.</p>}
-      </Panel>
-      <Panel title="Searches with no results · 30 days" note="Readers looked for these and found nothing: strong story ideas.">
-        {d.zeroSearches.length ? <TagList items={d.zeroSearches} warn /> : <p className="empty">None so far.</p>}
-      </Panel>
-    </>
   )
 }
 

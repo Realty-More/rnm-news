@@ -84,11 +84,9 @@ export async function signup(env: Env, req: Request, body: unknown) {
   if ((await fails(env, ipKey)) >= 12) throw new Error('Too many new accounts from this network. Try again in an hour.')
   const exists = await env.DB.prepare('SELECT status FROM accounts WHERE phone = ?').bind(phone).first<{ status: Status }>()
   if (exists && exists.status !== 'rejected') throw new Error('This number already has an account. Log in, or ask the owner to reset your password.')
-  const wantsOwner = typeof b.ownerKey === 'string' && b.ownerKey.trim().length > 0
-  if (wantsOwner && !sameKey(b.ownerKey as string, env.STATS_KEY ?? '')) {
-    await addFail(env, ipKey)
-    throw new Error('That owner setup key is not right.')
-  }
+  // The owner login is set up (mobile number); a new one can no longer be made with the owner key.
+  const wantsOwner = false
+  if (typeof b.ownerKey === 'string' && b.ownerKey.trim()) throw new Error('The owner login is already set up. Sign in with your mobile number.')
   const role = wantsOwner ? 'owner' : 'editor'
   const status: Status = wantsOwner ? 'active' : 'pending'
   const { salt, hash } = await hashPassword(b.password as string, pepperOf(env))

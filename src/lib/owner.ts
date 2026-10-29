@@ -178,7 +178,8 @@ export async function refreshRole(): Promise<'ok' | 'ended' | 'offline'> {
     localStorage.setItem(ROLE, JSON.stringify({ role: me.role, name: me.name, mustChange: !!me.mustChange, photo: me.photo ?? '', avatar: me.avatar ?? '', title: me.title ?? '' }))
     return 'ok'
   } catch (e) {
-    if (isOwnAccountLogin() && /login has ended/.test((e as Error).message)) {
+    // Access taken away, or an old owner key (key login is closed): back to the Sign in page.
+    if (/login has ended/.test((e as Error).message)) {
       dropNewsroom()
       return 'ended'
     }

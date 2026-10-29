@@ -181,7 +181,7 @@ function SignedOut() {
     try {
       if (mode === 'key') {
         // The older team login key (given by the owner) opens R&M Newsroom.
-        if (!(await unlock(f.key))) throw new Error('That login key is not right. Check it with Palash sir.')
+        if (!(await unlock(f.key))) throw new Error('That login key does not work. Sign in with your mobile number or email and password instead.')
         toast('Welcome to R&M Newsroom')
         navigate('/studio', { replace: true })
         return

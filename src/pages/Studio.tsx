@@ -120,7 +120,7 @@ export function Studio() {
       onEnded={() => {
         // Newsroom access was taken away from this account: back to the login, reader account kept.
         setKey(null)
-        toast('Newsroom access has ended for this account.')
+        toast('Your login has ended. Please sign in with your mobile number or email.')
       }}
     />
   )

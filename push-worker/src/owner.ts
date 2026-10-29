@@ -49,7 +49,9 @@ export function sameKey(a: string, b: string) {
 }
 
 export async function authenticate(key: string, env: Env, ctx: ExecutionContext): Promise<Who | null> {
-  if (sameKey(key, env.STATS_KEY ?? '')) return { role: 'owner', name: OWNER_NAME }
+  // The owner key (STATS_KEY) no longer opens the Newsroom (closed 29 Oct 2026): Palash sir signs in
+  // with his mobile number or email and password. STATS_KEY stays as a server secret because the
+  // password hashing uses it (pepperOf) and the private stats page needs it.
   if (key.startsWith('s_')) return sessionWho(env, key)
   // A normal Realtynmore account the owner gave Newsroom access (others get null → 401).
   if (key.startsWith('r_')) return (await import('./staffAccess.ts')).linkedWho(env, key)

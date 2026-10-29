@@ -9480,3 +9480,14 @@ button.mk-cover:focus-visible {
 .akeys-new .meta {
   margin: 0;
 }
+
+/* My account: Newsroom profile photo in the avatar */
+.acct-avatar {
+  overflow: hidden;
+}
+.acct-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

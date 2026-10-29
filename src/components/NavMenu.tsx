@@ -176,8 +176,8 @@ function AccountCard({ open, onClose }: { open: boolean; onClose: () => void }) 
     return (
       <div className="nav-acct staff">
         <Link to="/studio" onClick={onClose} className="nav-acct-who">
-          {who.role === 'owner' ? (
-            <img className="nav-acct-avatar photo" src="./brand/palash.jpg" alt="" width={44} height={44} />
+          {who.role === 'owner' || who.photo ? (
+            <img className="nav-acct-avatar photo" src={who.photo || './brand/palash.jpg'} alt="" width={44} height={44} />
           ) : (
             <span className="nav-acct-avatar" aria-hidden="true">
               {who.name.slice(0, 1).toUpperCase()}

@@ -396,6 +396,9 @@ function SignedIn() {
     return () => clearInterval(t)
   }, [])
   const hasPw = s.me.hasPassword !== false
+  // Signed in to the Newsroom too: show the Newsroom profile photo (the owner's default photo if none).
+  const staff = ownerKey() ? ownerRole() : null
+  const pic = staff?.photo || (staff?.role === 'owner' ? './brand/palash.jpg' : '')
   const initials = s.me.name
     .split(/\s+/)
     .filter(Boolean)
@@ -424,7 +427,7 @@ function SignedIn() {
     <div className="acct-in">
       <section className="acct-hero">
         <div className="acct-avatar" aria-hidden="true">
-          {initials || '?'}
+          {pic ? <img src={pic} alt="" width={72} height={72} /> : initials || '?'}
         </div>
         <div className="acct-who">
           {editing ? (

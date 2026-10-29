@@ -50,7 +50,7 @@ import { magazinePdf } from './magazine-pdf.ts'
 import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
-import { readerDelete, readerForgot, readerLogin, readerLogout, readerMe, readerProfile, readerReset, readerSignup, readerSync } from './reader.ts'
+import { readerDelete, readerForgot, readerGoogle, readerLogin, readerLogout, readerMe, readerProfile, readerReset, readerSignup, readerSync } from './reader.ts'
 import { getDraft, listDrafts, pressImage, pressToStory, removeDraft, savePressImage, setImageRole } from './press.ts'
 import { changeLink, createLink, kitAsset, kitBook, kitPage, kitPdf, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
 import { sendTeamEmail } from './teamEmail.ts'
@@ -76,6 +76,8 @@ export interface Env {
   NEWSLETTER_URL?: string
   STATS_KEY: string
   AI: Ai
+  /** Google OAuth web client ID for "Sign in with Google" (public; set in wrangler.jsonc vars). */
+  GOOGLE_CLIENT_ID?: string
   /** Secret mixed into password hashes (wrangler secret put AUTH_PEPPER). */
   AUTH_PEPPER?: string
 }
@@ -466,6 +468,7 @@ export default {
         const run: Record<string, () => Promise<unknown>> = {
           '/reader/signup': () => readerSignup(env, req, body),
           '/reader/login': () => readerLogin(env, req, body),
+          '/reader/google': () => readerGoogle(env, req, body),
           '/reader/logout': () => readerLogout(env, req),
           '/reader/me': () => readerMe(env, req),
           '/reader/sync': () => readerSync(env, req, body),

@@ -72,7 +72,7 @@ export function Settings() {
         <Icon name="bookmark" size={20} />
         <span>
           <strong>{reader ? reader.me.name : 'Sign in to Realty & More'}</strong>
-          <small>{reader ? `My account · ${reader.me.email}` : 'Keep saved stories and your feed on every device'}</small>
+          <small>{reader ? `My account · ${reader.me.email || (reader.me.phone ? `+91 ${reader.me.phone}` : '')}` : 'Keep saved stories and your feed on every device'}</small>
         </span>
         <Icon name="chevron" size={18} />
       </Link>

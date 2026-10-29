@@ -14,3 +14,9 @@ export const SOCIALS: { name: string; url: string; icon: IconName }[] = [
 
 /** Opens WhatsApp with a ready message; the reader picks a chat, group, broadcast list or channel. */
 export const whatsappShareUrl = (message: string) => `https://wa.me/?text=${encodeURIComponent(message)}`
+
+/**
+ * Google OAuth web client ID for "Continue with Google" (a public ID, not a secret; it must match
+ * GOOGLE_CLIENT_ID on the app server). Empty = the Google button is hidden.
+ */
+export const GOOGLE_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''

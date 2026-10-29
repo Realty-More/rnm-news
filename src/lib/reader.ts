@@ -14,7 +14,10 @@ const PREFS_AT = 'rnm-prefs-at'
 export interface ReaderMe {
   name: string
   email: string
+  phone?: string
   created: string
+  google?: boolean
+  hasPassword?: boolean
 }
 export interface ReaderState {
   token: string
@@ -83,10 +86,12 @@ const signedIn = async (out: { token: string; me: ReaderMe }) => {
   await syncNow().catch(() => {})
 }
 
-export const readerSignUp = async (name: string, email: string, password: string) => signedIn(await call('signup', { name, email, password }))
-export const readerSignIn = async (email: string, password: string) => signedIn(await call('login', { email, password }))
-export const readerForgot = (email: string) => call<{ ok: boolean }>('forgot', { email })
-export const readerReset = async (email: string, code: string, password: string) => signedIn(await call('reset', { email, code, password }))
+/** `id` is an email address or a mobile number. */
+export const readerSignUp = async (name: string, id: string, password: string) => signedIn(await call('signup', { name, id, password }))
+export const readerSignIn = async (id: string, password: string) => signedIn(await call('login', { id, password }))
+export const readerGoogle = async (credential: string) => signedIn(await call('google', { credential }))
+export const readerForgot = (id: string) => call<{ ok: boolean; noEmail?: boolean }>('forgot', { id })
+export const readerReset = async (id: string, code: string, password: string) => signedIn(await call('reset', { id, code, password }))
 
 export async function readerSignOut() {
   const s = readerState()
@@ -101,12 +106,21 @@ export async function readerRename(name: string) {
 }
 export async function readerChangePassword(password: string, newPassword: string) {
   const s = readerState()
-  if (s) await call('profile', { password, newPassword }, s.token)
+  if (!s) return
+  await call('profile', { password, newPassword }, s.token)
+  keep({ ...s, me: { ...s.me, hasPassword: true } })
 }
-export async function readerDeleteAccount(password: string) {
+/** Adds or changes the email or mobile number on the account. */
+export async function readerSetContact(field: 'email' | 'phone', value: string, password: string) {
   const s = readerState()
   if (!s) return
-  await call('delete', { password }, s.token)
+  const out = await call<{ email: string; phone: string }>('profile', { [field]: value, password }, s.token)
+  keep({ ...s, me: { ...s.me, email: out.email, phone: out.phone } })
+}
+export async function readerDeleteAccount(password: string, confirm = '') {
+  const s = readerState()
+  if (!s) return
+  await call('delete', { password, confirm }, s.token)
   keep(null)
 }
 
@@ -183,3 +197,6 @@ export function startReaderSync() {
   })
   soon(2000)
 }
+
+/** Looks like a mobile number rather than an email. */
+export const isMobile = (v: string) => !v.includes('@') && v.replace(/\D/g, '').length >= 10

@@ -912,3 +912,32 @@ describe('reader accounts', () => {
     expect(mergeSync(out, { prefs: { topics: ['old'], updatedAt: '2026-10-01T00:00:00Z' } }, now).prefs.topics).toEqual(['launches'])
   })
 })
+
+describe('reader sign-in ids and Google', () => {
+  it('reads an email or a mobile number', async () => {
+    const { readId } = await import('./reader.ts')
+    expect(readId('Ananya@Example.com')).toEqual({ email: 'ananya@example.com' })
+    expect(readId('+91 98100 12345')).toEqual({ phone: '9810012345' })
+    expect(readId('12345')).toBeNull()
+  })
+  it('accepts only a real Google token for our app', async () => {
+    const { verifyGoogleToken } = await import('./reader.ts')
+    const kp = (await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify'])) as CryptoKeyPair
+    const jwk = (await crypto.subtle.exportKey('jwk', kp.publicKey)) as { n: string; e: string }
+    const keys = [{ kid: 'k1', n: jwk.n, e: jwk.e, kty: 'RSA' }]
+    const u = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url')
+    const now = Date.parse('2026-10-29T12:00:00Z')
+    const make = async (claims: object) => {
+      const head = `${u({ alg: 'RS256', kid: 'k1' })}.${u(claims)}`
+      const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', kp.privateKey, new TextEncoder().encode(head)))
+      return `${head}.${Buffer.from(sig).toString('base64url')}`
+    }
+    const good = { sub: '123', email: 'Ananya@Gmail.com', email_verified: true, name: 'Ananya', aud: 'my-client', iss: 'https://accounts.google.com', exp: now / 1000 + 600 }
+    expect((await verifyGoogleToken(await make(good), 'my-client', keys, now)).sub).toBe('123')
+    await expect(verifyGoogleToken(await make({ ...good, aud: 'other-app' }), 'my-client', keys, now)).rejects.toThrow()
+    await expect(verifyGoogleToken(await make({ ...good, exp: now / 1000 - 10 }), 'my-client', keys, now)).rejects.toThrow(/expired/)
+    await expect(verifyGoogleToken(await make({ ...good, email_verified: false }), 'my-client', keys, now)).rejects.toThrow(/verified/)
+    const t = await make(good)
+    await expect(verifyGoogleToken(t.slice(0, -4) + 'AAAA', 'my-client', keys, now)).rejects.toThrow()
+  })
+})

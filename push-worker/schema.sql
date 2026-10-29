@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS kit_views (id INTEGER PRIMARY KEY AUTOINCREMENT, toke
 CREATE INDEX IF NOT EXISTS kit_views_token ON kit_views (token, at);
 -- Photos sent with a press release, kept with its draft (files in KV pr:img:<draft>:<n>).
 CREATE TABLE IF NOT EXISTS pr_images (draft_id INTEGER NOT NULL, n INTEGER NOT NULL, role TEXT, person TEXT, name TEXT, type TEXT, w INTEGER, h INTEGER, size INTEGER, PRIMARY KEY (draft_id, n));
--- Reader accounts (email + password; separate from team logins) and their sessions.
-CREATE TABLE IF NOT EXISTS readers (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, created_at TEXT NOT NULL, last_login TEXT, last_seen TEXT, sync TEXT, reset_hash TEXT, reset_expires TEXT, reset_tries INTEGER NOT NULL DEFAULT 0);
+-- Reader accounts (email or mobile + password, or Google; separate from team logins) and their sessions.
+CREATE TABLE IF NOT EXISTS readers (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, phone TEXT UNIQUE, name TEXT NOT NULL, salt TEXT NOT NULL DEFAULT '', hash TEXT NOT NULL DEFAULT '', google_sub TEXT UNIQUE, created_at TEXT NOT NULL, last_login TEXT, last_seen TEXT, sync TEXT, reset_hash TEXT, reset_expires TEXT, reset_tries INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS reader_sessions (token_hash TEXT PRIMARY KEY, reader_id INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS reader_sessions_reader ON reader_sessions (reader_id);

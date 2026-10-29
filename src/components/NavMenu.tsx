@@ -212,7 +212,7 @@ function AccountCard({ open, onClose }: { open: boolean; onClose: () => void }) 
         </span>
         <span className="nav-acct-text">
           <strong>{reader.me.name}</strong>
-          <small>{t('acct.myAccount')} · {reader.me.email}</small>
+          <small>{t('acct.myAccount')} · {reader.me.email || (reader.me.phone ? `+91 ${reader.me.phone}` : '')}</small>
         </span>
         <Icon name="chevron" size={16} />
       </Link>

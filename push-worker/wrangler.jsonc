@@ -22,7 +22,9 @@
     "VAPID_SUBJECT": "mailto:desk@realtynmore.com",
     "ALLOWED_ORIGINS": "https://realty-more.github.io,http://localhost:5173,http://localhost:4173,https://localhost,capacitor://localhost",
     "SITE_API": "https://realtynmore.com/wp-json/wp/v2",
-    "APP_URL": "https://realty-more.github.io/rnm-news/"
+    "APP_URL": "https://realty-more.github.io/rnm-news/",
+    // Google sign-in web client (public ID; project "Realtynmore App" in desk@realtynmore.com Google Cloud)
+    "GOOGLE_CLIENT_ID": "1085726735734-l7kre527slb0fe03tedi85dmrfdap7jc.apps.googleusercontent.com"
   },
   "secrets": { "required": ["VAPID_PRIVATE_KEY", "STATS_KEY"] }
   // Secrets (npx wrangler secret put <NAME>; locally they come from .dev.vars):

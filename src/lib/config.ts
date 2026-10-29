@@ -19,4 +19,4 @@ export const whatsappShareUrl = (message: string) => `https://wa.me/?text=${enco
  * Google OAuth web client ID for "Continue with Google" (a public ID, not a secret; it must match
  * GOOGLE_CLIENT_ID on the app server). Empty = the Google button is hidden.
  */
-export const GOOGLE_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
+export const GOOGLE_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '1085726735734-l7kre527slb0fe03tedi85dmrfdap7jc.apps.googleusercontent.com'

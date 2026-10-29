@@ -9205,3 +9205,56 @@ button.mk-cover:focus-visible {
   height: 1px;
   background: var(--line);
 }
+
+.acct-link.muted {
+  color: var(--mute);
+  font-weight: 500;
+}
+
+/* My profile: login email */
+.profile-email {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.profile-email-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.profile-email-head > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.profile-email-head small {
+  color: var(--mute);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.profile-email-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.profile-email-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.profile-email-form label small {
+  font-weight: 400;
+  color: var(--mute);
+}
+.profile-email-form input {
+  height: 42px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14.5px var(--sans);
+}

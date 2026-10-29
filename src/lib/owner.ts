@@ -86,7 +86,7 @@ export async function unlock(key: string): Promise<boolean> {
 /** True when this device signed in with a mobile number and password (not a key). */
 export const isAccountLogin = () => !!ownerKey()?.startsWith('s_')
 
-async function auth<T>(path: 'login' | 'signup' | 'delete', body: unknown): Promise<T> {
+async function auth<T>(path: 'login' | 'signup' | 'delete' | 'forgot' | 'reset', body: unknown): Promise<T> {
   if (!PUSH_API) throw new Error('App server is not set up.')
   let res: Response
   try {
@@ -104,9 +104,20 @@ function remember(token: string, role: Role, name: string) {
   localStorage.setItem(ROLE, JSON.stringify({ role, name }))
 }
 
-/** Mobile number + password. */
-export async function passwordLogin(phone: string, password: string): Promise<{ role: Role; name: string }> {
-  const r = await auth<{ token: string; role: Role; name: string }>('login', { phone, password })
+/** Mobile number (or the email added in My profile) + password. */
+export async function passwordLogin(phoneOrEmail: string, password: string): Promise<{ role: Role; name: string }> {
+  const id = phoneOrEmail.includes('@') ? { email: phoneOrEmail.trim() } : { phone: phoneOrEmail }
+  const r = await auth<{ token: string; role: Role; name: string }>('login', { ...id, password })
+  remember(r.token, r.role, r.name)
+  return r
+}
+
+/** Forgot password for a team login: a code goes to its email, if it has one. */
+export const staffForgot = (id: string) => auth<{ matched: boolean; sent: boolean }>('forgot', { id })
+
+/** Sets a new team password with the emailed code and logs in here. */
+export async function staffReset(id: string, code: string, password: string): Promise<{ role: Role; name: string }> {
+  const r = await auth<{ token: string; role: Role; name: string }>('reset', { id, code, password })
   remember(r.token, r.role, r.name)
   return r
 }

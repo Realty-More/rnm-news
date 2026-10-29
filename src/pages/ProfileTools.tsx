@@ -270,6 +270,73 @@ export function ProfilePanel({ onClose, onSaved }: { onClose: () => void; onSave
           Cancel
         </button>
       </div>
+      <LoginEmail />
     </Panel>
+  )
+}
+
+/** The email on my team login: sign in with it, and get a reset code if I forget my password. */
+function LoginEmail() {
+  const res = useAsync('studio:me-email', (s) => studio<{ email: string; canChange: boolean }>('me/email', undefined, s))
+  const [open, setOpen] = useState(false)
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
+  const [busy, setBusy] = useState(false)
+  if (!res.data?.canChange) return null
+  const current = res.data.email
+  const save = async (value: string) => {
+    setBusy(true)
+    try {
+      await studioPost('me/email', { email: value, password: pw })
+      toast(value ? 'Email saved. You can now sign in with it too.' : 'Email removed')
+      setOpen(false)
+      setPw('')
+      res.reload()
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="profile-email">
+      <div className="profile-email-head">
+        <span>
+          <b>Login email</b>
+          <small>{current ? `${current} · sign in with it, or get a reset code if you forget your password` : 'Not added yet. Add one to sign in with it and reset your password yourself.'}</small>
+        </span>
+        <button className="btn ghost small" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {current ? 'Change' : 'Add email'}
+        </button>
+      </div>
+      {open && (
+        <form
+          className="profile-email-form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void save(email)
+          }}
+        >
+          <label>
+            Email
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={current || 'you@example.com'} autoComplete="email" required />
+          </label>
+          <label>
+            Your password <small>(to confirm it’s you)</small>
+            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" required />
+          </label>
+          <div className="action-row">
+            <button className="btn small" disabled={busy}>
+              {busy ? 'Saving…' : 'Save email'}
+            </button>
+            {current && (
+              <button type="button" className="btn ghost small" disabled={busy || !pw} onClick={() => void save('')}>
+                Remove email
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+    </div>
   )
 }

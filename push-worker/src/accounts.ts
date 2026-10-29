@@ -105,8 +105,14 @@ export async function signup(env: Env, req: Request, body: unknown) {
 }
 
 export async function login(env: Env, req: Request, body: unknown) {
-  const b = (body ?? {}) as { phone?: unknown; password?: unknown }
-  const phone = normPhone(b.phone)
+  const b = (body ?? {}) as { phone?: unknown; email?: unknown; password?: unknown }
+  // A team member who added an email can sign in with it too.
+  let phone = normPhone(b.phone)
+  if (!phone && typeof b.email === 'string' && b.email.includes('@')) {
+    const row = await env.DB.prepare('SELECT phone FROM accounts WHERE email = ?').bind(b.email.trim().toLowerCase()).first<{ phone: string }>()
+    if (!row) throw new Error('No team login with this email.')
+    phone = row.phone
+  }
   if (!phone || typeof b.password !== 'string' || !b.password) throw new Error('Enter your mobile number and password.')
   const phoneKey = `login:${phone}`
   const ipKey = `login-ip:${await sha256hex(ipOf(req))}`
@@ -155,7 +161,7 @@ export async function accountStaff(env: Env): Promise<{ id: string; name: string
 
 export async function listAccounts(env: Env) {
   const [{ results }, { allProfiles }] = await Promise.all([
-    env.DB.prepare("SELECT phone, name, role, status, created_at AS created, approved_at AS approved, last_login AS lastLogin, last_seen AS lastSeen, must_change AS mustChange FROM accounts ORDER BY status = 'pending' DESC, name")
+    env.DB.prepare("SELECT phone, name, role, status, email, created_at AS created, approved_at AS approved, last_login AS lastLogin, last_seen AS lastSeen, must_change AS mustChange FROM accounts ORDER BY status = 'pending' DESC, name")
       .all<{ phone: string; name: string; mustChange: number | null }>(),
     import('./profile.ts'),
   ])

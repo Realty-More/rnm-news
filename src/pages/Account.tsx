@@ -12,13 +12,45 @@ import { toast } from '../components/Toast.tsx'
 import { usePageTitle } from './usePageTitle.ts'
 import { usePrefs } from '../lib/prefs.ts'
 import { GOOGLE_CLIENT_ID } from '../lib/config.ts'
-import { passwordLogin } from '../lib/owner.ts'
-import { isMobile, readerChangePassword, readerDeleteAccount, readerForgot, readerGoogle, readerRename, readerReset, readerSetContact, readerSignIn, readerSignOut, readerSignUp, syncNow, useReader } from '../lib/reader.ts'
+import { passwordLogin, staffForgot, staffReset, unlock } from '../lib/owner.ts'
+import {
+  isMobile,
+  readerChangePassword,
+  readerDeleteAccount,
+  readerForgot,
+  readerGoogle,
+  readerRename,
+  readerReset,
+  readerSetContact,
+  readerSignIn,
+  readerSignOut,
+  readerSignUp,
+  syncNow,
+  useReader,
+} from '../lib/reader.ts'
 import { timeAgo } from '../lib/format.ts'
 
-type Mode = 'signin' | 'signup' | 'forgot' | 'reset'
+type Mode = 'signin' | 'signup' | 'forgot' | 'reset' | 'key'
 
-function Field({ label, type = 'text', value, onChange, autoComplete, placeholder, hint, inputMode }: { label: string; type?: string; value: string; onChange: (v: string) => void; autoComplete?: string; placeholder?: string; hint?: string; inputMode?: 'text' | 'email' | 'tel' | 'numeric' }) {
+function Field({
+  label,
+  type = 'text',
+  value,
+  onChange,
+  autoComplete,
+  placeholder,
+  hint,
+  inputMode,
+}: {
+  label: string
+  type?: string
+  value: string
+  onChange: (v: string) => void
+  autoComplete?: string
+  placeholder?: string
+  hint?: string
+  inputMode?: 'text' | 'email' | 'tel' | 'numeric'
+}) {
   const [show, setShow] = useState(false)
   const pw = type === 'password'
   return (
@@ -41,7 +73,14 @@ function Field({ label, type = 'text', value, onChange, autoComplete, placeholde
 
 declare global {
   interface Window {
-    google?: { accounts: { id: { initialize: (o: object) => void; renderButton: (el: HTMLElement, o: object) => void } } }
+    google?: {
+      accounts: {
+        id: {
+          initialize: (o: object) => void
+          renderButton: (el: HTMLElement, o: object) => void
+        }
+      }
+    }
   }
 }
 let gsiLoading: Promise<void> | null = null
@@ -78,7 +117,14 @@ function GoogleButton({ onDone, onError }: { onDone: () => void; onError: (m: st
             readerGoogle(r.credential).then(cb.current.onDone, (e: Error) => cb.current.onError(e.message))
           },
         })
-        window.google.accounts.id.renderButton(box.current, { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'center', width: Math.min(380, box.current.clientWidth || 340) })
+        window.google.accounts.id.renderButton(box.current, {
+          theme: 'outline',
+          size: 'large',
+          shape: 'pill',
+          text: 'continue_with',
+          logo_alignment: 'center',
+          width: Math.min(380, box.current.clientWidth || 340),
+        })
         setReady(true)
       })
       .catch((e: Error) => cb.current.onError(e.message))
@@ -99,9 +145,17 @@ const showGoogle = !!GOOGLE_CLIENT_ID && !Capacitor.isNativePlatform()
 function SignedOut() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('signin')
-  const [f, setF] = useState({ name: '', id: '', password: '', code: '' })
+  const [f, setF] = useState({
+    name: '',
+    id: '',
+    password: '',
+    code: '',
+    key: '',
+  })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // The code was sent for a team login (then the reset opens R&M Newsroom).
+  const [teamReset, setTeamReset] = useState(false)
   const set = (k: keyof typeof f) => (v: string) => setF((x) => ({ ...x, [k]: v }))
   const go = (m: Mode) => {
     setMode(m)
@@ -116,16 +170,24 @@ function SignedOut() {
     setBusy(true)
     setError('')
     try {
+      if (mode === 'key') {
+        // The older team login key (given by the owner) opens R&M Newsroom.
+        if (!(await unlock(f.key))) throw new Error('That login key is not right. Check it with Palash sir.')
+        toast('Welcome to R&M Newsroom')
+        navigate('/studio', { replace: true })
+        return
+      }
       if (mode === 'signin') {
-        // A team member's mobile number opens R&M Newsroom with their usual team password.
-        if (isMobile(f.id)) {
+        // A team member's mobile number (or the email added in My profile) opens R&M Newsroom
+        // with their usual team password; anything else is a reader account.
+        if (isMobile(f.id) || f.id.includes('@')) {
           try {
             const who = await passwordLogin(f.id, f.password)
             toast(`Welcome, ${who.name.split(' ')[0]}`)
             navigate('/studio', { replace: true })
             return
           } catch (err) {
-            if (!/^No login on this mobile number/i.test((err as Error).message)) throw err
+            if (!/^No (team )?login (on|with) this (mobile number|email)/i.test((err as Error).message)) throw err
           }
         }
         await readerSignIn(f.id, f.password)
@@ -134,6 +196,19 @@ function SignedOut() {
         await readerSignUp(f.name, f.id, f.password)
         done('Welcome to Realty & More')
       } else if (mode === 'forgot') {
+        // Team logins first: their code comes from the team system.
+        const team = await staffForgot(f.id)
+        if (team.matched) {
+          if (!team.sent) {
+            setError('Your team login has no email yet, so a code can’t be sent. Ask Palash sir for a new password, then add your email in R&M Newsroom → My profile.')
+            return
+          }
+          setTeamReset(true)
+          toast('A 6-digit code is on its way to your email.')
+          setMode('reset')
+          return
+        }
+        setTeamReset(false)
         const r = await readerForgot(f.id)
         if (r.noEmail) {
           setError('This account was made with a mobile number and has no email, so a code can’t be sent. Team members: ask Palash sir for a new password.')
@@ -141,6 +216,10 @@ function SignedOut() {
         }
         toast('If this account has an email, a 6-digit code is on its way.')
         setMode('reset')
+      } else if (teamReset) {
+        const who = await staffReset(f.id, f.code, f.password)
+        toast(`Password changed. Welcome back, ${who.name.split(' ')[0]}`)
+        navigate('/studio', { replace: true })
       } else {
         await readerReset(f.id, f.code, f.password)
         done('Password changed. You are signed in.')
@@ -151,7 +230,7 @@ function SignedOut() {
       setBusy(false)
     }
   }
-  const title = mode === 'signin' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : mode === 'forgot' ? 'Reset your password' : 'Enter the code'
+  const title = mode === 'signin' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : mode === 'forgot' ? 'Reset your password' : mode === 'key' ? 'Team login key' : 'Enter the code'
   const mobile = isMobile(f.id)
   return (
     <div className="acct-out">
@@ -204,7 +283,8 @@ function SignedOut() {
         <h2>{title}</h2>
         {mode === 'reset' && <p className="acct-note">We sent a 6-digit code to the email on this account. It works for 20 minutes. Check Spam if you don’t see it.</p>}
         {mode === 'forgot' && <p className="acct-note">Enter your email or mobile number. We’ll send a code to your account’s email to set a new password.</p>}
-        {mode === 'signin' && <p className="acct-note">Realty &amp; More team: use your mobile number and team password.</p>}
+        {mode === 'signin' && <p className="acct-note">Realty &amp; More team: use your mobile number (or your added email) and team password.</p>}
+        {mode === 'key' && <p className="acct-note">For Realty &amp; More team members who were given a login key. It opens R&amp;M Newsroom.</p>}
 
         {showGoogle && (mode === 'signin' || mode === 'signup') && (
           <>
@@ -216,18 +296,23 @@ function SignedOut() {
         )}
 
         <form className="acct-form" onSubmit={(e) => void submit(e)}>
+          {mode === 'key' && <Field label="Login key" type="password" value={f.key} onChange={set('key')} autoComplete="off" placeholder="Paste your login key" />}
           {mode === 'signup' && <Field label="Your name" value={f.name} onChange={set('name')} autoComplete="name" placeholder="e.g. Ananya Sharma" />}
-          <Field
-            label="Email or mobile number"
-            value={f.id}
-            onChange={set('id')}
-            autoComplete="username"
-            placeholder="you@example.com or 98100 12345"
-            inputMode={mobile ? 'tel' : 'email'}
-            hint={mode === 'signup' && mobile ? 'Tip: add an email later in My account so you can reset your password.' : undefined}
-          />
-          {mode === 'reset' && <Field label="6-digit code" value={f.code} onChange={(v) => set('code')(v.replace(/\D/g, '').slice(0, 6))} autoComplete="one-time-code" placeholder="000000" inputMode="numeric" />}
-          {mode !== 'forgot' && (
+          {mode !== 'key' && (
+            <Field
+              label="Email or mobile number"
+              value={f.id}
+              onChange={set('id')}
+              autoComplete="username"
+              placeholder="you@example.com or 98100 12345"
+              inputMode={mobile ? 'tel' : 'email'}
+              hint={mode === 'signup' && mobile ? 'Tip: add an email later in My account so you can reset your password.' : undefined}
+            />
+          )}
+          {mode === 'reset' && (
+            <Field label="6-digit code" value={f.code} onChange={(v) => set('code')(v.replace(/\D/g, '').slice(0, 6))} autoComplete="one-time-code" placeholder="000000" inputMode="numeric" />
+          )}
+          {mode !== 'forgot' && mode !== 'key' && (
             <Field
               label={mode === 'reset' ? 'New password' : 'Password'}
               type="password"
@@ -243,16 +328,21 @@ function SignedOut() {
             </p>
           )}
           <button className="btn acct-submit" disabled={busy}>
-            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'forgot' ? 'Send code' : 'Set new password'}
+            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : mode === 'forgot' ? 'Send code' : mode === 'key' ? 'Open Newsroom' : 'Set new password'}
           </button>
         </form>
         <div className="acct-links">
           {mode === 'signin' && (
-            <button className="acct-link" onClick={() => go('forgot')}>
-              Forgot password?
-            </button>
+            <>
+              <button className="acct-link" onClick={() => go('forgot')}>
+                Forgot password?
+              </button>
+              <button className="acct-link muted" onClick={() => go('key')}>
+                Team login key
+              </button>
+            </>
           )}
-          {(mode === 'forgot' || mode === 'reset') && (
+          {(mode === 'forgot' || mode === 'reset' || mode === 'key') && (
             <button className="acct-link" onClick={() => go('signin')}>
               ← Back to sign in
             </button>
@@ -302,7 +392,10 @@ function SignedIn() {
     .slice(0, 2)
     .join('')
     .toUpperCase()
-  const since = new Date(s.me.created).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+  const since = new Date(s.me.created).toLocaleDateString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+  })
   const toggle = (k: typeof open) => setOpen((o) => (o === k ? '' : k))
   const run = async (fn: () => Promise<void>, ok: string, after?: () => void) => {
     setBusy(true)
@@ -328,7 +421,11 @@ function SignedIn() {
               className="acct-rename"
               onSubmit={(e) => {
                 e.preventDefault()
-                void run(() => readerRename(name), 'Name saved', () => setEditing(false))
+                void run(
+                  () => readerRename(name),
+                  'Name saved',
+                  () => setEditing(false),
+                )
               }}
             >
               <input value={name} onChange={(e) => setName(e.target.value)} maxLength={50} autoFocus aria-label="Your name" />
@@ -367,7 +464,10 @@ function SignedIn() {
           onClick={() => {
             setSyncing(true)
             syncNow()
-              .then(() => toast('Everything is up to date'), (e: Error) => toast(e.message))
+              .then(
+                () => toast('Everything is up to date'),
+                (e: Error) => toast(e.message),
+              )
               .finally(() => setSyncing(false))
           }}
         >
@@ -418,13 +518,23 @@ function SignedIn() {
                 className="acct-form acct-inline"
                 onSubmit={(e) => {
                   e.preventDefault()
-                  void run(() => readerSetContact(k, contact.value, contact.password), k === 'email' ? 'Email saved' : 'Mobile number saved', () => {
-                    setOpen('')
-                    setContact({ value: '', password: '' })
-                  })
+                  void run(
+                    () => readerSetContact(k, contact.value, contact.password),
+                    k === 'email' ? 'Email saved' : 'Mobile number saved',
+                    () => {
+                      setOpen('')
+                      setContact({ value: '', password: '' })
+                    },
+                  )
                 }}
               >
-                <Field label={k === 'email' ? 'Email' : 'Mobile number'} type={k === 'email' ? 'email' : 'tel'} value={contact.value} onChange={(v) => setContact((x) => ({ ...x, value: v }))} inputMode={k === 'email' ? 'email' : 'tel'} />
+                <Field
+                  label={k === 'email' ? 'Email' : 'Mobile number'}
+                  type={k === 'email' ? 'email' : 'tel'}
+                  value={contact.value}
+                  onChange={(v) => setContact((x) => ({ ...x, value: v }))}
+                  inputMode={k === 'email' ? 'email' : 'tel'}
+                />
                 {hasPw && <Field label="Your password" type="password" value={contact.password} onChange={(v) => setContact((x) => ({ ...x, password: v }))} autoComplete="current-password" />}
                 <button className="btn small" disabled={busy}>
                   Save
@@ -446,14 +556,25 @@ function SignedIn() {
             className="acct-form acct-inline"
             onSubmit={(e) => {
               e.preventDefault()
-              void run(() => readerChangePassword(pw.old, pw.next), hasPw ? 'Password changed' : 'Password set', () => {
-                setOpen('')
-                setPw({ old: '', next: '' })
-              })
+              void run(
+                () => readerChangePassword(pw.old, pw.next),
+                hasPw ? 'Password changed' : 'Password set',
+                () => {
+                  setOpen('')
+                  setPw({ old: '', next: '' })
+                },
+              )
             }}
           >
             {hasPw && <Field label="Current password" type="password" value={pw.old} onChange={(v) => setPw((x) => ({ ...x, old: v }))} autoComplete="current-password" />}
-            <Field label="New password" type="password" value={pw.next} onChange={(v) => setPw((x) => ({ ...x, next: v }))} autoComplete="new-password" hint="At least 8 characters, with letters and numbers." />
+            <Field
+              label="New password"
+              type="password"
+              value={pw.next}
+              onChange={(v) => setPw((x) => ({ ...x, next: v }))}
+              autoComplete="new-password"
+              hint="At least 8 characters, with letters and numbers."
+            />
             <button className="btn small" disabled={busy}>
               {hasPw ? 'Change password' : 'Set password'}
             </button>
@@ -490,7 +611,11 @@ function SignedIn() {
             onSubmit={(e) => {
               e.preventDefault()
               if (!window.confirm('Delete your account for good? This cannot be undone.')) return
-              void run(() => readerDeleteAccount(del.password, del.confirm), 'Account deleted', () => navigate('/account', { replace: true }))
+              void run(
+                () => readerDeleteAccount(del.password, del.confirm),
+                'Account deleted',
+                () => navigate('/account', { replace: true }),
+              )
             }}
           >
             <p className="acct-note">Your name, email, number and synced list will be deleted. Stories saved on this device stay here.</p>

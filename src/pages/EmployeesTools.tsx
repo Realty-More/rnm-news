@@ -18,6 +18,7 @@ interface Account {
   lastSeen?: string | null
   devices?: number
   mustChange?: boolean
+  email?: string | null
   title?: string
   photo?: string
   avatar?: string
@@ -305,7 +306,7 @@ export function EmployeesTab() {
                 <strong>
                   {a.name} {a.role === 'admin' && <span className="acct-tag">Full access</span>}
                 </strong>
-                <span className="meta">{[a.title, showPhone(a.phone)].filter(Boolean).join(' · ')}</span>
+                <span className="meta">{[a.title, showPhone(a.phone), a.email].filter(Boolean).join(' · ')}</span>
               </div>
               <div className="emp-cols">
                 <span>

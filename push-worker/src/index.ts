@@ -50,6 +50,7 @@ import { magazinePdf } from './magazine-pdf.ts'
 import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
+import { myEmail, setMyEmail, staffForgot, staffReset } from './staffEmail.ts'
 import { readerDelete, readerForgot, readerGoogle, readerLogin, readerLogout, readerMe, readerProfile, readerReset, readerSignup, readerSync } from './reader.ts'
 import { getDraft, listDrafts, pressImage, pressToStory, removeDraft, savePressImage, setImageRole } from './press.ts'
 import { changeLink, createLink, kitAsset, kitBook, kitPage, kitPdf, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
@@ -141,6 +142,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         }
         case '/editor/me/profile':
           return json(await myProfile(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/me/email':
+          return json(await myEmail(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/overview':
           return json(await overview(env), 200, headers)
         case '/editor/ideas':
@@ -267,6 +270,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json({ ok: await registerStaffDevice(env, who, body) }, 200, headers)
       case '/editor/me/profile':
         return json(await saveProfile(env, who, body), 200, headers)
+      case '/editor/me/email':
+        return json(await setMyEmail(env, who, body), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/accounts/add':
         return json(await addStaffLogin(env, body, who), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/team/email-now':
@@ -479,6 +484,14 @@ export default {
         }
         if (!run[pathname]) return json({ error: 'not found' }, 404, headers)
         return json(await run[pathname](), 200, { ...headers, 'Cache-Control': 'no-store' })
+      } catch (err) {
+        return json({ error: (err as Error).message }, 400, headers)
+      }
+    }
+    // Team logins with an email: forgot password code and reset.
+    if (pathname === '/auth/forgot' || pathname === '/auth/reset') {
+      try {
+        return json(pathname === '/auth/forgot' ? await staffForgot(env, req, body) : await staffReset(env, req, body), 200, { ...headers, 'Cache-Control': 'no-store' })
       } catch (err) {
         return json({ error: (err as Error).message }, 400, headers)
       }

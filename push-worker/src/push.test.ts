@@ -732,7 +732,8 @@ describe('daily team report email', () => {
     )
     expect(mail.subject).toBe('Daily Team Report · Tue, 27 Oct · 1/3 in · 1 late · 1 absent')
     expect(mail.html).toContain('brand/logo_white.png')
-    expect(mail.html).toContain('Needs your attention')
+    expect(mail.html).toContain('Action items')
+    expect(mail.html).toContain('Good evening, Palash.')
     expect(mail.html).toContain('<b>Neha is blocked:</b> Laptop slow')
     expect(mail.html).toContain('Ravi &lt;K&gt;')
     expect(mail.html).toContain('At Noida Office')
@@ -740,7 +741,7 @@ describe('daily team report email', () => {
     expect(mail.html).toContain('Laptop slow')
     expect(mail.html).toContain('Sick leave')
     // Cards: present first, then on leave, then absent.
-    const cards = mail.html.slice(mail.html.indexOf('The team today'))
+    const cards = mail.html.slice(mail.html.indexOf('>The team<'))
     expect(cards.indexOf('Neha')).toBeLessThan(cards.indexOf('Asha'))
     expect(cards.indexOf('Asha')).toBeLessThan(cards.indexOf('Ravi'))
     expect(mail.text).toContain('Neha (Writer): in 10:20 late (At Noida Office), out 18:50')

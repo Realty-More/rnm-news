@@ -331,7 +331,7 @@ export async function gatherIssue(env: Env, s: NlSettings, now = Date.now(), for
   for (const o of opens.results) score.set(o.id, (score.get(o.id) ?? 0) + o.n * 5)
   let stories: NewsItem[] = []
   if (picks.length) stories = await fetchByIds(env.SITE_API, picks)
-  else if (s.choice === 'pick' && !forPreview) throw new Error('Pick this week’s stories first (Studio → Newsletter).')
+  else if (s.choice === 'pick' && !forPreview) throw new Error('Pick this week’s stories first (R&M Newsroom → Publish → Newsletter).')
   else {
     const ids = [...score].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id]) => id)
     stories = ids.length >= 3 ? await fetchByIds(env.SITE_API, ids).catch(() => []) : []
@@ -494,7 +494,7 @@ export async function newsletterTick(env: Env, now = Date.now()): Promise<string
       if (!(await env.SUBS.get(`state:nl-pick-reminder:${week}`))) {
         await env.SUBS.put(`state:nl-pick-reminder:${week}`, '1', { expirationTtl: 10 * 86400 })
         const { toOwners } = await import('./owner.ts')
-        await toOwners(env, { title: 'Newsletter: pick this week’s stories', body: `It goes out at ${s.time} once you choose the stories in Studio → Newsletter.`, url: '#/studio?tab=newsletter', tag: 'nl-pick' }).catch(() => {})
+        await toOwners(env, { title: 'Newsletter: pick this week’s stories', body: `It goes out at ${s.time} once you choose the stories in R&M Newsroom → Newsletter.`, url: '#/studio?tab=newsletter', tag: 'nl-pick' }).catch(() => {})
         out.push('pick reminder sent')
       }
     } else if (now >= due) {

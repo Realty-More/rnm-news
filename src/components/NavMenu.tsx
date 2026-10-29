@@ -137,7 +137,8 @@ export function NavMenu({ open, onClose }: { open: boolean; onClose: () => void 
   )
 }
 
-/** Log in / log out for the owner and team (readers never need it). */
+/** The owner's or team member's R&M Newsroom entry and log out. Readers see nothing here: team members
+ *  open the Newsroom from the link in their login message (or Settings → tap the version 5 times). */
 function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT()
   const navigate = useNavigate()
@@ -157,7 +158,7 @@ function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
   }
   return (
     <>
-      <h2 className="nav-h">{who?.role === 'owner' ? t('menu.owner') : t('menu.team')}</h2>
+      {who && <h2 className="nav-h">{who.role === 'owner' ? t('menu.owner') : t('menu.team')}</h2>}
       {who ? (
         <div className="nav-login">
           <Link to="/studio" onClick={onClose} className="nav-login-who">
@@ -170,25 +171,14 @@ function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
             )}
             <span>
               <strong>{who.name}</strong>
-              <small>{who.role === 'owner' ? 'Founder & Editor · Content Studio' : who.role === 'admin' ? 'Full access · Content Studio' : `${t('menu.team')} · Content Studio`}</small>
+              <small>{who.role === 'owner' ? 'Founder & Editor · R&M Newsroom' : who.role === 'admin' ? 'Full access · R&M Newsroom' : `${t('menu.team')} · R&M Newsroom`}</small>
             </span>
           </Link>
           <button className="btn ghost small" onClick={logout}>
             {t('menu.logout')}
           </button>
         </div>
-      ) : (
-        <ul className="nav-list">
-          <li>
-            <NavLink to="/studio" onClick={onClose}>
-              <span className="nav-li-icon">
-                <Icon name="settings" size={18} /> {t('menu.login')}
-              </span>
-              <Icon name="chevron" size={16} />
-            </NavLink>
-          </li>
-        </ul>
-      )}
+      ) : null}
     </>
   )
 }

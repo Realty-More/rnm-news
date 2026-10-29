@@ -106,7 +106,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
             <button className="btn" disabled={busy || phone.replace(/\D/g, '').length < 10 || !password}>
               {busy ? 'Checking…' : 'Log in'}
             </button>
-            <p className="auth-note">Forgot your password? Ask Palash sir to set a new one from the Studio.</p>
+            <p className="auth-note">Forgot your password? Ask Palash sir to set a new one from R&M Newsroom.</p>
           </form>
         )}
 

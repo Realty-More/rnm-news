@@ -59,7 +59,7 @@ async function call<T>(path: string, init: RequestInit = {}, key = ownerKey()): 
   if (!res.ok) {
     // Show the server's own reason ("Name is required.", "Only the owner can do this." …) when it gives one.
     const reason = await res.json().then((j: { error?: string }) => j.error, () => null)
-    throw new Error(reason ?? (res.status === 403 ? 'Only the owner can do this.' : `Studio data unavailable (${res.status}).`))
+    throw new Error(reason ?? (res.status === 403 ? 'Only the owner can do this.' : `Newsroom data unavailable (${res.status}).`))
   }
   return res.json() as Promise<T>
 }

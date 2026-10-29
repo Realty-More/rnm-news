@@ -70,8 +70,8 @@ export function Settings() {
         <Link to="/studio" className="studio-entry">
           <Icon name="sparkle" size={20} />
           <span>
-            <strong>Content Studio</strong>
-            <small>Owner only · ideas, keywords, SEO</small>
+            <strong>R&amp;M Newsroom</strong>
+            <small>Team &amp; owner only · newsroom, team, sales</small>
           </span>
           <Icon name="chevron" size={18} />
         </Link>

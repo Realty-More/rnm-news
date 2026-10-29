@@ -214,7 +214,7 @@ export function ProfilePanel({ onClose, onSaved }: { onClose: () => void; onSave
   return (
     <Panel
       title="My profile"
-      note={me.role === 'owner' ? 'Your picture shows at the top of the Studio. Remove it to go back to the default photo.' : 'Your name, designation and picture show to the team and the owner in the Studio.'}
+      note={me.role === 'owner' ? 'Your picture shows at the top of R&M Newsroom. Remove it to go back to the default photo.' : 'Your name, designation and picture show to the team and the owner in R&M Newsroom.'}
     >
       <div className="profile-edit">
         <div className="profile-pic">

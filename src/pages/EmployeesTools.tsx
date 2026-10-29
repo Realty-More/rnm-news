@@ -44,7 +44,7 @@ export function seenLabel(iso: string | null | undefined, now = Date.now()): str
 }
 const APP = 'https://realty-more.github.io/rnm-news/#/studio'
 const loginMessage = (name: string, phone: string, password: string) =>
-  `Hi ${name.split(' ')[0]}, your Realtynmore app login:\nMobile: ${phone}\nTemporary password: ${password}\nOpen: ${APP}\nOn first login you will set your own password.`
+  `Hi ${name.split(' ')[0]}, your R&M Newsroom login (Realtynmore app):\nMobile: ${phone}\nTemporary password: ${password}\nOpen: ${APP}\nOn first login you will set your own password.`
 
 /** A centred dialog (a sheet from the bottom on phones). Escape or the backdrop closes it. */
 export function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {

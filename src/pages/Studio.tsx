@@ -109,7 +109,7 @@ type Tab = (typeof TABS)[number]['key']
 
 export function Studio() {
   const [key, setKey] = useState(ownerKey)
-  usePageTitle(key ? 'Content Studio' : 'Login')
+  usePageTitle(key ? 'R&M Newsroom' : 'Login')
   if (!key) return <AuthScreen onDone={() => setKey(ownerKey())} />
   return (
     <StudioHome
@@ -170,7 +170,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
             <div>
               <span className="owner-badge">{me.role === 'admin' ? `Full access · ${me.name}` : `Team · ${me.name}`}{me.title ? ` · ${me.title}` : ''}</span>
               <h1>{greeting()}, {me.name.split(' ')[0]}</h1>
-              <p className="page-sub">Content Studio · real data from the app, realtynmore.com, Google and other news sites</p>
+              <p className="page-sub">R&amp;M Newsroom · real data from the app, realtynmore.com, Google and other news sites</p>
             </div>
           </div>
         ) : (
@@ -182,7 +182,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
             <div>
               <span className="owner-badge">Founder &amp; Editor</span>
               <h1>{greeting()}, Palash Roy</h1>
-              <p className="page-sub">Content Studio · real data from the app, realtynmore.com, NSE and other news sites</p>
+              <p className="page-sub">R&amp;M Newsroom · real data from the app, realtynmore.com, NSE and other news sites</p>
             </div>
           </div>
         )}
@@ -208,7 +208,7 @@ function StudioHome({ onLock }: { onLock: () => void }) {
           }}
         />
       )}
-      <nav className="studio-nav" aria-label="Studio">
+      <nav className="studio-nav" aria-label="R&M Newsroom">
         <div className="studio-groups" role="tablist" aria-label="Sections">
           {GROUPS.filter((g) => visible.some((t) => t.group === g.key)).map((g) => (
             <button

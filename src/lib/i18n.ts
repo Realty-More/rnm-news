@@ -192,7 +192,7 @@ const en: Record<TKey, string> = {
   'menu.login': 'Owner & team login',
   'menu.owner': 'Owner',
   'menu.logout': 'Log out',
-  'menu.logoutAsk': 'Log out of the Studio on this device?',
+  'menu.logoutAsk': 'Log out of R&M Newsroom on this device?',
   'menu.loggedOut': 'Logged out',
   'article.keyPoints': 'Key points',
   'article.keyPointsNote': 'Lines taken from this story.',

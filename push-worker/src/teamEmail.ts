@@ -550,7 +550,7 @@ ${yt ? youtubeSection : ''}
 <tr><td class="px" style="background:#0F0F11;padding:26px 36px;text-align:center">
 <img src="${esc(logo)}" width="72" height="40" alt="Realty &amp; More" style="display:inline-block;border:0;width:72px;height:auto">
 <div style="margin:14px auto 0;width:24px;height:1px;background:#3A3A40;font-size:0;line-height:0">&nbsp;</div>
-<div style="margin-top:14px;font:11.5px/1.7 ${F.sans};color:#8D8D92">Confidential · prepared for ${esc(ownerName)}. Sent automatically every evening by the Realtynmore app.<br>Change the time or address in Studio → Team today → Daily team report.<br><a href="https://realtynmore.com" style="color:#B9B9BD;text-decoration:none">realtynmore.com</a></div>
+<div style="margin-top:14px;font:11.5px/1.7 ${F.sans};color:#8D8D92">Confidential · prepared for ${esc(ownerName)}. Sent automatically every evening by the Realtynmore app.<br>Change the time or address in R&M Newsroom → Team today → Daily team report.<br><a href="https://realtynmore.com" style="color:#B9B9BD;text-decoration:none">realtynmore.com</a></div>
 </td></tr>
 
 </table></td></tr></table></body></html>`

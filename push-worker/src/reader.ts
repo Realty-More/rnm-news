@@ -87,7 +87,7 @@ export async function newSession(env: Env, id: number): Promise<string> {
   return token
 }
 
-export const publicMe = (r: Reader, newsroom: 'admin' | 'editor' | null = null) => ({ newsroom, name: r.name, email: r.email ?? '', phone: r.phone ?? '', created: r.created_at, google: !!r.google_sub, hasPassword: !!r.hash, sync: parseSync(r.sync) })
+export const publicMe = (r: Reader, newsroom: 'owner' | 'admin' | 'editor' | null = null) => ({ newsroom, name: r.name, email: r.email ?? '', phone: r.phone ?? '', created: r.created_at, google: !!r.google_sub, hasPassword: !!r.hash, sync: parseSync(r.sync) })
 
 function parseSync(s: string | null): SyncState {
   try {

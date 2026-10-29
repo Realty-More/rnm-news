@@ -45,25 +45,27 @@ export async function linkedWho(env: Env, token: string): Promise<Who | null> {
     .bind(hash, new Date(now).toISOString())
     .first<{ id: number; name: string; role: AccessRole; last_seen: string | null; person_id: string | null; team_name: string | null; team_role: string | null; team_status: string | null; expires: string }>()
   if (!row) return null
-  // Linked to a team login that was removed or declined: no Newsroom. The owner's own app account
-  // never opens the Newsroom by itself (he uses his owner key or mobile login for that).
-  if (row.person_id && (row.team_status !== 'active' || row.team_role === 'owner')) return null
+  // Linked to a team login that was removed or declined: no Newsroom.
+  if (row.person_id && row.team_status !== 'active') return null
   // "Last seen" for Employees (every 5 minutes at most); someone who uses the Newsroom stays signed in.
   const writes: D1PreparedStatement[] = []
   if (!row.last_seen || Date.parse(row.last_seen) < now - 5 * 60000) writes.push(env.DB.prepare('UPDATE staff_links SET last_seen = ? WHERE reader_id = ?').bind(new Date(now).toISOString(), row.id))
   if (Date.parse(row.expires) < now + (READER_SESSION_DAYS - 1) * DAY) writes.push(env.DB.prepare('UPDATE reader_sessions SET expires_at = ? WHERE token_hash = ?').bind(new Date(now + READER_SESSION_DAYS * DAY).toISOString(), hash))
   if (writes.length) await env.DB.batch(writes)
+  // The owner's own app account (linked to his mobile login, same password) opens the Newsroom as owner.
+  // Owner links are made only by the owner's own sign-in or by hand, never from Employees.
+  if (row.person_id && row.team_role === 'owner') return { role: 'owner', name: row.team_name ?? row.name, phone: row.person_id.slice(3) }
   if (row.person_id) return { role: row.team_role === 'admin' ? 'admin' : 'editor', name: row.team_name ?? row.name, id: row.person_id }
   return { role: row.role === 'admin' ? 'admin' : 'editor', name: row.name, id: linkId(row.id) }
 }
 
 /** Newsroom role of a reader account, or null. */
-export async function accessOf(env: Env, readerId: number): Promise<AccessRole | null> {
+export async function accessOf(env: Env, readerId: number): Promise<AccessRole | 'owner' | null> {
   const r = await env.DB.prepare("SELECT l.role, l.person_id, a.role AS team_role, a.status FROM staff_links l LEFT JOIN accounts a ON 'ph:' || a.phone = l.person_id WHERE l.reader_id = ?")
     .bind(readerId)
     .first<{ role: AccessRole; person_id: string | null; team_role: string | null; status: string | null }>()
   if (!r) return null
-  if (r.person_id) return r.status === 'active' && r.team_role !== 'owner' ? (r.team_role === 'admin' ? 'admin' : 'editor') : null
+  if (r.person_id) return r.status === 'active' ? (r.team_role === 'owner' ? 'owner' : r.team_role === 'admin' ? 'admin' : 'editor') : null
   return r.role === 'admin' ? 'admin' : 'editor'
 }
 

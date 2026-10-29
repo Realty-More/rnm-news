@@ -21,7 +21,7 @@ export interface ReaderMe {
   google?: boolean
   hasPassword?: boolean
   /** Newsroom access the owner gave this account. */
-  newsroom?: 'admin' | 'editor' | null
+  newsroom?: 'owner' | 'admin' | 'editor' | null
 }
 export interface ReaderState {
   token: string

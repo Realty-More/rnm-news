@@ -9,6 +9,7 @@ import { Icon, type IconName } from './Icon.tsx'
 import { SocialLinks } from './SiteFooter.tsx'
 import { toast } from './Toast.tsx'
 import { forgetOwner, ownerKey, ownerRole } from '../lib/owner.ts'
+import { useReader } from '../lib/reader.ts'
 
 const QUICK: { to: string; label: TKey; icon: IconName }[] = [
   { to: '/news', label: 'nav.news', icon: 'news' },
@@ -57,6 +58,8 @@ export function NavMenu({ open, onClose }: { open: boolean; onClose: () => void 
             <Icon name="close" />
           </button>
         </div>
+
+        <AccountCard open={open} onClose={onClose} />
 
         <Link to="/search" className="nav-search" onClick={onClose}>
           <Icon name="search" size={18} />
@@ -127,21 +130,35 @@ export function NavMenu({ open, onClose }: { open: boolean; onClose: () => void 
           </li>
         </ul>
 
-        <TeamLogin open={open} onClose={onClose} />
-
         <h2 className="nav-h">{t('home.followUs')}</h2>
         <SocialLinks />
-        <p className="nav-foot">Realty &amp; More · realtynmore.com</p>
+        <p className="nav-foot">
+          Realty &amp; More · realtynmore.com
+          {!ownerKey() && (
+            <>
+              {' · '}
+              <Link to="/studio" onClick={onClose} className="nav-team-link">
+                {t('acct.teamLogin')}
+              </Link>
+            </>
+          )}
+        </p>
       </div>
     </div>
   )
 }
 
-/** Log in / log out for the owner and team. After login it shows who is in and opens R&M Newsroom. */
-function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * The account card at the top of the menu.
+ *   Team or owner logged in: who they are, R&M Newsroom and Log out.
+ *   Reader signed in: their name and My account.
+ *   Nobody: a Sign in invitation (readers). Team members use the small "Team login" link at the bottom.
+ */
+function AccountCard({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const reader = useReader()
   // Read on every open, so it reflects a login or logout made elsewhere.
   const [who, setWho] = useState(() => (ownerKey() ? ownerRole() : null))
   useEffect(() => {
@@ -155,41 +172,64 @@ function TeamLogin({ open, onClose }: { open: boolean; onClose: () => void }) {
     onClose()
     if (pathname.startsWith('/studio')) navigate('/')
   }
-  return (
-    <>
-      <h2 className="nav-h">{who?.role === 'owner' ? t('menu.owner') : t('menu.team')}</h2>
-      {who ? (
-        <div className="nav-login">
-          <Link to="/studio" onClick={onClose} className="nav-login-who">
-            {who.role === 'owner' ? (
-              <img className="nav-login-avatar photo" src="./brand/palash.jpg" alt="" width={36} height={36} />
-            ) : (
-              <span className="nav-login-avatar" aria-hidden="true">
-                {who.name.slice(0, 1).toUpperCase()}
-              </span>
-            )}
-            <span>
-              <strong>{who.name}</strong>
-              <small>{who.role === 'owner' ? 'Founder & Editor · R&M Newsroom' : who.role === 'admin' ? 'Full access · R&M Newsroom' : `${t('menu.team')} · R&M Newsroom`}</small>
+  if (who)
+    return (
+      <div className="nav-acct staff">
+        <Link to="/studio" onClick={onClose} className="nav-acct-who">
+          {who.role === 'owner' ? (
+            <img className="nav-acct-avatar photo" src="./brand/palash.jpg" alt="" width={44} height={44} />
+          ) : (
+            <span className="nav-acct-avatar" aria-hidden="true">
+              {who.name.slice(0, 1).toUpperCase()}
             </span>
+          )}
+          <span>
+            <strong>{who.name}</strong>
+            <small>{who.role === 'owner' ? 'Founder & Editor' : who.role === 'admin' ? 'Full access' : t('menu.team')} · R&amp;M Newsroom</small>
+          </span>
+        </Link>
+        <div className="nav-acct-btns">
+          <Link to="/studio" onClick={onClose} className="btn small">
+            <Icon name="sparkle" size={15} /> {t('acct.openNewsroom')}
           </Link>
           <button className="btn ghost small" onClick={logout}>
             {t('menu.logout')}
           </button>
         </div>
-      ) : (
-        <ul className="nav-list">
-          <li>
-            <NavLink to="/studio" onClick={onClose}>
-              <span className="nav-li-icon">
-                <Icon name="settings" size={18} /> {t('menu.login')}
-              </span>
-              <Icon name="chevron" size={16} />
-            </NavLink>
-          </li>
-        </ul>
-      )}
-    </>
+      </div>
+    )
+  if (reader)
+    return (
+      <Link to="/account" onClick={onClose} className="nav-acct reader">
+        <span className="nav-acct-avatar" aria-hidden="true">
+          {reader.me.name
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((w) => w[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase()}
+        </span>
+        <span className="nav-acct-text">
+          <strong>{reader.me.name}</strong>
+          <small>{t('acct.myAccount')} · {reader.me.email}</small>
+        </span>
+        <Icon name="chevron" size={16} />
+      </Link>
+    )
+  return (
+    <div className="nav-acct guest">
+      <span className="nav-acct-icon" aria-hidden="true">
+        <Icon name="bookmark" size={20} />
+      </span>
+      <span className="nav-acct-text">
+        <strong>{t('acct.signInTitle')}</strong>
+        <small>{t('acct.signInSub')}</small>
+      </span>
+      <Link to="/account" onClick={onClose} className="btn small">
+        {t('acct.signIn')}
+      </Link>
+    </div>
   )
 }
 

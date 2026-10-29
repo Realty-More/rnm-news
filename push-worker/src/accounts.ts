@@ -33,9 +33,9 @@ export function passwordProblem(pw: unknown): string | null {
   return null
 }
 
-const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
-const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
-const pepperOf = (env: Env) => env.AUTH_PEPPER || env.STATS_KEY
+export const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes))
+export const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
+export const pepperOf = (env: Env) => env.AUTH_PEPPER || env.STATS_KEY
 
 export async function hashPassword(pw: string, pepper: string, salt = crypto.getRandomValues(new Uint8Array(16))): Promise<{ salt: string; hash: string }> {
   const enc = new TextEncoder()
@@ -52,10 +52,10 @@ async function checkPassword(pw: string, a: Account, pepper: string): Promise<bo
 }
 
 const hourKey = () => new Date().toISOString().slice(0, 13)
-async function fails(env: Env, k: string): Promise<number> {
+export async function fails(env: Env, k: string): Promise<number> {
   return (await env.DB.prepare('SELECT n FROM auth_fail WHERE k = ? AND hour = ?').bind(k, hourKey()).first<{ n: number }>())?.n ?? 0
 }
-async function addFail(env: Env, k: string) {
+export async function addFail(env: Env, k: string) {
   await env.DB.prepare('INSERT INTO auth_fail (k, hour, n) VALUES (?, ?, 1) ON CONFLICT(k, hour) DO UPDATE SET n = n + 1').bind(k, hourKey()).run()
 }
 
@@ -70,7 +70,7 @@ async function newSession(env: Env, phone: string): Promise<string> {
   return token
 }
 
-const ipOf = (req: Request) => req.headers.get('CF-Connecting-IP') ?? 'x'
+export const ipOf = (req: Request) => req.headers.get('CF-Connecting-IP') ?? 'x'
 
 export async function signup(env: Env, req: Request, body: unknown) {
   const b = (body ?? {}) as { name?: unknown; phone?: unknown; password?: unknown; ownerKey?: unknown }

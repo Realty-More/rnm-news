@@ -15,6 +15,7 @@ import { CHANNEL_URL } from '../lib/youtubeFeed.ts'
 import { SITE } from '../lib/wp.ts'
 import { NewsletterCard } from '../components/NewsletterCard.tsx'
 import { usePageTitle } from './usePageTitle.ts'
+import { useReader } from '../lib/reader.ts'
 
 // Public pages (also used as the store listing's privacy and account-deletion links).
 const LEGAL = 'https://realty-more.github.io/rnm-news/'
@@ -39,6 +40,7 @@ export function Settings() {
     if (taps.current.n >= 5) navigate('/studio')
   }
   const t = useT()
+  const reader = useReader()
   const [offline, setOffline] = useState<{ at: string; count: number } | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -65,6 +67,15 @@ export function Settings() {
         <h1>{t('settings.title')}</h1>
         <p className="page-sub">{t('settings.sub')}</p>
       </div>
+
+      <Link to="/account" className="studio-entry acct-entry">
+        <Icon name="bookmark" size={20} />
+        <span>
+          <strong>{reader ? reader.me.name : 'Sign in to Realty & More'}</strong>
+          <small>{reader ? `My account · ${reader.me.email}` : 'Keep saved stories and your feed on every device'}</small>
+        </span>
+        <Icon name="chevron" size={18} />
+      </Link>
 
       {ownerKey() && (
         <Link to="/studio" className="studio-entry">

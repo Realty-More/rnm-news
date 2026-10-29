@@ -21,6 +21,7 @@ const Markets = lazy(() => import('./pages/Markets.tsx').then((m) => ({ default:
 const MagazineList = lazy(() => import('./pages/Magazine.tsx').then((m) => ({ default: m.MagazineList })))
 const MagazineReader = lazy(() => import('./pages/Magazine.tsx').then((m) => ({ default: m.MagazineReader })))
 const Settings = lazy(() => import('./pages/Settings.tsx').then((m) => ({ default: m.Settings })))
+const Account = lazy(() => import('./pages/Account.tsx'))
 
 const fallback = (
   <div className="page">
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="magazine" element={<Suspense fallback={fallback}><MagazineList /></Suspense>} />
         <Route path="magazine/:id" element={<Suspense fallback={fallback}><MagazineReader /></Suspense>} />
         <Route path="settings" element={<Suspense fallback={fallback}><Settings /></Suspense>} />
+        <Route path="account" element={<Suspense fallback={fallback}><Account /></Suspense>} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

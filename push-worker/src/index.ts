@@ -3,6 +3,7 @@
 //   POST /hit, GET /trending          anonymous usage counts and "Trending in app" (D1)
 //   POST /auth/signup|login|logout    Studio accounts: mobile number + password, owner approves staff
 //   POST /auth/delete                 delete my account (mobile number + password)
+//   POST /reader/*                    reader accounts: sign up, sign in, sync saved stories and feed choices
 //   GET  /magazine/pdf/<id>           R&M Magazine PDF from realtynmore.com, in parts, for the in-app reader
 //   POST /ai/ask                      "Ask R&M": answers from realtynmore.com stories only (Workers AI)
 //   GET  /a/<id>                      share preview page that opens the story in the app
@@ -49,6 +50,7 @@ import { magazinePdf } from './magazine-pdf.ts'
 import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
+import { readerDelete, readerForgot, readerLogin, readerLogout, readerMe, readerProfile, readerReset, readerSignup, readerSync } from './reader.ts'
 import { getDraft, listDrafts, pressImage, pressToStory, removeDraft, savePressImage, setImageRole } from './press.ts'
 import { changeLink, createLink, kitAsset, kitBook, kitPage, kitPdf, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
 import { sendTeamEmail } from './teamEmail.ts'
@@ -437,7 +439,8 @@ export default {
     if (req.method !== 'POST' || !allowedCaller) return json({ error: 'not allowed' }, 403, headers)
     let body: unknown
     try {
-      body = await readJson(req)
+      // Syncing saved stories is the one bigger body readers send.
+      body = await readJson(req, pathname === '/reader/sync' ? 400_000 : MAX_BODY)
     } catch {
       return json({ error: 'bad request' }, 400, headers)
     }
@@ -453,6 +456,26 @@ export default {
     if (pathname === '/newsletter/subscribe') {
       try {
         return json(await nlSubscribe(env, req, body), 200, { ...headers, 'Cache-Control': 'no-store' })
+      } catch (err) {
+        return json({ error: (err as Error).message }, 400, headers)
+      }
+    }
+    // Reader accounts (never open R&M Newsroom; see reader.ts).
+    if (pathname.startsWith('/reader/')) {
+      try {
+        const run: Record<string, () => Promise<unknown>> = {
+          '/reader/signup': () => readerSignup(env, req, body),
+          '/reader/login': () => readerLogin(env, req, body),
+          '/reader/logout': () => readerLogout(env, req),
+          '/reader/me': () => readerMe(env, req),
+          '/reader/sync': () => readerSync(env, req, body),
+          '/reader/profile': () => readerProfile(env, req, body),
+          '/reader/delete': () => readerDelete(env, req, body),
+          '/reader/forgot': () => readerForgot(env, req, body),
+          '/reader/reset': () => readerReset(env, req, body),
+        }
+        if (!run[pathname]) return json({ error: 'not found' }, 404, headers)
+        return json(await run[pathname](), 200, { ...headers, 'Cache-Control': 'no-store' })
       } catch (err) {
         return json({ error: (err as Error).message }, 400, headers)
       }

@@ -889,3 +889,26 @@ describe('media kit links', async () => {
     expect(isToken('short')).toBe(false)
   })
 })
+
+describe('reader accounts', () => {
+  it('checks emails', async () => {
+    const { normEmail } = await import('./reader.ts')
+    expect(normEmail('  Kaushik@Gmail.com ')).toBe('kaushik@gmail.com')
+    expect(normEmail('no-at-sign')).toBeNull()
+    expect(normEmail('a@b')).toBeNull()
+  })
+  it('merges saved stories and feed choices across devices', async () => {
+    const { mergeSync } = await import('./reader.ts')
+    const now = Date.parse('2026-10-29T12:00:00Z')
+    const server = { saved: [{ id: 1, savedAt: '2026-10-20T10:00:00Z', title: 'A' }, { id: 2, savedAt: '2026-10-21T10:00:00Z', title: 'B' }], removed: {}, prefs: { topics: ['rera'], updatedAt: '2026-10-20T00:00:00Z' } }
+    // This phone saved story 3, removed story 1 after it was saved, and changed topics later.
+    const out = mergeSync(server, { saved: [{ id: 3, savedAt: '2026-10-28T09:00:00Z', title: 'C' }], removed: { '1': '2026-10-27T00:00:00Z' }, prefs: { topics: ['launches'], cities: ['Noida'], updatedAt: '2026-10-28T00:00:00Z' } }, now)
+    expect(out.saved.map((s) => s.id)).toEqual([3, 2])
+    expect(out.prefs).toMatchObject({ topics: ['launches'], cities: ['Noida'] })
+    // Saving story 1 again after the removal brings it back.
+    const again = mergeSync(out, { saved: [{ id: 1, savedAt: '2026-10-29T08:00:00Z', title: 'A' }] }, now)
+    expect(again.saved.map((s) => s.id)).toEqual([1, 3, 2])
+    // Older feed choices from another phone do not overwrite newer ones.
+    expect(mergeSync(out, { prefs: { topics: ['old'], updatedAt: '2026-10-01T00:00:00Z' } }, now).prefs.topics).toEqual(['launches'])
+  })
+})

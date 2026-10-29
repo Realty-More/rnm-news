@@ -10,8 +10,11 @@ import { Capacitor } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
 import App from './App.tsx'
 import { applyPrefs } from './lib/prefs.ts'
+import { startReaderSync } from './lib/reader.ts'
 
 applyPrefs()
+// Signed-in readers: keep saved stories and feed choices the same on every device.
+startReaderSync()
 
 // Android back button: go back inside the app, exit only from the first screen.
 if (Capacitor.isNativePlatform()) {

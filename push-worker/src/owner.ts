@@ -53,6 +53,8 @@ export async function authenticate(key: string, env: Env, ctx: ExecutionContext)
   // with his mobile number or email and password. STATS_KEY stays as a server secret because the
   // password hashing uses it (pepperOf) and the private stats page needs it.
   if (key.startsWith('s_')) return sessionWho(env, key)
+  // Palash sir's own login key (made by him in My profile): signs in only as the owner.
+  if (key.startsWith('rnm-')) return (await import('./staffEmail.ts')).ownerKeyWho(env, key, ctx)
   // A normal Realtynmore account the owner gave Newsroom access (others get null → 401).
   if (key.startsWith('r_')) return (await import('./staffAccess.ts')).linkedWho(env, key)
   if (key.length < 24 || key.length > 64) return null

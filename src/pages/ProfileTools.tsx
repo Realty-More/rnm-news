@@ -271,6 +271,7 @@ export function ProfilePanel({ onClose, onSaved }: { onClose: () => void; onSave
         </button>
       </div>
       <OwnerLogin />
+      <OwnerKey />
       <LoginEmail />
     </Panel>
   )
@@ -355,6 +356,98 @@ function OwnerLogin() {
               {busy ? 'Saving…' : 'Save mobile login'}
             </button>
             <button type="button" className="btn ghost small" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Palash sir's own login key: signs in only as him (Sign in → Team login key). He makes it here with
+ * his password; it is shown once. A new key replaces the old one.
+ */
+function OwnerKey() {
+  const res = useAsync('studio:owner-key', (s) => studio<{ can: boolean; has?: boolean; created?: string; lastUsed?: string }>('me/login-key', undefined, s))
+  const [open, setOpen] = useState<'' | 'make' | 'remove'>('')
+  const [pw, setPw] = useState('')
+  const [made, setMade] = useState('')
+  const [busy, setBusy] = useState(false)
+  const d = res.data
+  if (!d?.can) return null
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '')
+  const run = async (action: 'make' | 'remove') => {
+    setBusy(true)
+    try {
+      const r = await studioPost<{ key?: string }>('me/login-key', { action, password: pw })
+      if (r.key) setMade(r.key)
+      else toast('Login key removed. It no longer works.')
+      setOpen('')
+      setPw('')
+      res.reload()
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="profile-email owner-key">
+      <div className="profile-email-head">
+        <span>
+          <b>My login key</b>
+          <small>
+            {d.has
+              ? `Made ${when(d.created)} · ${d.lastUsed ? `last used ${when(d.lastUsed)}` : 'not used yet'}. Sign in page → Team login key. Only you can sign in with it.`
+              : 'A key that signs in only as you: Sign in page → Team login key. Handy on a new phone or laptop.'}
+          </small>
+        </span>
+        <span className="owner-key-btns">
+          <button className={`btn small ${d.has ? 'ghost' : ''}`} onClick={() => setOpen((o) => (o === 'make' ? '' : 'make'))} aria-expanded={open === 'make'}>
+            {d.has ? 'New key' : 'Make key'}
+          </button>
+          {d.has && (
+            <button className="btn ghost small" onClick={() => setOpen((o) => (o === 'remove' ? '' : 'remove'))} aria-expanded={open === 'remove'}>
+              Remove
+            </button>
+          )}
+        </span>
+      </div>
+      {made && (
+        <div className="akeys-new" role="status">
+          <strong>Your login key</strong>
+          <code>{made}</code>
+          <p className="meta">Shown only once. Copy it and keep it private (not in a group chat). Lost or shared by mistake? Make a new key or tap Remove.</p>
+          <div className="action-row">
+            <button className="btn small" onClick={() => void navigator.clipboard?.writeText(made).then(() => toast('Key copied'))}>
+              Copy key
+            </button>
+            <button className="btn ghost small" onClick={() => setMade('')}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+      {open && (
+        <form
+          className="profile-email-form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void run(open)
+          }}
+        >
+          <p className="meta">{open === 'make' ? (d.has ? 'A new key replaces the old one: the old key stops working.' : 'Your key is shown once after this.') : 'The key stops working at once, on every device.'}</p>
+          <label>
+            Your password <small>(to confirm it’s you)</small>
+            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" required />
+          </label>
+          <div className="action-row">
+            <button className={`btn small ${open === 'remove' ? 'danger' : ''}`} disabled={busy || !pw}>
+              {busy ? 'Working…' : open === 'make' ? 'Make my key' : 'Remove key'}
+            </button>
+            <button type="button" className="btn ghost small" onClick={() => setOpen('')}>
               Cancel
             </button>
           </div>

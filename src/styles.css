@@ -9451,3 +9451,32 @@ button.mk-cover:focus-visible {
   color: var(--mute);
   font-size: 12px;
 }
+
+/* My profile → My login key (owner) */
+.owner-key-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.akeys-new {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1.5px solid var(--accent-deep);
+}
+.akeys-new code {
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  user-select: all;
+}
+.akeys-new .meta {
+  margin: 0;
+}

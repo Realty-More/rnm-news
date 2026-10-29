@@ -50,7 +50,7 @@ import { magazinePdf } from './magazine-pdf.ts'
 import { addSubscriber, candidates, savePicks, confirmPage, newsletterBook, newsletterTick, previewIssue, removeSubscriber, saveNlSettings, sendNow, sendTest, subscribe as nlSubscribe, unsubscribePage } from './newsletter.ts'
 import { addPayment, adsBook, removeClient, removeDeal, removePayment, saveClient, saveDeal, updateDeal } from './ads.ts'
 import { getProfile, myProfile, saveProfile } from './profile.ts'
-import { myEmail, ownerLogin, setMyEmail, setOwnerLogin, staffForgot, staffReset } from './staffEmail.ts'
+import { myEmail, ownerKeyInfo, ownerLogin, setMyEmail, setOwnerKey, setOwnerLogin, staffForgot, staffReset } from './staffEmail.ts'
 import { findAccount, grantAccess, revokeAccess, signOutLinked } from './staffAccess.ts'
 import { readerDelete, readerForgot, readerGoogle, readerLogin, readerLogout, readerMe, readerProfile, readerReset, readerSignup, readerSync } from './reader.ts'
 import { getDraft, listDrafts, pressImage, pressToStory, removeDraft, savePressImage, setImageRole } from './press.ts'
@@ -147,6 +147,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await myEmail(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/me/owner-login':
           return json(await ownerLogin(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/me/login-key':
+          return json(await ownerKeyInfo(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/overview':
           return json(await overview(env), 200, headers)
         case '/editor/ideas':
@@ -277,6 +279,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await setMyEmail(env, who, body), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/me/owner-login':
         return json(await setOwnerLogin(env, who, body), 200, { ...headers, 'Cache-Control': 'no-store' })
+      case '/editor/me/login-key':
+        return json(await setOwnerKey(env, who, body), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/access/find':
         return json(await findAccount(env, who, body), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/access/grant':

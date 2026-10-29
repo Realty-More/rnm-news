@@ -157,3 +157,50 @@ export async function setOwnerLogin(env: Env, who: Who, body: unknown) {
     ])
   return { ok: true, phone, email: email ?? '' }
 }
+
+/* ---------- Palash sir's own login key ---------- */
+// One key that signs in ONLY as the owner (Sign in → Team login key). Palash sir makes it himself in
+// My profile (his password needed); it is shown once to him and only its hash is kept (KV owner-login-key).
+// Making a new key replaces the old one; "Remove key" stops it at once.
+
+const OWNER_KEY_KV = 'owner-login-key'
+interface OwnerKeyRec {
+  hash: string
+  created: string
+  lastUsed?: string
+}
+
+/** The owner, if this is his current login key; otherwise null. */
+export async function ownerKeyWho(env: Env, key: string, ctx: ExecutionContext): Promise<Who | null> {
+  if (!/^rnm-[\w-]{30,60}$/.test(key)) return null
+  const rec = await env.SUBS.get<OwnerKeyRec>(OWNER_KEY_KV, 'json')
+  if (!rec || !sameKey(await sha256hex(key), rec.hash)) return null
+  const owner = await env.DB.prepare("SELECT phone, name FROM accounts WHERE role = 'owner' AND status = 'active' ORDER BY created_at LIMIT 1").first<{ phone: string; name: string }>()
+  if (!owner) return null
+  // Last use, at most once an hour (KV writes are limited).
+  if (!rec.lastUsed || Date.now() - Date.parse(rec.lastUsed) > 3600000) ctx.waitUntil(env.SUBS.put(OWNER_KEY_KV, JSON.stringify({ ...rec, lastUsed: new Date().toISOString() })))
+  return { role: 'owner', name: owner.name, phone: owner.phone }
+}
+
+export async function ownerKeyInfo(env: Env, who: Who) {
+  if (who.role !== 'owner') return { can: false }
+  const rec = await env.SUBS.get<OwnerKeyRec>(OWNER_KEY_KV, 'json')
+  return { can: true, has: !!rec, created: rec?.created ?? '', lastUsed: rec?.lastUsed ?? '' }
+}
+
+/** Make (or replace) the key, or remove it. Needs the owner's password. */
+export async function setOwnerKey(env: Env, who: Who, body: unknown) {
+  if (who.role !== 'owner') throw new Error('Only the owner can do this.')
+  const b = (body ?? {}) as { action?: unknown; password?: unknown }
+  const a = await env.DB.prepare("SELECT * FROM accounts WHERE role = 'owner' AND status = 'active' ORDER BY created_at LIMIT 1").first<StaffRow>()
+  if (!a) throw new Error('Set up your mobile login first.')
+  if (typeof b.password !== 'string' || !(await checkPassword(env, b.password, a))) throw new Error('Your password is not right.')
+  if (b.action === 'remove') {
+    await env.SUBS.delete(OWNER_KEY_KV)
+    return { ok: true, removed: true }
+  }
+  const key = `rnm-${b64(crypto.getRandomValues(new Uint8Array(27))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
+  const rec: OwnerKeyRec = { hash: await sha256hex(key), created: new Date().toISOString() }
+  await env.SUBS.put(OWNER_KEY_KV, JSON.stringify(rec))
+  return { ok: true, key, created: rec.created }
+}

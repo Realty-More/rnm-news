@@ -293,7 +293,7 @@ function SignedOut() {
         {mode === 'reset' && <p className="acct-note">We sent a 6-digit code to the email on this account. It works for 20 minutes. Check Spam if you don’t see it.</p>}
         {mode === 'forgot' && <p className="acct-note">Enter your email or mobile number. We’ll send a code to your account’s email to set a new password.</p>}
         {mode === 'signin' && <p className="acct-note">Realty &amp; More team: use your mobile number (or your added email) and team password.</p>}
-        {mode === 'key' && <p className="acct-note">For Realty &amp; More team members who were given a login key. It opens R&amp;M Newsroom.</p>}
+        {mode === 'key' && <p className="acct-note">For Palash sir’s own login key (made in R&amp;M Newsroom → My profile) or a team login key. It opens R&amp;M Newsroom.</p>}
 
         {showGoogle && (mode === 'signin' || mode === 'signup') && (
           <>

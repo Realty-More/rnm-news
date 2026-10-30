@@ -90,7 +90,7 @@ export async function setMyEmail(env: Env, who: Who, body: unknown) {
   if ((await fails(env, pwKey)) >= 5) throw new Error('Too many wrong tries. Please try again in an hour.')
   if (typeof b.password !== 'string' || !(await checkPassword(env, b.password, a))) {
     await addFail(env, pwKey)
-    throw new Error('Your password is not right. Forgot it? Ask Palash sir to add your email from Employees.')
+    throw new Error('That password is not right. Use the password you sign in to R&M Newsroom with (your mobile number login). Forgot it? Ask Palash sir to add your email from Employees.')
   }
   if (!email) {
     await env.DB.prepare('UPDATE accounts SET email = NULL WHERE phone = ?').bind(who.phone).run()

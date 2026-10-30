@@ -467,8 +467,10 @@ function useEmailAdd(onSaved: () => void) {
   const [code, setCode] = useState('')
   const [step, setStep] = useState<'form' | 'code'>('form')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const send = async () => {
     setBusy(true)
+    setError('')
     try {
       const r = await studioPost<{ sent?: boolean; email: string }>('me/email', { email, password: pw })
       if (r.sent) {
@@ -479,13 +481,14 @@ function useEmailAdd(onSaved: () => void) {
         onSaved()
       }
     } catch (e) {
-      toast((e as Error).message)
+      setError((e as Error).message)
     } finally {
       setBusy(false)
     }
   }
   const verify = async () => {
     setBusy(true)
+    setError('')
     try {
       await studioPost('me/email', { email, code })
       toast('Email added. You can now sign in with it and reset your password yourself.')
@@ -494,12 +497,12 @@ function useEmailAdd(onSaved: () => void) {
       setCode('')
       onSaved()
     } catch (e) {
-      toast((e as Error).message)
+      setError((e as Error).message)
     } finally {
       setBusy(false)
     }
   }
-  return { email, setEmail, pw, setPw, code, setCode, step, setStep, busy, send, verify }
+  return { email, setEmail, pw, setPw, code, setCode, step, setStep, busy, send, verify, error, setError }
 }
 
 /**
@@ -525,8 +528,8 @@ export function EmailNudge() {
       {f.step === 'form' ? (
         <>
           <input type="email" value={f.email} onChange={(e) => f.setEmail(e.target.value)} placeholder="you@gmail.com" autoComplete="email" required aria-label="Your email" />
-          <input type="password" value={f.pw} onChange={(e) => f.setPw(e.target.value)} placeholder="Your password" autoComplete="current-password" required aria-label="Your password" />
-          <button className="btn small" disabled={f.busy || !f.email.includes('@') || !f.pw}>
+          <input type="password" value={f.pw} onChange={(e) => f.setPw(e.target.value)} placeholder="Your Newsroom password" autoComplete="current-password" required aria-label="Your Newsroom password" />
+          <button className="btn small" disabled={f.busy}>
             {f.busy ? 'Sending…' : 'Send code'}
           </button>
         </>
@@ -540,6 +543,11 @@ export function EmailNudge() {
             {f.busy ? 'Checking…' : 'Verify and save'}
           </button>
         </>
+      )}
+      {f.error && (
+        <p className="email-nudge-err" role="alert">
+          {f.error}
+        </p>
       )}
     </form>
   )
@@ -621,6 +629,11 @@ function LoginEmail() {
                 </button>
               </div>
             </>
+          )}
+          {f.error && (
+            <p className="email-nudge-err" role="alert">
+              {f.error}
+            </p>
           )}
         </form>
       )}

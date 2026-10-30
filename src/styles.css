@@ -9612,3 +9612,14 @@ button.mk-cover:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+.email-nudge-err {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgb(217 80 46 / 0.1);
+  color: #c2412a;
+  font-size: 13.5px;
+  font-weight: 600;
+}

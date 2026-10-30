@@ -202,8 +202,8 @@ export function AddEmployeeDialog({ onClose, onAdded, office }: { onClose: () =>
             </span>
           </label>
           <label>
-            Email <small>(optional: sign-in, password reset and task / leave emails)</small>
-            <input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="e.g. vimal@gmail.com" autoComplete="off" />
+            Email <small>(for sign-in, password reset and task / leave emails)</small>
+            <input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="e.g. vimal@gmail.com" autoComplete="off" required />
           </label>
           <label>
             Designation <small>(optional)</small>
@@ -230,7 +230,7 @@ export function AddEmployeeDialog({ onClose, onAdded, office }: { onClose: () =>
             </label>
           )}
           <div className="action-row">
-            <button className="btn" disabled={busy || endBeforeStart || f.name.trim().length < 2 || f.phone.replace(/\D/g, '').length < 10}>
+            <button className="btn" disabled={busy || endBeforeStart || f.name.trim().length < 2 || f.phone.replace(/\D/g, '').length < 10 || !/^\S+@\S+\.\S+$/.test(f.email.trim())}>
               {busy ? 'Adding…' : 'Add employee'}
             </button>
             <button type="button" className="btn ghost" onClick={onClose}>

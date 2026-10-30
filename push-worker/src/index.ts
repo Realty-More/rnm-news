@@ -300,6 +300,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       case '/editor/access/signout':
         return json(await signOutLinked(env, who, body), 200, headers)
       case '/editor/accounts/add':
+        // A new employee always gets an email (sign-in, password reset, task and leave emails).
+        if (!String((body as { email?: unknown })?.email ?? '').trim()) return json({ error: 'Enter the employee’s email address.' }, 400, headers)
         return json(await addStaffLogin(env, body, who), 200, { ...headers, 'Cache-Control': 'no-store' })
       case '/editor/team/month-email-now':
         return full(who) ? json({ result: await sendMonthEmail(env, true, String((body as { month?: unknown })?.month ?? '') || undefined) }, 200, headers) : ownerOnly()

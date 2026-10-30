@@ -583,6 +583,9 @@ describe('personal office hours and attendance reminders', () => {
     // 19:00 IST: still checked in 30 min after an 18:30 end.
     const att = new Map([['std', { check_in: '2026-10-27T04:30:00Z', check_out: null }]])
     expect(planNudges(people, s, att, new Set(), '2026-10-27', 19 * 60).checkOut.map((p) => p.id)).toEqual(['std'])
+    // 18:10 IST: 20 min before an 18:30 end, checked in, no report yet → report reminder (not if reported).
+    expect(planNudges(people, s, att, new Set(), '2026-10-27', 18 * 60 + 10).reportDue.map((p) => p.id)).toEqual(['std'])
+    expect(planNudges(people, s, att, new Set(), '2026-10-27', 18 * 60 + 10, new Set(['std'])).reportDue).toEqual([])
     // Sunday is a weekly off: nothing.
     expect(planNudges(people, s, none, new Set(), '2026-11-01', 10 * 60 + 20).checkIn).toEqual([])
     // Reminders switched off.

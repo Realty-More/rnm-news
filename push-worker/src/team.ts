@@ -564,15 +564,18 @@ export function planNudges(
   onLeave: Set<string>,
   day: string,
   mins: number,
-): { checkIn: { id: string; name: string; start: string }[]; checkOut: { id: string; name: string; end: string }[] } {
+  reported: Set<string> = new Set(),
+): { checkIn: { id: string; name: string; start: string }[]; checkOut: { id: string; name: string; end: string }[]; reportDue: { id: string; name: string; end: string }[] } {
   const weekday = new Date(`${day}T00:00:00Z`).getUTCDay()
-  const out = { checkIn: [] as { id: string; name: string; start: string }[], checkOut: [] as { id: string; name: string; end: string }[] }
+  const out = { checkIn: [] as { id: string; name: string; start: string }[], checkOut: [] as { id: string; name: string; end: string }[], reportDue: [] as { id: string; name: string; end: string }[] }
   for (const p of people) {
     const ps = forPerson(s, p.id)
     if (ps.weekOff.includes(weekday) || onLeave.has(p.id)) continue
     const a = att.get(p.id)
     if (s.notifyCheckIn && !a?.check_in && inWindow(mins, toMin(ps.startTime) + s.graceMin)) out.checkIn.push({ id: p.id, name: p.name, start: ps.startTime })
     if (s.notifyCheckOut && a?.check_in && !a.check_out && inWindow(mins, toMin(ps.endTime) + 30)) out.checkOut.push({ id: p.id, name: p.name, end: ps.endTime })
+    // 20 minutes before their shift ends: still working and no report yet.
+    if (s.notifyCheckOut && a?.check_in && !a.check_out && !reported.has(p.id) && inWindow(mins, toMin(ps.endTime) - 20)) out.reportDue.push({ id: p.id, name: p.name, end: ps.endTime })
   }
   return out
 }
@@ -611,16 +614,17 @@ export async function attendanceNudges(env: Env, now = Date.now()): Promise<stri
   const wantSummary = s.managerSummary && inWindow(mins, summaryAt) && !(await env.SUBS.get(`state:att-summary:${day}`))
   // Quick exit outside every reminder window, so most cron runs read nothing else.
   const times = [s, ...Object.keys(s.people).map((id) => forPerson(s, id))]
-  const near = times.some((t) => inWindow(mins, toMin(t.startTime) + s.graceMin) || inWindow(mins, toMin(t.endTime) + 30))
+  const near = times.some((t) => inWindow(mins, toMin(t.startTime) + s.graceMin) || inWindow(mins, toMin(t.endTime) + 30) || inWindow(mins, toMin(t.endTime) - 20))
   if (!near && !wantSummary) return 'no nudges due'
-  const [people, attRows, leave] = await Promise.all([
+  const [people, attRows, leave, reps] = await Promise.all([
     assignablePeople(env),
     env.DB.prepare('SELECT person_id, check_in, check_out FROM attendance WHERE day = ?1').bind(day).all<{ person_id: string; check_in: string | null; check_out: string | null }>(),
     leaveOnDay(env, day),
+    env.DB.prepare('SELECT person_id FROM reports WHERE day = ?1').bind(day).all<{ person_id: string }>(),
   ])
   const att = new Map(attRows.results.map((a) => [a.person_id, a]))
   const onLeave = new Set(leave.keys())
-  const plan = planNudges(people, s, att, onLeave, day, mins)
+  const plan = planNudges(people, s, att, onLeave, day, mins, new Set(reps.results.map((r) => r.person_id)))
   // Each person gets each reminder at most once a day.
   const fresh = async (kind: string, id: string) => {
     const key = `state:nudge:${kind}:${day}:${id.slice(0, 40)}`
@@ -633,6 +637,9 @@ export async function attendanceNudges(env: Env, now = Date.now()): Promise<stri
     if (await fresh('in', p.id)) notices.set(p.id, { title: `Good morning, ${p.name.split(' ')[0]}`, body: `Your office time is ${p.start}. You haven’t checked in yet. Tap to check in.`, url: '#/studio?tab=myday', tag: 'checkin-reminder' })
   for (const p of plan.checkOut)
     if (await fresh('out', p.id)) notices.set(p.id, { title: 'Still checked in', body: `Your day ended at ${p.end}. Add today’s report and check out before you leave.`, url: '#/studio?tab=myday', tag: 'checkout-reminder' })
+  for (const p of plan.reportDue)
+    if (!notices.has(p.id) && (await fresh('report-due', p.id)))
+      notices.set(p.id, { title: 'Shift ends in 20 min', body: `Your day ends at ${p.end}. Please add today’s work report before you check out.`, url: '#/studio?tab=myday', tag: 'report-due' })
   let sent = 0
   if (notices.size)
     sent = (
@@ -651,7 +658,7 @@ export async function attendanceNudges(env: Env, now = Date.now()): Promise<stri
       summary = `, summary to ${r.sent}`
     }
   }
-  return `nudges: ${plan.checkIn.length} in, ${plan.checkOut.length} out, sent ${sent}${summary}`
+  return `nudges: ${plan.checkIn.length} in, ${plan.checkOut.length} out, ${plan.reportDue.length} report due, sent ${sent}${summary}`
 }
 
 /**

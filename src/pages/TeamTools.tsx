@@ -302,6 +302,30 @@ export function MyDayTab() {
 
   return (
     <>
+      {a?.check_in && !a.check_out && now !== null && left <= 20 && (
+        <div className={`md-nudge ${d.report ? 'ok' : left <= 0 ? 'late' : ''}`} role="status">
+          <span className="md-nudge-ico" aria-hidden="true">
+            {d.report ? '✅' : '⏰'}
+          </span>
+          <div>
+            <b>
+              {d.report
+                ? left > 0
+                  ? `Report sent. Shift ends in ${left} min`
+                  : 'Report sent. Don’t forget to check out'
+                : left > 0
+                  ? `Shift ends in ${left} min, your report is pending`
+                  : `Shift ended ${hm(-left).replace(/^0h /, '')} ago, report pending`}
+            </b>
+            <small>{d.report ? 'Check out before you leave so your hours are saved.' : 'Write what you did today, then check out.'}</small>
+          </div>
+          {!d.report && (
+            <button className="btn small" onClick={() => document.querySelector('.md-report')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              Write report
+            </button>
+          )}
+        </div>
+      )}
       <section className="md-hero">
         <div className="md-top">
           <div className="md-hello">

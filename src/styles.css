@@ -10366,3 +10366,75 @@ button.mk-cover:focus-visible {
     animation: none;
   }
 }
+
+/* My day: smart reminder near the end of the shift */
+.md-nudge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(110deg, rgb(251 165 25 / 0.18), rgb(242 113 28 / 0.1));
+  border: 1px solid rgb(242 113 28 / 0.4);
+  animation: md-tile-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.md-nudge.late {
+  background: linear-gradient(110deg, rgb(217 80 46 / 0.16), rgb(242 113 28 / 0.08));
+  border-color: rgb(217 80 46 / 0.45);
+}
+.md-nudge.ok {
+  background: linear-gradient(110deg, rgb(46 157 91 / 0.14), rgb(59 125 221 / 0.08));
+  border-color: rgb(46 157 91 / 0.35);
+}
+.md-nudge > div {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.md-nudge b {
+  font-size: 14.5px;
+}
+.md-nudge small {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+.md-nudge-ico {
+  font-size: 24px;
+  animation: md-ring-shake 2.6s ease-in-out 0.6s infinite;
+}
+.md-nudge.ok .md-nudge-ico {
+  animation: none;
+}
+@keyframes md-ring-shake {
+  0%, 70%, 100% {
+    transform: rotate(0);
+  }
+  74% {
+    transform: rotate(-14deg);
+  }
+  78% {
+    transform: rotate(12deg);
+  }
+  82% {
+    transform: rotate(-8deg);
+  }
+  86% {
+    transform: rotate(5deg);
+  }
+}
+@media (max-width: 480px) {
+  .md-nudge {
+    flex-wrap: wrap;
+  }
+  .md-nudge .btn {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-nudge,
+  .md-nudge-ico {
+    animation: none;
+  }
+}

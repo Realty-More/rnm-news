@@ -10089,3 +10089,98 @@ button.mk-cover:focus-visible {
     transition: none;
   }
 }
+
+/* Celebrations: end-of-day card (My day) and team banner (Team today) */
+.day-done {
+  display: grid;
+  gap: 16px;
+  text-align: center;
+}
+.day-done-hero {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 18px 12px;
+  border-radius: var(--radius);
+  background: radial-gradient(120% 120% at 50% 0%, rgb(251 165 25 / 0.22), transparent 70%), var(--surface);
+}
+.day-done-emoji {
+  font-size: 40px;
+  animation: day-pop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.day-done-hero b {
+  font: 700 34px/1.1 var(--serif);
+  color: var(--ink);
+}
+.day-done-hero small {
+  color: var(--mute);
+  font-size: 14px;
+}
+.day-done-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.day-done-stats span {
+  display: grid;
+  gap: 2px;
+  padding: 10px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  font: 700 15px var(--sans);
+}
+.day-done-stats small {
+  font: 700 10.5px var(--cond);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.day-done .action-row {
+  justify-content: center;
+}
+@keyframes day-pop {
+  from {
+    transform: scale(0.3) rotate(-20deg);
+    opacity: 0;
+  }
+}
+.tm-cele {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(110deg, rgb(46 157 91 / 0.14), rgb(251 165 25 / 0.14));
+  border: 1px solid rgb(46 157 91 / 0.3);
+  animation: md-tile-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.tm-cele > span {
+  font-size: 26px;
+  animation: day-pop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) 0.1s both;
+}
+.tm-cele div {
+  display: grid;
+  gap: 2px;
+}
+.tm-cele small {
+  color: var(--mute);
+}
+@media (prefers-reduced-motion: reduce) {
+  .day-done-emoji,
+  .tm-cele,
+  .tm-cele > span {
+    animation: none;
+  }
+}
+
+/* Serif numbers as clear modern figures (Playfair's old-style 0 looks like "o") */
+.md-ring-text b,
+.day-done-hero b,
+.md-facts b,
+.tm-kpi b,
+.kpi b,
+.emp-pill.shift {
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+}

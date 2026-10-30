@@ -1,6 +1,6 @@
 // Team attendance and daily work reports in the Content Studio.
 // Employees: "My day" (check in/out, daily report). Owner: "Team today" and monthly "Attendance" with CSV export.
-import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
@@ -9,7 +9,8 @@ import { useAsync } from '../lib/hooks.ts'
 import { studio, studioPost } from '../lib/owner.ts'
 import { getSpot, mapLink } from '../lib/location.ts'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
-import { AddEmployeeDialog, RowMenu } from './EmployeesTools.tsx'
+import { AddEmployeeDialog, Dialog, RowMenu } from './EmployeesTools.tsx'
+import { buzz, confetti, firstToday } from '../lib/confetti.ts'
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
 import { MyTasksPanel } from './WorkTools.tsx'
@@ -219,6 +220,8 @@ export function MyDayTab() {
   const res = useAsync('studio:myday', (s) => studio<Today>('me/today', undefined, s))
   const hist = useAsync('studio:myhistory', (s) => studio<{ days: { day: string; checkIn: string | null; checkOut: string | null; late: boolean; minutes: number; report: string | null }[] }>('me/history', undefined, s))
   const [mode, setMode] = useState('office')
+  const [dayDone, setDayDone] = useState<{ minutes: number; inAt: string; outAt: string; report: boolean; full: boolean } | null>(null)
+  const shiftLenRef = useRef(480)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({ done: '', plan: '', blockers: '', links: '' })
@@ -237,9 +240,20 @@ export function MyDayTab() {
   const act = async (path: string, body: unknown, done: string) => {
     setBusy(true)
     try {
-      const r = await studioPost<{ ok?: boolean; error?: string }>(path, body)
+      const r = await studioPost<{ ok?: boolean; error?: string; late?: boolean; minutes?: number; report?: unknown; attendance?: { check_in: string | null; check_out: string | null } }>(path, body)
       if (r.ok === false) throw new Error(r.error)
       toast(done)
+      // On time: a small celebration. A finished day: a summary card (confetti for a full shift).
+      if (path === 'me/checkin' && !r.late) {
+        confetti()
+        buzz([20, 40, 20])
+      }
+      if (path === 'me/checkout' && r.attendance?.check_in) {
+        const full = (r.minutes ?? 0) >= shiftLenRef.current * 0.95
+        setDayDone({ minutes: r.minutes ?? 0, inAt: r.attendance.check_in, outAt: r.attendance.check_out ?? new Date().toISOString(), report: !!r.report, full })
+        if (full) confetti(180)
+        buzz(full ? [30, 50, 30, 50, 60] : 30)
+      }
       res.reload()
       hist.reload()
     } catch (e) {
@@ -263,6 +277,7 @@ export function MyDayTab() {
   const start = toMin(d.settings.startTime, 600)
   const end = toMin(d.settings.endTime, start + 480)
   const shiftLen = Math.max(60, end - start)
+  shiftLenRef.current = shiftLen
   const inAt = a?.check_in ? istMin(a.check_in) : null
   const outAt = a?.check_out ? istMin(a.check_out) : null
   const from = Math.max(0, Math.floor((Math.min(start, inAt ?? start) - 60) / 60) * 60)
@@ -388,6 +403,50 @@ export function MyDayTab() {
           </div>
         )}
       </section>
+
+      {dayDone && (
+        <Dialog title={dayDone.full ? 'Great day!' : 'Checked out'} onClose={() => setDayDone(null)}>
+          <div className="day-done">
+            <div className="day-done-hero">
+              <span className="day-done-emoji" aria-hidden="true">
+                {dayDone.full ? '🎉' : '👋'}
+              </span>
+              <b>{hm(dayDone.minutes)}</b>
+              <small>{dayDone.full ? `Full shift done, ${d.name.split(' ')[0]}. Well done!` : `Thanks, ${d.name.split(' ')[0]}. See you tomorrow.`}</small>
+            </div>
+            <div className="day-done-stats">
+              <span>
+                <small>In</small>
+                {clock(dayDone.inAt)}
+              </span>
+              <span>
+                <small>Out</small>
+                {clock(dayDone.outAt)}
+              </span>
+              <span>
+                <small>Report</small>
+                {dayDone.report ? '✓ Sent' : 'Not yet'}
+              </span>
+            </div>
+            <div className="action-row">
+              {!dayDone.report && (
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setDayDone(null)
+                    document.querySelector('.md-report, form.report-form, #report')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                >
+                  Add today’s report
+                </button>
+              )}
+              <button className={`btn ${dayDone.report ? '' : 'ghost'}`} onClick={() => setDayDone(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
 
       <section className="panel md-week" aria-label="This week">
         <div className="panel-head">
@@ -599,6 +658,14 @@ export function TeamTodayTab() {
   const shown = rows.filter((r) => (filter === 'working' ? r.p.checkIn && !r.p.checkOut : filter === 'missing' ? !r.p.checkIn && !r.p.leave : filter === 'late' ? r.p.late : filter === 'pending' ? r.p.checkIn && !r.p.report : true))
   const present = d?.summary.present ?? 0
   const total = d?.summary.total ?? 0
+  const due = rows.filter((r) => !r.p.leave)
+  const allIn = isToday && due.length > 0 && due.every((r) => r.p.checkIn) && count.late === 0
+  const allReports = isToday && due.length > 0 && due.every((r) => r.p.checkIn && r.p.report)
+  // Celebrate once a day on this device: the whole team in on time, then every report in.
+  useEffect(() => {
+    if (allReports && firstToday('team-reports')) confetti(160)
+    else if (allIn && firstToday('team-in')) confetti(160)
+  }, [allIn, allReports])
   const teamMinutes = rows.reduce((n, r) => n + (r.p.checkIn ? r.minutes : 0), 0)
 
   return (
@@ -684,6 +751,15 @@ export function TeamTodayTab() {
             </div>
           </div>
 
+          {(allIn || allReports) && (
+            <div className="tm-cele" role="status">
+              <span aria-hidden="true">{allReports ? '🏆' : '🎉'}</span>
+              <div>
+                <b>{allReports ? 'All reports are in' : 'Everyone is in, on time'}</b>
+                <small>{allReports ? `${due.length} of ${due.length} people sent today’s report.` : `${due.length} of ${due.length} checked in, nobody late.`}</small>
+              </div>
+            </div>
+          )}
           <div className="tm-filters chips" role="tablist" aria-label="Show">
             {(
               [

@@ -133,14 +133,33 @@ function ShiftBar({ from, to, start, end, inAt, outAt, now, grace = 0, hours = t
         <div className="sb-hours" aria-hidden="true">
           {ticks
             .filter((_, i) => i % (span > 600 ? 2 : 1) === 0)
-            .map((t) => (
-              <span key={t} style={{ left: x(t) }}>
+            .map((t, i) => (
+              <span key={t} className={i % 2 ? 'odd' : ''} style={{ left: x(t) }}>
                 {label12(t).replace(':00', '')}
               </span>
             ))}
         </div>
       )}
     </div>
+  )
+}
+
+/** Small line icons for the My day tiles (24 px grid). */
+const MD_ICON: Record<string, string> = {
+  in: 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3',
+  office: 'M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1',
+  remote: 'M3 11l9-8 9 8M5 10v11h14V10M10 21v-6h4v6',
+  field: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
+  out: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+}
+function MdIcon({ name, tone = 'gold' }: { name: string; tone?: 'gold' | 'green' | 'orange' | 'blue' }) {
+  return (
+    <span className={`md-ico ${tone}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d={MD_ICON[name] ?? MD_ICON.flag} />
+      </svg>
+    </span>
   )
 }
 
@@ -158,8 +177,15 @@ function Ring({ value, total, children }: { value: number; total: number; childr
   return (
     <div className="md-ring">
       <svg viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <linearGradient id="md-ring-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#FFD36B" />
+            <stop offset="55%" stopColor="#FBA519" />
+            <stop offset="100%" stopColor="#F2711C" />
+          </linearGradient>
+        </defs>
         <circle cx="60" cy="60" r={r} className="md-ring-bg" />
-        <circle cx="60" cy="60" r={r} className="md-ring-fg" strokeDasharray={c} strokeDashoffset={shown ? c * (1 - pct) : c} />
+        <circle cx="60" cy="60" r={r} className="md-ring-fg" stroke="url(#md-ring-grad)" strokeDasharray={c} strokeDashoffset={shown ? c * (1 - pct) : c} />
       </svg>
       <div className="md-ring-text">{children}</div>
     </div>
@@ -284,19 +310,36 @@ export function MyDayTab() {
         ) : (
           <div className="md-facts">
             <div>
-              <small>Checked in</small>
+              <div className="md-fact-head">
+                <MdIcon name="in" tone={d.late ? 'orange' : 'green'} />
+                <small>Checked in</small>
+              </div>
               <b>{clock(a.check_in)}</b>
               <span className={`md-chip ${d.late ? 'warn' : 'ok'}`}>{d.late ? `Late by ${hm(lateBy)}` : 'On time'}</span>
             </div>
             <div>
-              <small>Working from</small>
+              <div className="md-fact-head">
+                <MdIcon name={a.mode === 'remote' ? 'remote' : a.mode === 'field' ? 'field' : 'office'} tone="blue" />
+                <small>Working from</small>
+              </div>
               <b>{MODE_LABEL[a.mode ?? 'office']}</b>
               <PlaceTag p={d.place?.in} missing="Location not shared" />
             </div>
-            <div>
-              <small>{a.check_out ? 'Checked out' : 'Shift ends'}</small>
+            <div className="md-fact-wide">
+              <div className="md-fact-head">
+                <MdIcon name={a.check_out ? 'out' : 'flag'} tone="gold" />
+                <small>{a.check_out ? 'Checked out' : 'Shift ends'}</small>
+              </div>
               <b>{a.check_out ? clock(a.check_out) : d.settings.endTime ?? '–'}</b>
               {!a.check_out && now !== null && <span className="md-chip">{left > 0 ? `${hm(left)} to go` : `${hm(-left)} over`}</span>}
+              {shiftLen > 0 && (
+                <div className="md-prog" role="img" aria-label={`${Math.min(100, Math.round((live / shiftLen) * 100))}% of the shift done`}>
+                  <div className="md-prog-track">
+                    <i style={{ width: `${Math.min(100, Math.round((live / shiftLen) * 100))}%` }} />
+                  </div>
+                  <span>{Math.min(100, Math.round((live / shiftLen) * 100))}% of shift</span>
+                </div>
+              )}
               {a.check_out && <PlaceTag p={d.place?.out} missing="Location not shared" />}
             </div>
             {!a.check_out && (
@@ -691,6 +734,7 @@ export function TeamTodayTab() {
                 <div className="tm-side">
                   {p.checkIn && (
                     <RowMenu
+                      title={p.name}
                       items={[
                         ...(p.checkOut ? [{ label: 'Undo check-out', onClick: () => void resetAtt(p.id, p.name, 'checkout') }] : []),
                         { label: 'Reset attendance for this day', danger: true, onClick: () => void resetAtt(p.id, p.name, 'all') },

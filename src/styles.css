@@ -125,7 +125,7 @@ h3 {
   top: 0;
   z-index: 30;
   padding-top: env(safe-area-inset-top);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  background: color-mix(in srgb, var(--bg) 97%, transparent);
   backdrop-filter: saturate(1.6) blur(14px);
   -webkit-backdrop-filter: saturate(1.6) blur(14px);
   border-bottom: 1px solid var(--line);
@@ -6374,19 +6374,6 @@ a.mini-btn {
     padding: 14px 12px;
     font-size: 16px;
   }
-  .row-menu-list {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    top: auto;
-    bottom: calc(78px + env(safe-area-inset-bottom));
-    z-index: 60;
-    border-radius: var(--radius);
-  }
-  .row-menu-list button {
-    padding: 14px 12px;
-    font-size: 16px;
-  }
 }
 
 /* Photo crop */
@@ -9622,4 +9609,302 @@ button.mk-cover:focus-visible {
   color: #c2412a;
   font-size: 13.5px;
   font-weight: 600;
+}
+
+/* Row "⋯" menu: opens upwards near the bottom of the screen; on phones a bottom sheet. */
+.row-menu-list.up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(10 10 12 / 0.45);
+  animation: sheet-fade 0.18s ease-out both;
+}
+.sheet {
+  width: 100%;
+  max-width: 520px;
+  padding: 8px 12px calc(12px + env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+  background: var(--bg);
+  box-shadow: 0 -10px 40px rgb(0 0 0 / 0.25);
+  animation: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.sheet-grip {
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 4px auto 10px;
+  border-radius: 4px;
+  background: var(--line);
+}
+.sheet-title {
+  padding: 2px 8px 10px;
+  border-bottom: 1px solid var(--line);
+  font: 700 15px var(--sans);
+  color: var(--ink);
+}
+.sheet-items {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+}
+.sheet-items button,
+.sheet-cancel {
+  text-align: left;
+  padding: 14px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--ink);
+  font: 500 16px var(--sans);
+  cursor: pointer;
+}
+.sheet-items button:active {
+  background: var(--surface);
+}
+.sheet-items button.danger {
+  color: #d9502e;
+}
+.sheet-cancel {
+  width: 100%;
+  margin-top: 4px;
+  text-align: center;
+  font-weight: 700;
+  background: var(--surface);
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet-scrim {
+    animation: none;
+  }
+}
+
+/* Employees: status pills under the name (clean on phones and desktop) */
+.emp-row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 14px;
+  border-radius: var(--radius);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.emp-row:hover {
+  border-color: rgb(245 130 32 / 0.35);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.05);
+}
+.emp-main strong {
+  font-size: 16px;
+}
+.emp-facts {
+  order: 3;
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding-left: 56px;
+}
+.emp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font: 600 12.5px var(--sans);
+  white-space: nowrap;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.emp-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.emp-pill.online {
+  background: rgb(46 157 91 / 0.12);
+  color: #23874d;
+}
+.emp-pill.online i {
+  box-shadow: 0 0 0 0 rgb(46 157 91 / 0.5);
+  animation: emp-pulse 1.8s ease-out infinite;
+}
+.emp-pill.in {
+  background: rgb(59 125 221 / 0.12);
+  color: #2f68bf;
+}
+.emp-pill.out {
+  background: var(--surface);
+  color: var(--mute);
+}
+.emp-pill.pending {
+  background: rgb(250 166 27 / 0.16);
+  color: #a86b00;
+}
+.emp-pill.shift {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.emp-seen {
+  font-size: 12.5px;
+  color: var(--mute);
+}
+@keyframes emp-pulse {
+  70% {
+    box-shadow: 0 0 0 6px rgb(46 157 91 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(46 157 91 / 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .emp-pill.online i {
+    animation: none;
+  }
+}
+@media (max-width: 760px) {
+  .emp-facts {
+    padding-left: 0;
+  }
+  .emp-main .meta {
+    white-space: normal;
+  }
+}
+
+/* Old login keys: buttons wrap on phones */
+.acct-btns,
+.merge-box {
+  flex-wrap: wrap;
+}
+
+/* My day: icon tiles, shift progress, gradient ring, tidy hour labels */
+@media (max-width: 560px) {
+  .sb-hours span.odd {
+    display: none;
+  }
+}
+.md-ring-fg {
+  stroke-linecap: round;
+}
+.md-fact-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.md-ico {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  background: rgb(250 166 27 / 0.16);
+  color: #fbb94a;
+  box-shadow: inset 0 0 0 1px rgb(250 166 27 / 0.22);
+}
+.md-ico.green {
+  background: rgb(46 157 91 / 0.18);
+  color: #5ad08b;
+  box-shadow: inset 0 0 0 1px rgb(46 157 91 / 0.3);
+}
+.md-ico.orange {
+  background: rgb(242 113 28 / 0.18);
+  color: #ff9a55;
+  box-shadow: inset 0 0 0 1px rgb(242 113 28 / 0.3);
+}
+.md-ico.blue {
+  background: rgb(59 125 221 / 0.2);
+  color: #8db8ff;
+  box-shadow: inset 0 0 0 1px rgb(59 125 221 / 0.32);
+}
+.md-facts > div {
+  position: relative;
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.015));
+  border: 1px solid rgb(255 255 255 / 0.09);
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+.md-facts > div:hover {
+  transform: translateY(-1px);
+  border-color: rgb(250 166 27 / 0.35);
+}
+.md-prog {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  width: 100%;
+  align-self: stretch;
+}
+.md-prog-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 6px;
+  min-width: 60px;
+  background: rgb(255 255 255 / 0.14);
+  overflow: hidden;
+}
+.md-prog-track i {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  min-width: 6px;
+  background: linear-gradient(90deg, #ffd36b, #fba519 55%, #f2711c);
+  box-shadow: 0 0 10px rgb(251 165 25 / 0.5);
+  transform-origin: left;
+  animation: md-prog-in 1.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.md-prog span {
+  font: 600 12px var(--sans);
+  color: #b9b9bd;
+  white-space: nowrap;
+}
+@keyframes md-prog-in {
+  from {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-prog-track i {
+    animation: none;
+  }
+}
+
+/* Old login keys on phones: the buttons go on their own lines */
+@media (max-width: 640px) {
+  .cal-list li {
+    flex-wrap: wrap;
+  }
+  .acct-btns {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .merge-box {
+    display: flex;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .merge-box input {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
 }

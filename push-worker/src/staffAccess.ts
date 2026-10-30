@@ -198,6 +198,17 @@ export async function linkToTeamLogin(env: Env, who: Who, readerId: number, pers
 }
 
 /**
+ * The team login's email also goes on the person's own app account (My account), so it isn't asked
+ * for twice. Skipped when another app account already uses that email.
+ */
+export async function syncAppEmail(env: Env, phone: string, email: string | null) {
+  if (!email) return
+  const taken = await env.DB.prepare('SELECT id FROM readers WHERE email = ?').bind(email).first<{ id: number }>()
+  const { results } = await env.DB.prepare('SELECT reader_id FROM staff_links WHERE person_id = ?').bind(`ph:${phone}`).all<{ reader_id: number }>()
+  for (const r of results) if (!taken || taken.id === r.reader_id) await env.DB.prepare('UPDATE readers SET email = ? WHERE id = ?').bind(email, r.reader_id).run()
+}
+
+/**
  * One login for both: when the owner or a team member signs in with their mobile number (or email),
  * they are also signed in to their Realtynmore app account (saved stories, feed, My account).
  * The account is the one already linked to that login, or one with the same mobile number (its old
@@ -234,6 +245,8 @@ export async function readerForStaff(env: Env, phone: string): Promise<{ token: 
       .bind(rid, a.role === 'admin' ? 'admin' : 'editor', new Date().toISOString(), pid)
       .run()
   }
+  // An email added to the team login later fills an empty email on the app account.
+  if (a.email) await env.DB.prepare('UPDATE readers SET email = ? WHERE id = ? AND email IS NULL AND NOT EXISTS (SELECT 1 FROM readers WHERE email = ?)').bind(a.email, rid, a.email).run()
   const r = await env.DB.prepare('SELECT * FROM readers WHERE id = ?').bind(rid).first<Parameters<typeof publicMe>[0]>()
   if (!r) return null
   return { token: await newSession(env, rid), me: publicMe(r, await accessOf(env, rid)) }

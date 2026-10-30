@@ -5,6 +5,8 @@
 //   • + Add employee (backup): a mobile login with a temporary password, as before.
 // Reset a password, give or remove full access, log out everywhere, remove.
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { Icon } from '../components/Icon.tsx'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
@@ -83,6 +85,31 @@ export function seenLabel(iso: string | null | undefined, now = Date.now()): str
 const APP = 'https://realty-more.github.io/rnm-news/#/studio'
 const loginMessage = (name: string, phone: string, password: string) =>
   `Hi ${name.split(' ')[0]}, your R&M Newsroom login (Realtynmore app):\nMobile: ${phone}\nTemporary password: ${password}\nOpen: ${APP}\nOn first login you will set your own password.`
+
+/** Status pills under a person's name: presence, account status, shift and last seen. */
+function EmpFacts({ presence, status = 'active', shift, seen }: { presence: { tone: 'online' | 'in' | 'out'; text: string }; status?: 'active' | 'pending' | 'declined'; shift: string; seen: string }) {
+  return (
+    <div className="emp-facts">
+      {status === 'pending' ? (
+        <span className="emp-pill pending">Awaiting first sign-in</span>
+      ) : status === 'declined' ? (
+        <span className="emp-pill out">Declined</span>
+      ) : (
+        <span className={`emp-pill ${presence.tone}`}>
+          <i aria-hidden="true" />
+          {presence.text}
+        </span>
+      )}
+      {shift && (
+        <span className="emp-pill shift">
+          <Icon name="clock" size={13} />
+          {shift.replace('–', ' – ')}
+        </span>
+      )}
+      {seen && <span className="emp-seen">{seen}</span>}
+    </div>
+  )
+}
 
 /** A centred dialog (a sheet from the bottom on phones). Escape or the backdrop closes it. */
 export function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -598,38 +625,65 @@ export function AccessKeys() {
   )
 }
 
-/** The "⋯" menu on each employee row. */
-export function RowMenu({ items }: { items: { label: string; danger?: boolean; onClick: () => void }[] }) {
-  const [open, setOpen] = useState(false)
+/**
+ * The "⋯" menu on a row. On phones it opens as a sheet from the bottom with the row's name on top
+ * (so it never looks like part of the section below); on larger screens as a small dropdown that
+ * opens upwards when there is no room below.
+ */
+export function RowMenu({ items, title }: { items: { label: string; danger?: boolean; onClick: () => void }[]; title?: string }) {
+  const [open, setOpen] = useState<false | 'down' | 'up' | 'sheet'>(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
-    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    const close = (e: MouseEvent) => open !== 'sheet' && !ref.current?.contains(e.target as Node) && setOpen(false)
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
     document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
+    window.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      window.removeEventListener('keydown', esc)
+    }
   }, [open])
+  const toggle = () => {
+    if (open) return setOpen(false)
+    if (window.matchMedia('(max-width: 640px)').matches) return setOpen('sheet')
+    const r = ref.current?.getBoundingClientRect()
+    const need = items.length * 42 + 24
+    setOpen(r && window.innerHeight - r.bottom < need && r.top > need ? 'up' : 'down')
+  }
+  const pick = (fn: () => void) => {
+    setOpen(false)
+    fn()
+  }
+  const buttons = items.map((i) => (
+    <button key={i.label} role="menuitem" className={i.danger ? 'danger' : ''} onClick={() => pick(i.onClick)}>
+      {i.label}
+    </button>
+  ))
   return (
     <div className="row-menu" ref={ref}>
-      <button className="icon-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="More actions">
+      <button className="icon-btn" onClick={toggle} aria-haspopup="menu" aria-expanded={!!open} aria-label={title ? `More actions for ${title}` : 'More actions'}>
         ⋯
       </button>
-      {open && (
-        <div className="row-menu-list" role="menu">
-          {items.map((i) => (
-            <button
-              key={i.label}
-              role="menuitem"
-              className={i.danger ? 'danger' : ''}
-              onClick={() => {
-                setOpen(false)
-                i.onClick()
-              }}
-            >
-              {i.label}
-            </button>
-          ))}
+      {(open === 'down' || open === 'up') && (
+        <div className={`row-menu-list ${open === 'up' ? 'up' : ''}`} role="menu">
+          {buttons}
         </div>
       )}
+      {open === 'sheet' &&
+        createPortal(
+          <div className="sheet-scrim" onClick={() => setOpen(false)}>
+            <div className="sheet" role="menu" aria-label={title ?? 'Actions'} onClick={(e) => e.stopPropagation()}>
+              <span className="sheet-grip" aria-hidden="true" />
+              {title && <div className="sheet-title">{title}</div>}
+              <div className="sheet-items">{buttons}</div>
+              <button className="sheet-cancel" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
@@ -706,7 +760,7 @@ export function EmployeesTab() {
           <p className="meta">
             {list.filter((a) => a.status === 'active').length + linked.length} active ·{' '}
             {list.filter((a) => a.devices && seenLabel(a.lastSeen) === 'Online now').length + linked.filter((a) => seenLabel(a.lastSeen) === 'Online now').length} online now ·{' '}
-            {list.filter((a) => a.devices).length + linked.length} with a login
+            {list.filter((a) => a.devices).length + linked.length} signed in
           </p>
         </div>
         <div className="emp-head-btns">
@@ -759,25 +813,13 @@ export function EmployeesTab() {
                 </strong>
                 <span className="meta">{[a.title, signInWith(a)].filter(Boolean).join(' · ')}</span>
               </div>
-              <div className="emp-cols">
-                <span>
-                  <small>Shift</small>
-                  {shift(a) || '–'}
-                </span>
-                <span>
-                  <small>Status</small>
-                  <em className="emp-status ok">Active</em>
-                </span>
-                <span>
-                  <small>Login</small>
-                  {seenLabel(a.lastSeen) === 'Online now' ? <em className="emp-status online">● Online now</em> : <em className="emp-status ok">Own account</em>}
-                </span>
-                <span>
-                  <small>Last seen</small>
-                  {a.lastSeen ? seenLabel(a.lastSeen) : 'Not yet'}
-                </span>
-              </div>
+              <EmpFacts
+                presence={seenLabel(a.lastSeen) === 'Online now' ? { tone: 'online', text: 'Online now' } : { tone: 'in', text: 'Own account' }}
+                shift={shift(a)}
+                seen={seenLabel(a.lastSeen) === 'Online now' ? '' : a.lastSeen ? `Last seen ${seenLabel(a.lastSeen).toLowerCase().replace(/^today/, 'today')}` : 'Not signed in yet'}
+              />
               <RowMenu
+                title={a.name}
                 items={[
                   a.role === 'admin'
                     ? { label: 'Change to Employee access', onClick: () => setGranting({ ...a, role: 'editor' }) }
@@ -820,37 +862,26 @@ export function EmployeesTab() {
                   {[a.title, showPhone(a.phone), a.email, ...(alsoBy.get(`ph:${a.phone}`) ?? []).map((l) => `also ${signInWith(l)}`)].filter(Boolean).join(' · ')}
                 </span>
               </div>
-              <div className="emp-cols">
-                <span>
-                  <small>Shift</small>
-                  {shift(a) || '–'}
-                </span>
-                <span>
-                  <small>Status</small>
-                  {a.status === 'rejected' ? (
-                    <em className="emp-status off">Declined</em>
-                  ) : a.mustChange ? (
-                    <em className="emp-status wait">Waiting for first login</em>
-                  ) : (
-                    <em className="emp-status ok">Active</em>
-                  )}
-                </span>
-                <span>
-                  <small>Login</small>
-                  {seenLabel(a.lastSeen ?? a.lastLogin) === 'Online now' && a.devices ? (
-                    <em className="emp-status online">● Online now</em>
-                  ) : a.devices ? (
-                    <em className="emp-status ok">Logged in{a.devices > 1 ? ` · ${a.devices} devices` : ''}</em>
-                  ) : (
-                    <em className="emp-status off">Not logged in</em>
-                  )}
-                </span>
-                <span>
-                  <small>Last seen</small>
-                  {seenLabel(a.lastSeen ?? a.lastLogin)}
-                </span>
-              </div>
+              <EmpFacts
+                status={a.status === 'rejected' ? 'declined' : a.mustChange ? 'pending' : 'active'}
+                presence={
+                  seenLabel(a.lastSeen ?? a.lastLogin) === 'Online now' && a.devices
+                    ? { tone: 'online', text: 'Online now' }
+                    : a.devices
+                      ? { tone: 'in', text: a.devices > 1 ? `Signed in on ${a.devices} devices` : 'Signed in' }
+                      : { tone: 'out', text: 'Signed out' }
+                }
+                shift={shift(a)}
+                seen={
+                  seenLabel(a.lastSeen ?? a.lastLogin) === 'Online now' && a.devices
+                    ? ''
+                    : a.lastSeen || a.lastLogin
+                      ? `Last seen ${seenLabel(a.lastSeen ?? a.lastLogin).toLowerCase()}`
+                      : 'Never signed in'
+                }
+              />
               <RowMenu
+                title={a.name}
                 items={[
                   {
                     label: a.email ? 'Change email' : 'Add email',

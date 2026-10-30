@@ -81,6 +81,7 @@ export async function setMyEmail(env: Env, who: Who, body: unknown) {
     }
     if (await env.DB.prepare('SELECT phone FROM accounts WHERE email = ? AND phone != ?').bind(rec.email, who.phone).first()) throw new Error('This email is already used by another team login.')
     await env.DB.prepare('UPDATE accounts SET email = ? WHERE phone = ?').bind(rec.email, who.phone).run()
+    await import('./staffAccess.ts').then((m) => m.syncAppEmail(env, who.phone!, rec.email)).catch(() => null)
     await env.SUBS.delete(kvKey)
     return { ok: true, email: rec.email }
   }

@@ -225,6 +225,7 @@ export async function manageAccount(env: Env, action: string, body: unknown, who
       if (raw && !email) throw new Error('Enter a valid email address.')
       if (email && (await env.DB.prepare('SELECT phone FROM accounts WHERE email = ? AND phone != ?').bind(email, phone).first())) throw new Error('This email is already used by another team login.')
       await env.DB.prepare('UPDATE accounts SET email = ? WHERE phone = ?').bind(email, phone).run()
+      await import('./staffAccess.ts').then((m) => m.syncAppEmail(env, phone, email)).catch(() => null)
       return { ok: true, email: email ?? '' }
     }
     case 'grant':

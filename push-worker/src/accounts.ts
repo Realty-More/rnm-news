@@ -301,7 +301,7 @@ export async function mustChangePassword(env: Env, phone: string | undefined): P
  */
 export async function addStaffLogin(env: Env, body: unknown, who: Who) {
   if (!full(who)) throw new Error('Only the owner or full-access staff can add logins.')
-  const b = (body ?? {}) as { name?: unknown; phone?: unknown; title?: unknown; start?: unknown; end?: unknown; admin?: unknown }
+  const b = (body ?? {}) as { name?: unknown; phone?: unknown; title?: unknown; start?: unknown; end?: unknown; admin?: unknown; email?: unknown }
   const name = typeof b.name === 'string' ? b.name.replace(/\s+/g, ' ').trim() : ''
   if (name.length < 2 || name.length > 40) throw new Error('Write the person’s name (2 to 40 characters).')
   const title = typeof b.title === 'string' ? b.title.replace(/\s+/g, ' ').trim().slice(0, 60) : ''
@@ -312,6 +312,11 @@ export async function addStaffLogin(env: Env, body: unknown, who: Who) {
   if (!phone) throw new Error('Enter a valid 10-digit Indian mobile number.')
   const cur = await env.DB.prepare('SELECT name, status FROM accounts WHERE phone = ?').bind(phone).first<{ name: string; status: Status }>()
   if (cur) throw new Error(`${cur.name} already has a login on this number. Use “New password” on their account instead.`)
+  // Optional email: sign-in, "Forgot password?" codes and task / leave emails.
+  const rawEmail = typeof b.email === 'string' ? b.email.trim() : ''
+  const email = rawEmail ? (await import('./reader.ts')).normEmail(rawEmail) : null
+  if (rawEmail && !email) throw new Error('Enter a valid email address, or leave it empty.')
+  if (email && (await env.DB.prepare('SELECT name FROM accounts WHERE email = ?').bind(email).first())) throw new Error('This email is already used by another team login.')
   const password = randomPassword()
   const { salt, hash } = await hashPassword(password, pepperOf(env))
   const now = new Date().toISOString()
@@ -322,14 +327,14 @@ export async function addStaffLogin(env: Env, body: unknown, who: Who) {
     const people = { ...s.people, ...cleanPeopleTimes({ [`ph:${phone}`]: { start, end } }, s.startTime, s.endTime) }
     await env.SUBS.put('team:settings', JSON.stringify({ ...s, people }))
   }
-  await env.DB.prepare("INSERT INTO accounts (phone, name, role, status, salt, hash, created_at, approved_at, must_change) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, 1)")
-    .bind(phone, name, b.admin === true ? 'admin' : 'editor', salt, hash, now, now)
+  await env.DB.prepare("INSERT INTO accounts (phone, name, role, status, salt, hash, created_at, approved_at, must_change, email) VALUES (?, ?, ?, 'active', ?, ?, ?, ?, 1, ?)")
+    .bind(phone, name, b.admin === true ? 'admin' : 'editor', salt, hash, now, now, email)
     .run()
   if (title)
     await env.DB.prepare('INSERT INTO profiles (person_id, title, photo, avatar, updated_at) VALUES (?, ?, \'\', \'\', ?) ON CONFLICT(person_id) DO UPDATE SET title = excluded.title')
       .bind(`ph:${phone}`, title, now)
       .run()
-  return { name, phone, password }
+  return { name, phone, password, email: email ?? '' }
 }
 
 /**

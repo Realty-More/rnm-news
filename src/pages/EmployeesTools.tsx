@@ -118,7 +118,7 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
-  return (
+  return createPortal(
     <div className="dlg-scrim" onClick={onClose}>
       <div className="dlg" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="dlg-head">
@@ -129,7 +129,8 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -165,7 +166,7 @@ function LoginCard({ name, phone, password, onDone }: { name: string; phone: str
 
 /** Add employee: name, mobile, designation, office time and access, in one form. */
 export function AddEmployeeDialog({ onClose, onAdded, office }: { onClose: () => void; onAdded: () => void; office?: { start: string; end: string } }) {
-  const [f, setF] = useState({ name: '', phone: '', title: '', start: '', end: '', admin: false })
+  const [f, setF] = useState({ name: '', phone: '', email: '', title: '', start: '', end: '', admin: false })
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<{ name: string; phone: string; password: string } | null>(null)
   const isOwner = ownerRole()?.role === 'owner' || ownerRole()?.role === 'admin'
@@ -174,7 +175,7 @@ export function AddEmployeeDialog({ onClose, onAdded, office }: { onClose: () =>
     e.preventDefault()
     setBusy(true)
     try {
-      const r = await studioPost<{ name: string; phone: string; password: string }>('accounts/add', { ...f, start: f.start || undefined, end: f.end || undefined })
+      const r = await studioPost<{ name: string; phone: string; password: string; email?: string }>('accounts/add', { ...f, email: f.email.trim() || undefined, start: f.start || undefined, end: f.end || undefined })
       setDone(r)
       onAdded()
     } catch (err) {
@@ -199,6 +200,10 @@ export function AddEmployeeDialog({ onClose, onAdded, office }: { onClose: () =>
               <span>+91</span>
               <input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value.replace(/[^\d ]/g, '').slice(0, 12) })} placeholder="10-digit mobile" inputMode="numeric" required />
             </span>
+          </label>
+          <label>
+            Email <small>(optional: sign-in, password reset and task / leave emails)</small>
+            <input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} placeholder="e.g. vimal@gmail.com" autoComplete="off" />
           </label>
           <label>
             Designation <small>(optional)</small>

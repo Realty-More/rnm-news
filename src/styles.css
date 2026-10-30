@@ -9575,3 +9575,40 @@ button.mk-cover:focus-visible {
   color: var(--ink);
   font: 500 14px var(--sans);
 }
+
+/* My day: add your email */
+.email-nudge {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: linear-gradient(120deg, rgb(251 165 25 / 0.14), rgb(245 130 32 / 0.06));
+  border: 1px solid rgb(245 130 32 / 0.35);
+}
+.email-nudge div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.email-nudge small {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+.email-nudge input {
+  height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+}
+@media (max-width: 760px) {
+  .email-nudge {
+    grid-template-columns: 1fr;
+  }
+}

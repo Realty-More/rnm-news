@@ -457,6 +457,49 @@ function OwnerKey() {
   )
 }
 
+/**
+ * My day: a card for team members whose login has no email yet (needed for "Forgot password?" codes
+ * and task / leave emails). Hidden once an email is added.
+ */
+export function EmailNudge() {
+  const res = useAsync('studio:me-email', (s) => studio<{ email: string; canChange: boolean }>('me/email', undefined, s))
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
+  const [busy, setBusy] = useState(false)
+  if (!res.data?.canChange || res.data.email) return null
+  const save = async () => {
+    setBusy(true)
+    try {
+      await studioPost('me/email', { email, password: pw })
+      toast('Email saved. You can now sign in with it and reset your password yourself.')
+      res.reload()
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form
+      className="email-nudge"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save()
+      }}
+    >
+      <div>
+        <b>Add your email</b>
+        <small>So you can reset your password yourself and get task and leave updates by email.</small>
+      </div>
+      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@gmail.com" autoComplete="email" required aria-label="Your email" />
+      <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Your password" autoComplete="current-password" required aria-label="Your password" />
+      <button className="btn small" disabled={busy || !email.includes('@') || !pw}>
+        {busy ? 'Saving…' : 'Save email'}
+      </button>
+    </form>
+  )
+}
+
 /** The email on my team login: sign in with it, and get a reset code if I forget my password. */
 function LoginEmail() {
   const res = useAsync('studio:me-email', (s) => studio<{ email: string; canChange: boolean }>('me/email', undefined, s))

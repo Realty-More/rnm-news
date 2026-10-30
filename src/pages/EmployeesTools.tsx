@@ -642,6 +642,8 @@ export function EmployeesTab() {
   const [q, setQ] = useState('')
   const [confirm, setConfirm] = useState<{ title: string; text: string; action: string; danger?: boolean; run: () => Promise<void> } | null>(null)
   const [newPw, setNewPw] = useState<{ name: string; phone: string; password: string } | null>(null)
+  const [emailFor, setEmailFor] = useState<Account | null>(null)
+  const [emailVal, setEmailVal] = useState('')
   const [busy, setBusy] = useState(false)
   const me = ownerRole()
   const s = settings.data?.settings
@@ -851,6 +853,13 @@ export function EmployeesTab() {
               <RowMenu
                 items={[
                   {
+                    label: a.email ? 'Change email' : 'Add email',
+                    onClick: () => {
+                      setEmailVal(a.email ?? '')
+                      setEmailFor(a)
+                    },
+                  },
+                  {
                     label: 'New password',
                     onClick: () => setConfirm({ title: 'Set a new password?', text: `${a.name} will be logged out everywhere and get a temporary password to log in again.`, action: 'Set new password', run: () => act(a, 'reset') }),
                   },
@@ -923,6 +932,36 @@ export function EmployeesTab() {
               Cancel
             </button>
           </div>
+        </Dialog>
+      )}
+      {emailFor && (
+        <Dialog title={`${emailFor.email ? 'Change' : 'Add'} email · ${emailFor.name}`} onClose={() => setEmailFor(null)}>
+          <form
+            className="emp-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void run(async () => {
+                const r = await studioPost<{ email: string }>('accounts/email', { phone: emailFor.phone, email: emailVal })
+                toast(r.email ? `${emailFor.name.split(' ')[0]} can now sign in with ${r.email} and get reset codes there` : 'Email removed')
+                setEmailFor(null)
+                res.reload()
+              })
+            }}
+          >
+            <label>
+              Email
+              <input type="email" value={emailVal} onChange={(e) => setEmailVal(e.target.value)} placeholder="name@gmail.com" autoFocus />
+            </label>
+            <p className="meta">They can sign in with it, get “Forgot password?” codes and task / leave emails.</p>
+            <div className="action-row">
+              <button className="btn" disabled={busy || (!emailVal.trim() && !emailFor.email)}>
+                {busy ? 'Saving…' : emailVal.trim() ? 'Save email' : 'Remove email'}
+              </button>
+              <button type="button" className="btn ghost" onClick={() => setEmailFor(null)}>
+                Cancel
+              </button>
+            </div>
+          </form>
         </Dialog>
       )}
       {newPw && (

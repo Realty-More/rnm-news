@@ -13,6 +13,7 @@ import { AddEmployeeDialog, RowMenu } from './EmployeesTools.tsx'
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
 import { MyTasksPanel } from './WorkTools.tsx'
+import { EmailNudge } from './ProfileTools.tsx'
 
 const IST = 'Asia/Kolkata'
 const clock = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-IN', { timeZone: IST, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso)) : '–')
@@ -236,6 +237,7 @@ export function MyDayTab() {
 
   return (
     <>
+      <EmailNudge />
       <section className="md-hero">
         <div className="md-top">
           <div className="md-hello">

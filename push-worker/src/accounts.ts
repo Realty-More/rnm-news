@@ -216,6 +216,17 @@ export async function manageAccount(env: Env, action: string, body: unknown, who
     case 'signout':
       await endSessions.run()
       return { ok: true }
+    case 'email': {
+      // Owner or full access adds / changes / removes a team member's login email (for sign-in,
+      // password-reset codes and alerts). The owner's own email is changed only by the owner.
+      const raw = String((body as { email?: unknown })?.email ?? '').trim()
+      const { normEmail } = await import('./reader.ts')
+      const email = raw ? normEmail(raw) : null
+      if (raw && !email) throw new Error('Enter a valid email address.')
+      if (email && (await env.DB.prepare('SELECT phone FROM accounts WHERE email = ? AND phone != ?').bind(email, phone).first())) throw new Error('This email is already used by another team login.')
+      await env.DB.prepare('UPDATE accounts SET email = ? WHERE phone = ?').bind(email, phone).run()
+      return { ok: true, email: email ?? '' }
+    }
     case 'grant':
     case 'ungrant':
       await env.DB.prepare('UPDATE accounts SET role = ? WHERE phone = ?').bind(action === 'grant' ? 'admin' : 'editor', phone).run()

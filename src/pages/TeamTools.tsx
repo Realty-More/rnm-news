@@ -163,8 +163,24 @@ function MdIcon({ name, tone = 'gold' }: { name: string; tone?: 'gold' | 'green'
   )
 }
 
+/** Time since check-in, ticking every second (shown inside the ring while working). */
+function LiveDuration({ since, part = 'hm' }: { since: string; part?: 'hm' | 's' }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const s = Math.max(0, Math.floor((now - Date.parse(since)) / 1000))
+  if (part === 's') return <span className="md-sec">{String(s % 60).padStart(2, '0')}s</span>
+  return (
+    <>
+      {Math.floor(s / 3600)}h {String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m
+    </>
+  )
+}
+
 /** A ring that fills as the shift's hours are worked. */
-function Ring({ value, total, children }: { value: number; total: number; children: ReactNode }) {
+function Ring({ value, total, children, live = false }: { value: number; total: number; children: ReactNode; live?: boolean }) {
   const r = 52
   const c = 2 * Math.PI * r
   const pct = total > 0 ? Math.min(1, value / total) : 0
@@ -175,7 +191,7 @@ function Ring({ value, total, children }: { value: number; total: number; childr
     return () => cancelAnimationFrame(t)
   }, [])
   return (
-    <div className="md-ring">
+    <div className={`md-ring ${live ? 'live' : ''}`}>
       <svg viewBox="0 0 120 120" aria-hidden="true">
         <defs>
           <linearGradient id="md-ring-grad" x1="0" y1="0" x2="1" y2="1">
@@ -186,6 +202,12 @@ function Ring({ value, total, children }: { value: number; total: number; childr
         </defs>
         <circle cx="60" cy="60" r={r} className="md-ring-bg" />
         <circle cx="60" cy="60" r={r} className="md-ring-fg" stroke="url(#md-ring-grad)" strokeDasharray={c} strokeDashoffset={shown ? c * (1 - pct) : c} />
+        {pct > 0.01 && (
+          <g className="md-ring-cap" style={{ transform: `rotate(${shown ? pct * 360 : 0}deg)` }}>
+            <circle cx={60 + r} cy="60" r="7" className="md-ring-cap-glow" />
+            <circle cx={60 + r} cy="60" r="4" className="md-ring-cap-dot" />
+          </g>
+        )}
       </svg>
       <div className="md-ring-text">{children}</div>
     </div>
@@ -273,9 +295,15 @@ export function MyDayTab() {
               Shift {d.settings.startTime}–{d.settings.endTime ?? '–'} · grace {d.settings.graceMin} min · report reminder {d.settings.reminderTime}
             </p>
           </div>
-          <Ring value={live} total={shiftLen}>
-            <b>{a?.check_in ? hm(live) : '0h 00m'}</b>
+          <Ring value={live} total={shiftLen} live={!!a?.check_in && !a.check_out}>
+            <b>{a?.check_in && !a.check_out ? <LiveDuration since={a.check_in} /> : a?.check_in ? hm(live) : '0h 00m'}</b>
             <span>of {hm(shiftLen)}</span>
+            {a?.check_in && !a.check_out && (
+              <em className="md-live">
+                <i aria-hidden="true" />
+                Live <LiveDuration since={a.check_in} part="s" />
+              </em>
+            )}
           </Ring>
         </div>
 

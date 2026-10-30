@@ -125,7 +125,7 @@ h3 {
   top: 0;
   z-index: 30;
   padding-top: env(safe-area-inset-top);
-  background: color-mix(in srgb, var(--bg) 97%, transparent);
+  background: var(--bg);
   backdrop-filter: saturate(1.6) blur(14px);
   -webkit-backdrop-filter: saturate(1.6) blur(14px);
   border-bottom: 1px solid var(--line);
@@ -9925,5 +9925,167 @@ button.mk-cover:focus-visible {
 @media (max-width: 600px) {
   .dlg {
     max-height: calc(100dvh - 24px);
+  }
+}
+
+/* ---------- My day: motion graphics ---------- */
+/* Slow aurora light behind the card */
+.md-hero::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 42% at 18% 22%, rgb(251 165 25 / 0.22), transparent 70%),
+    radial-gradient(34% 38% at 82% 18%, rgb(242 113 28 / 0.18), transparent 70%),
+    radial-gradient(40% 40% at 60% 88%, rgb(255 211 107 / 0.1), transparent 70%);
+  filter: blur(18px);
+  animation: md-aurora 16s ease-in-out infinite alternate;
+}
+@keyframes md-aurora {
+  0% {
+    transform: translate3d(-4%, -2%, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, 3%, 0) rotate(8deg) scale(1.06);
+  }
+  100% {
+    transform: translate3d(-2%, 4%, 0) rotate(-6deg) scale(1.02);
+  }
+}
+/* Ring: travelling glow at the tip, breathing while live, ticking seconds */
+.md-ring-cap {
+  transform-origin: 60px 60px;
+  transition: transform 1.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.md-ring-cap-glow {
+  fill: rgb(251 165 25 / 0.35);
+  stroke: none !important;
+}
+.md-ring-cap-dot {
+  fill: #fff4d6;
+  stroke: none !important;
+  filter: drop-shadow(0 0 4px #fba519);
+}
+.md-ring.live .md-ring-cap-glow {
+  animation: md-cap 1.8s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes md-cap {
+  50% {
+    transform: scale(1.7);
+    opacity: 0.25;
+  }
+}
+.md-ring.live svg {
+  animation: md-breathe 3.2s ease-in-out infinite;
+}
+@keyframes md-breathe {
+  50% {
+    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 55%, transparent));
+  }
+}
+.md-sec {
+  margin-left: 2px;
+  font: 700 10px var(--sans);
+  color: #b8f0cf;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.md-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(46 157 91 / 0.18);
+  color: #6fe0a0;
+  font: 700 9.5px var(--sans);
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.md-live i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4fd68a;
+  animation: emp-pulse 1.6s ease-out infinite;
+}
+/* Tiles rise in one after another; icons glow */
+.md-facts > div {
+  animation: md-tile-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.md-facts > div:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.md-facts > div:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.md-facts > .btn.md-out {
+  animation: md-tile-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.24s both;
+}
+@keyframes md-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+.md-ico {
+  position: relative;
+}
+.md-ico::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 11px;
+  box-shadow: 0 0 14px currentColor;
+  opacity: 0.25;
+  animation: md-ico-glow 3s ease-in-out infinite;
+}
+@keyframes md-ico-glow {
+  50% {
+    opacity: 0.55;
+  }
+}
+/* Progress: a light runs along the filled part */
+.md-prog-track i {
+  position: relative;
+  overflow: hidden;
+}
+.md-prog-track i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.65), transparent);
+  animation: md-prog-run 2.4s ease-in-out 1.2s infinite;
+}
+@keyframes md-prog-run {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-hero::before,
+  .md-ring.live svg,
+  .md-ring.live .md-ring-cap-glow,
+  .md-live i,
+  .md-facts > div,
+  .md-facts > .btn.md-out,
+  .md-ico::after,
+  .md-prog-track i::after {
+    animation: none;
+  }
+  .md-ring-cap {
+    transition: none;
   }
 }

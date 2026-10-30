@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS pr_images (draft_id INTEGER NOT NULL, n INTEGER NOT N
 CREATE TABLE IF NOT EXISTS readers (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, phone TEXT UNIQUE, name TEXT NOT NULL, salt TEXT NOT NULL DEFAULT '', hash TEXT NOT NULL DEFAULT '', google_sub TEXT UNIQUE, created_at TEXT NOT NULL, last_login TEXT, last_seen TEXT, sync TEXT, reset_hash TEXT, reset_expires TEXT, reset_tries INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS reader_sessions (token_hash TEXT PRIMARY KEY, reader_id INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS reader_sessions_reader ON reader_sessions (reader_id);
+-- Notice board (Newsroom): notices and who has seen them.
+CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT, urgent INTEGER NOT NULL DEFAULT 0, created_by TEXT, by_id TEXT, created_at TEXT NOT NULL, expires_at TEXT, deleted INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS notice_seen (notice_id INTEGER NOT NULL, person_id TEXT NOT NULL, name TEXT, seen_at TEXT NOT NULL, PRIMARY KEY (notice_id, person_id));
 -- Normal accounts the owner gave R&M Newsroom access (role editor = Employee, admin = Full access).
 CREATE TABLE IF NOT EXISTS staff_links (reader_id INTEGER PRIMARY KEY, role TEXT NOT NULL DEFAULT 'editor', by_name TEXT, granted_at TEXT NOT NULL, last_seen TEXT, person_id TEXT);
 -- person_id: "ph:<mobile>" when the account is the same person as an existing team login.

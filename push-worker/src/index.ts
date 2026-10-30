@@ -56,6 +56,7 @@ import { readerDelete, readerForgot, readerGoogle, readerLogin, readerLogout, re
 import { getDraft, listDrafts, pressImage, pressToStory, removeDraft, savePressImage, setImageRole } from './press.ts'
 import { changeLink, createLink, kitAsset, kitBook, kitPage, kitPdf, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
 import { sendTeamEmail } from './teamEmail.ts'
+import { listNotices, postNotice, removeNotice, seeNotice } from './notices.ts'
 import { buildMonthEmail, monthData, prevMonth, sendMonthEmail } from './monthEmail.ts'
 import { addStaffLogin, keyToMobile, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
@@ -146,6 +147,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return json(await myProfile(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/me/email':
           return json(await myEmail(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
+        case '/editor/notices':
+          return json(await listNotices(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/me/owner-login':
           return json(await ownerLogin(env, who), 200, { ...headers, 'Cache-Control': 'no-store' })
         case '/editor/me/login-key':
@@ -303,6 +306,12 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         // A new employee always gets an email (sign-in, password reset, task and leave emails).
         if (!String((body as { email?: unknown })?.email ?? '').trim()) return json({ error: 'Enter the employee’s email address.' }, 400, headers)
         return json(await addStaffLogin(env, body, who), 200, { ...headers, 'Cache-Control': 'no-store' })
+      case '/editor/notices':
+        return json(await postNotice(env, who, body), 200, headers)
+      case '/editor/notices/seen':
+        return json(await seeNotice(env, who, body), 200, headers)
+      case '/editor/notices/delete':
+        return json(await removeNotice(env, who, body), 200, headers)
       case '/editor/team/month-email-now':
         return full(who) ? json({ result: await sendMonthEmail(env, true, String((body as { month?: unknown })?.month ?? '') || undefined) }, 200, headers) : ownerOnly()
       case '/editor/team/email-now':

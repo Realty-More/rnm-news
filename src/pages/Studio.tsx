@@ -25,6 +25,7 @@ import { AiWriterTab } from './AiTools.tsx'
 import { WebsiteTab, YouTubeTab } from './WebsiteTools.tsx'
 import { AddToCalendar, CalendarTab, CaptionsTab, NotifyTab, PerformanceTab, ReportTab, SiteTab, TeamTab } from './StudioTools.tsx'
 import { usePageTitle } from './usePageTitle.ts'
+import { NoticeBoard } from './NoticeBoard.tsx'
 import { WHATSAPP_CHANNEL, whatsappShareUrl } from '../lib/config.ts'
 import { smartLink } from '../lib/stats.ts'
 import { loadFeed } from '../lib/videos.ts'
@@ -213,6 +214,7 @@ function StudioHome({ onLock, onEnded }: { onLock: () => void; onEnded: () => vo
           }}
         />
       )}
+      <NoticeBoard isFull={me?.role === 'owner' || me?.role === 'admin'} />
       <nav className="studio-nav" aria-label="R&M Newsroom">
         <div className="studio-groups" role="tablist" aria-label="Sections">
           {GROUPS.filter((g) => visible.some((t) => t.group === g.key)).map((g) => (

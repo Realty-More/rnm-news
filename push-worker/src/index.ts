@@ -56,6 +56,7 @@ import { readerDelete, readerForgot, readerGoogle, readerLogin, readerLogout, re
 import { getDraft, listDrafts, pressImage, pressToStory, removeDraft, savePressImage, setImageRole } from './press.ts'
 import { changeLink, createLink, kitAsset, kitBook, kitPage, kitPdf, linkViews, moveKit, removeKit, saveKitSettings, updateKit, uploadCover, uploadKit } from './mediakit.ts'
 import { sendTeamEmail } from './teamEmail.ts'
+import { buildMonthEmail, monthData, prevMonth, sendMonthEmail } from './monthEmail.ts'
 import { addStaffLogin, keyToMobile, mergeKeyIntoAccount, mustChangePassword, changePassword, deleteAccount, listAccounts, login, logout, manageAccount, signup } from './accounts.ts'
 import { allLeaves, cancelLeave, createTask, decideLeave, deleteTask, listTasks, myLeaves, requestLeave, updateTask } from './work.ts'
 import { autoCapture, captureDay, dailyData, downloadRef, listRefs, removeRef, uploadRef, weeklyData } from './reels.ts'
@@ -232,6 +233,14 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
           return full(who) ? json(await allLeaves(env, url.searchParams.get('month') ?? ''), 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
         case '/editor/team/settings':
           return full(who) ? json({ settings: await teamSettings(env) }, 200, { ...headers, 'Cache-Control': 'no-store' }) : ownerOnly()
+        case '/editor/team/month-email': {
+          // The monthly report as it will be emailed (Preview in Team today → Daily team report).
+          if (!full(who)) return ownerOnly()
+          const qm = url.searchParams.get('month') ?? ''
+          const m = /^\d{4}-\d{2}$/.test(qm) ? qm : prevMonth(new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 7))
+          const mail = buildMonthEmail(await monthData(env, m), env.APP_URL)
+          return json({ month: m, subject: mail.subject, html: mail.html }, 200, { ...headers, 'Cache-Control': 'no-store' })
+        }
         case '/editor/team/day':
           return full(who) ? json(await teamDay(env, url.searchParams.get('date') ?? ''), 200, headers) : ownerOnly()
         case '/editor/team/month':
@@ -292,6 +301,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await signOutLinked(env, who, body), 200, headers)
       case '/editor/accounts/add':
         return json(await addStaffLogin(env, body, who), 200, { ...headers, 'Cache-Control': 'no-store' })
+      case '/editor/team/month-email-now':
+        return full(who) ? json({ result: await sendMonthEmail(env, true, String((body as { month?: unknown })?.month ?? '') || undefined) }, 200, headers) : ownerOnly()
       case '/editor/team/email-now':
         return full(who) ? json({ result: await sendTeamEmail(env, true) }, 200, headers) : ownerOnly()
       case '/editor/team/to-mobile':
@@ -559,6 +570,6 @@ export default {
     const run = (name: string, job: () => Promise<string>) => job().then((r) => console.log(name, r), (e) => console.log(name, 'failed', (e as Error).message))
     // Its own hourly run, so the ~45 site requests don't share the 50-request limit with alerts.
     if (event.cron === '7 * * * *') return ctx.waitUntil(Promise.all([run('views', () => collectViews(env)), run('youtube', () => collectYouTube(env))]))
-    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('nudges', () => attendanceNudges(env)), run('newsletter', () => newsletterTick(env)), run('team-email', () => sendTeamEmail(env)), run('market', () => autoCapture(env))]))
+    ctx.waitUntil(Promise.all([run('alerts', () => checkAndNotify(env)), run('uptime', () => checkSite(env)), run('brief', () => morningBrief(env)), run('reminders', () => reportReminders(env)), run('nudges', () => attendanceNudges(env)), run('newsletter', () => newsletterTick(env)), run('team-email', () => sendTeamEmail(env)), run('month-email', () => sendMonthEmail(env)), run('market', () => autoCapture(env))]))
   },
 } satisfies ExportedHandler<Env>

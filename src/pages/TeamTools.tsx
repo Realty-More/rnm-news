@@ -995,6 +995,7 @@ function TeamSettingsPanel() {
         >
           Send today’s report now
         </button>
+        <MonthlyReport />
       </Panel>
 
       <Panel title="Attendance notifications" note="Sent to phones where “Turn on reminders” is switched on (team) and owner alerts are on (owner).">
@@ -1073,6 +1074,60 @@ export function monthCsv(m: Month): string {
     }),
   ])
   return [head, ...lines].map((row) => row.map(csvCell).join(',')).join('\r\n')
+}
+
+/** Monthly report (sent on the 1st at 9 AM IST to the same address): preview or send now. */
+function MonthlyReport() {
+  const last = (() => {
+    const d = new Date(Date.now() + 5.5 * 3600000)
+    d.setUTCDate(1)
+    d.setUTCMonth(d.getUTCMonth() - 1)
+    return d.toISOString().slice(0, 7)
+  })()
+  const [month, setMonth] = useState(last)
+  const [busy, setBusy] = useState(false)
+  const preview = async () => {
+    setBusy(true)
+    try {
+      const r = await studio<{ html: string }>(`team/month-email?month=${month}`)
+      const w = window.open('', '_blank')
+      if (w) {
+        w.document.open()
+        w.document.write(r.html)
+        w.document.close()
+      } else toast('Allow pop-ups to see the preview.')
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const send = async () => {
+    if (!window.confirm(`Send the ${month} monthly report by email now?`)) return
+    setBusy(true)
+    try {
+      toast((await studioPost<{ result: string }>('team/month-email-now', { month })).result)
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="month-report">
+      <b>Monthly report</b>
+      <small>Full month in detail: attendance, hours, reports, tasks, leave, website, YouTube and the app. Goes by itself on the 1st at 9 AM.</small>
+      <div className="action-row">
+        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Month" />
+        <button className="btn ghost small" disabled={busy} onClick={() => void preview()}>
+          Preview
+        </button>
+        <button className="btn ghost small" disabled={busy} onClick={() => void send()}>
+          Send now
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export function AttendanceTab() {

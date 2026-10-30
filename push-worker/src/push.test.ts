@@ -941,3 +941,30 @@ describe('reader sign-in ids and Google', () => {
     await expect(verifyGoogleToken(t.slice(0, -4) + 'AAAA', 'my-client', keys, now)).rejects.toThrow()
   })
 })
+
+describe('monthly report email', () => {
+  it('builds a full month with people, tasks, leave, website and YouTube', async () => {
+    const { buildMonthEmail, prevMonth } = await import('./monthEmail.ts')
+    expect(prevMonth('2026-01')).toBe('2025-12')
+    expect(prevMonth('2026-11')).toBe('2026-10')
+    const p = (name: string, present: number, late: number, absent: number, minutes: number, reports: number) => ({ id: `ph:${name}`, name, present, late, reports, minutes, avgCheckIn: '10:12', workingDays: 26, leave: 26 - present - absent, leaveByKind: {}, absent, tasksDone: 4, tasksOpen: 1, tasksOverdue: 0 })
+    const mail = buildMonthEmail(
+      {
+        month: '2026-10',
+        people: [p('Tanisha Sharma', 24, 3, 0, 24 * 480, 22), p('Vimal Singh', 20, 1, 4, 20 * 470, 12)],
+        tasks: { given: 12, done: 9, open: 3, overdue: 1, topDone: [{ title: 'Jewar airport reel', who: 'Vimal Singh' }] },
+        leaves: [{ name: 'Tanisha Sharma', kind: 'Sick leave', from: '2026-10-14', to: '2026-10-15', days: 2, status: 'approved' }],
+        site: { stories: 64, prevStories: 58, views: 18200, sections: [{ name: 'News', n: 40 }, { name: 'Guest Column', n: 8 }], top: [{ title: 'DLF Q2 results <b>', link: 'https://realtynmore.com/x', views: 2100, section: 'News' }] },
+        yt: { uploads: 18, prevUploads: 20, shorts: 11, views: 52000, top: [{ id: 'abc', title: 'Interview', views: 9000, short: false }] },
+        app: { views: 8400, prevViews: 7000, reads: 3100, prevReads: 2500, searches: [{ q: 'jewar', n: 40 }] },
+      },
+      'https://realty-more.github.io/rnm-news/',
+    )
+    expect(mail.subject).toContain('October 2026')
+    expect(mail.html).toContain('Tanisha Sharma')
+    expect(mail.html).toContain('DLF Q2 results &lt;b&gt;')
+    expect(mail.html).toContain('Vimal Singh was absent 4 working days')
+    expect(mail.text).toContain('64 stories')
+    if (process.env.MONTH_PREVIEW) (await import('node:fs')).writeFileSync(process.env.MONTH_PREVIEW, mail.html)
+  })
+})

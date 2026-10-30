@@ -9554,3 +9554,24 @@ button.mk-cover:focus-visible {
   color: var(--ink);
   font: 500 15px var(--sans);
 }
+
+/* Team today → Daily team report → Monthly report */
+.month-report {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.month-report small {
+  color: var(--mute);
+}
+.month-report input[type='month'] {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 14px var(--sans);
+}

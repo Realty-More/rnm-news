@@ -21,6 +21,8 @@ export interface Who {
   id?: string
   /** Set when signed in with a mobile number and password. */
   phone?: string
+  /** Signed in with a Full access key (not a team member: no check-in, report or leave). */
+  accessKey?: boolean
 }
 interface Editor {
   id: string
@@ -30,6 +32,8 @@ interface Editor {
   active: boolean
   /** Full access: sees and does everything the owner does. */
   admin?: boolean
+  /** "access": a Full access key (Employees → Access keys), not a person on the team. */
+  kind?: 'access'
 }
 
 /** Owner or full-access staff: allowed into the owner sections. */
@@ -63,7 +67,13 @@ export async function authenticate(key: string, env: Env, ctx: ExecutionContext)
   if (!ed?.active) return null
   // Note last use at most once an hour (KV writes are limited on the free plan).
   if (!ed.lastUsed || Date.now() - Date.parse(ed.lastUsed) > 3600000) ctx.waitUntil(env.SUBS.put(`editor:${id}`, JSON.stringify({ ...ed, lastUsed: new Date().toISOString() })))
+  if (ed.kind === 'access') return { role: 'admin', name: ed.name, id, accessKey: true }
   return { role: ed.admin ? 'admin' : 'editor', name: ed.name, id }
+}
+
+/** Login keys that belong to people (Full access keys are not team members). */
+export async function teamKeys(env: Env): Promise<Editor[]> {
+  return (await listEditors(env)).filter((e) => e.kind !== 'access')
 }
 
 export async function listEditors(env: Env): Promise<Editor[]> {
@@ -72,11 +82,17 @@ export async function listEditors(env: Env): Promise<Editor[]> {
   return all.filter((e): e is Editor => !!e).sort((a, b) => b.created.localeCompare(a.created))
 }
 
-export async function createEditor(env: Env, name: string): Promise<{ key: string; editor: Editor }> {
-  const bytes = crypto.getRandomValues(new Uint8Array(24))
-  const key = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+export async function createEditor(env: Env, name: string, access = false): Promise<{ key: string; editor: Editor }> {
+  // A key never starts like a session or owner key (s_, r_, rnm-), or it would be checked the wrong way.
+  let key = ''
+  do {
+    const bytes = crypto.getRandomValues(new Uint8Array(24))
+    key = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  } while (/^(s_|r_|rnm-)/.test(key))
   const id = await sha256hex(key)
-  const editor: Editor = { id, name: name.trim().slice(0, 40) || 'Editor', created: new Date().toISOString(), active: true }
+  const editor: Editor = access
+    ? { id, name: name.trim().slice(0, 40) || 'Full access key', created: new Date().toISOString(), active: true, admin: true, kind: 'access' }
+    : { id, name: name.trim().slice(0, 40) || 'Editor', created: new Date().toISOString(), active: true }
   await env.SUBS.put(`editor:${id}`, JSON.stringify(editor))
   return { key, editor }
 }
@@ -85,7 +101,7 @@ export async function createEditor(env: Env, name: string): Promise<{ key: strin
 export async function setKeyAccess(env: Env, id: string, admin: boolean) {
   if (!/^[0-9a-f]{64}$/.test(id)) return false
   const ed = await env.SUBS.get<Editor>(`editor:${id}`, 'json')
-  if (!ed) return false
+  if (!ed || ed.kind === 'access') return false
   await env.SUBS.put(`editor:${id}`, JSON.stringify({ ...ed, admin }))
   return true
 }

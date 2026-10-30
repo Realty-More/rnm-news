@@ -455,6 +455,149 @@ export function GrantAccessDialog({ onClose, onDone, office, edit }: { onClose: 
   )
 }
 
+interface AccessKey {
+  id: string
+  name: string
+  created: string
+  lastUsed?: string
+  kind?: 'access'
+}
+
+/** A text file with the key and how to use it (for the handover folder). */
+function saveKeyFile(name: string, key: string) {
+  const made = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
+  const text = [
+    'R&M NEWSROOM - FULL ACCESS KEY',
+    '',
+    `Name: ${name}`,
+    `Made: ${made} (IST)`,
+    '',
+    `Key: ${key}`,
+    '',
+    'How to sign in:',
+    '1. Open https://realty-more.github.io/rnm-news/#/account (or the Realtynmore app → Menu → Sign in)',
+    '2. Tap "Team login key"',
+    '3. Paste the key and tap "Open Newsroom"',
+    '',
+    'This key opens every Newsroom section (Full access). Keep this file private.',
+    'If it is lost or shared by mistake: R&M Newsroom → Manage → Employees → Access keys → Revoke.',
+    '',
+  ].join('\r\n')
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `RNM Newsroom - ${name.replace(/[\\/:*?"<>|]/g, '')}.txt`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
+}
+
+/**
+ * Full access keys (owner and full access): a spare way into R&M Newsroom with every section, e.g. for a
+ * handover folder. Shown once, with "Save as file"; Revoke stops a key at once on every device.
+ */
+export function AccessKeys() {
+  const res = useAsync('studio:team', (s) => studio<{ editors: AccessKey[] }>('team', undefined, s))
+  const [label, setLabel] = useState('')
+  const [made, setMade] = useState<{ name: string; key: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [confirm, setConfirm] = useState<AccessKey | null>(null)
+  const keys = (res.data?.editors ?? []).filter((e) => e.kind === 'access')
+  const create = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const r = await studioPost<{ key: string; editor: AccessKey }>('team', { name: label.trim() || 'Full access key', kind: 'access' })
+      setMade({ name: r.editor.name, key: r.key })
+      setLabel('')
+      res.reload()
+    } catch (err) {
+      toast((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const revoke = async (k: AccessKey) => {
+    setBusy(true)
+    try {
+      await studioPost('team/revoke', { id: k.id })
+      toast(`“${k.name}” no longer works`)
+      res.reload()
+    } catch (err) {
+      toast((err as Error).message)
+    } finally {
+      setBusy(false)
+      setConfirm(null)
+    }
+  }
+  return (
+    <section className="akeys">
+      <div>
+        <h3>Access keys</h3>
+        <p className="meta">A Full access key opens R&amp;M Newsroom with every section. Sign in page → Team login key. Keep it private; revoke it any time.</p>
+      </div>
+      {made && (
+        <div className="akeys-new" role="status">
+          <strong>{made.name}</strong>
+          <code>{made.key}</code>
+          <p className="meta">Shown only once. Save it as a file (for the handover folder) or copy it now.</p>
+          <div className="action-row">
+            <button className="btn small" onClick={() => saveKeyFile(made.name, made.key)}>
+              Save as file
+            </button>
+            <button className="btn ghost small" onClick={() => void navigator.clipboard?.writeText(made.key).then(() => toast('Key copied'))}>
+              Copy key
+            </button>
+            <button className="btn ghost small" onClick={() => setMade(null)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+      {keys.length > 0 && (
+        <ul className="akeys-list">
+          {keys.map((k) => (
+            <li key={k.id}>
+              <span aria-hidden="true">🔑</span>
+              <span className="akeys-text">
+                <b>
+                  {k.name} <span className="acct-tag">Full access</span>
+                </b>
+                <small>
+                  Made {formatDateTime(k.created)} · {k.lastUsed ? `last used ${seenLabel(k.lastUsed).toLowerCase()}` : 'not used yet'}
+                </small>
+              </span>
+              <button className="btn ghost small danger-text" disabled={busy} onClick={() => setConfirm(k)}>
+                Revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="akeys-form" onSubmit={create}>
+        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Key name, e.g. Handover key" maxLength={40} aria-label="Key name" />
+        <button className="btn" disabled={busy}>
+          {busy ? 'Making…' : '+ Make Full access key'}
+        </button>
+      </form>
+      {confirm && (
+        <Dialog title={`Revoke “${confirm.name}”?`} onClose={() => setConfirm(null)}>
+          <p>The key stops working at once, on every device that used it.</p>
+          <div className="action-row">
+            <button className="btn danger" disabled={busy} onClick={() => void revoke(confirm)}>
+              {busy ? 'Working…' : 'Revoke key'}
+            </button>
+            <button className="btn ghost" onClick={() => setConfirm(null)}>
+              Cancel
+            </button>
+          </div>
+        </Dialog>
+      )}
+    </section>
+  )
+}
+
 /** The "⋯" menu on each employee row. */
 export function RowMenu({ items }: { items: { label: string; danger?: boolean; onClick: () => void }[] }) {
   const [open, setOpen] = useState(false)
@@ -764,6 +907,7 @@ export function EmployeesTab() {
         </div>
       )}
 
+      {(me?.role === 'owner' || me?.role === 'admin') && <AccessKeys />}
       {granting && (
         <GrantAccessDialog onClose={() => setGranting(null)} onDone={res.reload} office={s ? { start: s.startTime, end: s.endTime } : undefined} edit={granting === true ? undefined : granting} />
       )}

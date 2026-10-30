@@ -4,7 +4,7 @@
 // location is read only at the moment of check-in and check-out (when the person allows it), and shown
 // as "at <office>" or the distance from the nearest office the owner set.
 import { deliver, isValidSubscription, subKey, type StoredSub } from './push.ts'
-import { listEditors, type Who } from './owner.ts'
+import { teamKeys, type Who } from './owner.ts'
 import { accountStaff } from './accounts.ts'
 import { approvedLeavesInMonth, leaveDays, leaveOnDay, LEAVE_KINDS, tasksForDay, type Leave } from './work.ts'
 import type { Env } from './index.ts'
@@ -333,7 +333,7 @@ export async function myHistory(env: Env, who: Who) {
  */
 /** Everyone who can be given tasks: staff with an active key or account. */
 export async function assignablePeople(env: Env): Promise<{ id: string; name: string }[]> {
-  const [keys, accounts] = await Promise.all([listEditors(env), accountStaff(env)])
+  const [keys, accounts] = await Promise.all([teamKeys(env), accountStaff(env)])
   return teamPeople([...keys, ...accounts], [])
 }
 
@@ -351,7 +351,7 @@ export function teamPeople(editors: { id: string; name: string; active: boolean;
 export async function teamDay(env: Env, day: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) day = istDay()
   const [editors, settings, att, rep, cal, pushes] = await Promise.all([
-    Promise.all([listEditors(env), accountStaff(env)]).then(([keys, accounts]) => [...keys, ...accounts]),
+    Promise.all([teamKeys(env), accountStaff(env)]).then(([keys, accounts]) => [...keys, ...accounts]),
     teamSettings(env),
     env.DB.prepare('SELECT * FROM attendance WHERE day = ?1').bind(day).all<Att>(),
     env.DB.prepare('SELECT * FROM reports WHERE day = ?1').bind(day).all<Rep>(),
@@ -488,7 +488,7 @@ export function summarizeMonth(
 export async function teamMonth(env: Env, month: string) {
   if (!/^\d{4}-\d{2}$/.test(month)) month = istDay().slice(0, 7)
   const [editors, settings, att, reps] = await Promise.all([
-    Promise.all([listEditors(env), accountStaff(env)]).then(([keys, accounts]) => [...keys, ...accounts]),
+    Promise.all([teamKeys(env), accountStaff(env)]).then(([keys, accounts]) => [...keys, ...accounts]),
     teamSettings(env),
     env.DB.prepare('SELECT * FROM attendance WHERE substr(day,1,7) = ?1').bind(month).all<Att>(),
     env.DB.prepare('SELECT person_id, day FROM reports WHERE substr(day,1,7) = ?1').bind(month).all<{ person_id: string; day: string }>(),
@@ -652,4 +652,24 @@ export async function attendanceNudges(env: Env, now = Date.now()): Promise<stri
     }
   }
   return `nudges: ${plan.checkIn.length} in, ${plan.checkOut.length} out, sent ${sent}${summary}`
+}
+
+/**
+ * Owner or full access fixes a mistake in someone's attendance: "checkout" undoes a check-out (they
+ * are checked in again), "all" clears the whole day so they can check in afresh.
+ */
+export async function resetAttendance(env: Env, body: unknown) {
+  const b = (body ?? {}) as { personId?: unknown; day?: unknown; what?: unknown }
+  const personId = typeof b.personId === 'string' ? b.personId.slice(0, 80) : ''
+  const day = typeof b.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.day) ? b.day : ''
+  if (!personId || !day) throw new Error('Pick the person and the day.')
+  const r =
+    b.what === 'checkout'
+      ? await env.DB.prepare('UPDATE attendance SET check_out = NULL, out_lat = NULL, out_lng = NULL, out_acc = NULL WHERE person_id = ? AND day = ? AND check_out IS NOT NULL').bind(personId, day).run()
+      : b.what === 'all'
+        ? await env.DB.prepare('DELETE FROM attendance WHERE person_id = ? AND day = ?').bind(personId, day).run()
+        : null
+  if (!r) throw new Error('Choose what to reset.')
+  if (!r.meta.changes) throw new Error(b.what === 'checkout' ? 'They have not checked out on this day.' : 'No check-in on this day.')
+  return { ok: true }
 }

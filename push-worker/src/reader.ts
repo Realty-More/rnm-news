@@ -225,7 +225,14 @@ export async function readerGoogle(env: Env, req: Request, body: unknown) {
   let r = await env.DB.prepare('SELECT * FROM readers WHERE google_sub = ?').bind(c.sub).first<Reader>()
   if (!r) {
     r = await env.DB.prepare('SELECT * FROM readers WHERE email = ?').bind(email).first<Reader>()
-    if (r) await env.DB.prepare('UPDATE readers SET google_sub = ? WHERE id = ?').bind(c.sub, r.id).run()
+    // Emails on app accounts are not verified, but Google's is: the Google owner takes the account over.
+    // Any password set by someone else stops working (they can set a new one in My account).
+    if (r && !r.hash) await env.DB.prepare('UPDATE readers SET google_sub = ? WHERE id = ?').bind(c.sub, r.id).run()
+    else if (r)
+      await env.DB.batch([
+        env.DB.prepare("UPDATE readers SET google_sub = ?, salt = '', hash = '', reset_hash = NULL, reset_expires = NULL WHERE id = ?").bind(c.sub, r.id),
+        env.DB.prepare('DELETE FROM reader_sessions WHERE reader_id = ?').bind(r.id),
+      ])
     else {
       const ins = await env.DB.prepare("INSERT INTO readers (email, name, salt, hash, google_sub, created_at) VALUES (?, ?, '', '', ?, ?)")
         .bind(email, cleanName(c.name) || email.split('@')[0], c.sub, new Date().toISOString())

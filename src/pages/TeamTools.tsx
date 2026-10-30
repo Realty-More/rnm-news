@@ -9,7 +9,7 @@ import { useAsync } from '../lib/hooks.ts'
 import { studio, studioPost } from '../lib/owner.ts'
 import { getSpot, mapLink } from '../lib/location.ts'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
-import { AddEmployeeDialog } from './EmployeesTools.tsx'
+import { AddEmployeeDialog, RowMenu } from './EmployeesTools.tsx'
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
 import { MyTasksPanel } from './WorkTools.tsx'
@@ -489,6 +489,22 @@ export function TeamTodayTab() {
   }, [])
   const isToday = date === todayIst()
   const now = istMin()
+  /** Fix a mistaken check-out, or clear the day so they can check in again. */
+  const resetAtt = async (personId: string, name: string, what: 'checkout' | 'all') => {
+    const first = name.split(' ')[0]
+    const ask =
+      what === 'checkout'
+        ? `Undo ${first}’s check-out? They will show as checked in again and can check out later.`
+        : `Reset ${first}’s attendance for ${date}? The check-in and check-out are cleared and they can check in again.`
+    if (!window.confirm(ask)) return
+    try {
+      await studioPost('team/attendance-reset', { personId, day: date, what })
+      toast(what === 'checkout' ? `${first} is checked in again` : `${first}’s attendance for the day is cleared`)
+      res.reload()
+    } catch (e) {
+      toast((e as Error).message)
+    }
+  }
   const officeStart = toMin(d?.settings.startTime, 600)
   const officeEnd = toMin(d?.settings.endTime, officeStart + 480)
   const grace = d?.settings.graceMin ?? 15
@@ -673,6 +689,14 @@ export function TeamTodayTab() {
                   )}
                 </div>
                 <div className="tm-side">
+                  {p.checkIn && (
+                    <RowMenu
+                      items={[
+                        ...(p.checkOut ? [{ label: 'Undo check-out', onClick: () => void resetAtt(p.id, p.name, 'checkout') }] : []),
+                        { label: 'Reset attendance for this day', danger: true, onClick: () => void resetAtt(p.id, p.name, 'all') },
+                      ]}
+                    />
+                  )}
                   <span className={`tm-pill ${st.tone}`}>{st.label}</span>
                   {p.checkIn && <span className={`tm-rep ${p.report ? 'ok' : ''}`}>{p.report ? `Report ✓ ${clock(p.report.submittedAt)}` : 'Report pending'}</span>}
                 </div>

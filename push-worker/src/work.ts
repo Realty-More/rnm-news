@@ -57,6 +57,16 @@ export async function createTask(env: Env, who: Who, body: unknown, people: { id
   )
     .bind(title, text(b.details, 1000), person.id, person.name, due, priority, who.name, new Date().toISOString())
     .run()
+  // Tell the person: phone notification, and email if they added one.
+  const dueTxt = due ? ` · due ${new Date(`${due}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''
+  const { alertPerson } = await import('./alerts.ts')
+  await alertPerson(env, person.id, {
+    title: `New task from ${who.name}`,
+    body: `${title}${dueTxt}${priority === 'high' ? ' · high priority' : ''}`,
+    lines: [`${who.name} gave you a task:`, title, ...(text(b.details, 1000) ? [text(b.details, 1000)] : []), ...(dueTxt ? [`Due:${dueTxt.replace(' · due', '')}`] : []), ...(priority === 'high' ? ['High priority'] : [])],
+    path: '#/studio?tab=tasks',
+    tag: `task-${r.meta.last_row_id}`,
+  })
   return { id: r.meta.last_row_id }
 }
 
@@ -71,6 +81,19 @@ export async function updateTask(env: Env, who: Who, body: unknown) {
   const status = b.status
   if (status === 'done') {
     await env.DB.prepare("UPDATE tasks SET status = 'done', done_at = ?, done_note = ? WHERE id = ?").bind(new Date().toISOString(), text(b.note, 300) || null, id).run()
+    // The team member finished it: tell the owner and full access.
+    if (mine && t.status !== 'done') {
+      const note = text(b.note, 300)
+      const { alertManagers } = await import('./alerts.ts')
+      await alertManagers(env, {
+        title: `Task done · ${t.assignee_name}`,
+        body: `${t.title}${note ? ` · ${note.slice(0, 80)}` : ''}`,
+        lines: [`${t.assignee_name} finished a task:`, t.title, ...(note ? [`Note: ${note}`] : [])],
+        path: '#/studio?tab=tasks',
+        tag: `task-${id}`,
+        except: t.assignee_id,
+      })
+    }
   } else if (status === 'open') {
     await env.DB.prepare("UPDATE tasks SET status = 'open', done_at = NULL WHERE id = ?").bind(id).run()
   } else if (status === 'cancelled' && full(who)) {
@@ -164,42 +187,31 @@ export async function requestLeave(env: Env, who: Who, body: unknown) {
 const shortDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 const spanOf = (l: { from_day: string; to_day: string; half: number }) => (l.from_day === l.to_day ? `${shortDay(l.from_day)}${l.half ? ' (half day)' : ''}` : `${shortDay(l.from_day)} – ${shortDay(l.to_day)}`)
 
-/** Team ids with full access: admin mobile logins, admin login keys, accounts given Full access. */
-async function fullAccessIds(env: Env): Promise<Set<string>> {
-  const [accts, links, { listEditors }] = await Promise.all([
-    env.DB.prepare("SELECT phone FROM accounts WHERE role = 'admin' AND status = 'active'").all<{ phone: string }>(),
-    env.DB.prepare("SELECT reader_id FROM staff_links WHERE role = 'admin' AND person_id IS NULL").all<{ reader_id: number }>(),
-    import('./owner.ts'),
-  ])
-  const keys = (await listEditors(env)).filter((e) => e.active && e.admin)
-  return new Set([...accts.results.map((a) => `ph:${a.phone}`), ...links.results.map((l) => `rd:${l.reader_id}`), ...keys.map((k) => k.id)])
-}
-
 /**
- * Leave notifications. A new request goes to the owner's devices and to everyone with full access
- * (not to the person who asked); a decision goes back to the person who asked.
+ * Leave alerts (phone + email). A new request goes to the owner and everyone with full access (not to
+ * the person who asked); the decision goes back to the person who asked.
  */
 export async function leaveNotice(env: Env, what: 'request' | 'approved' | 'rejected', l: { person_id: string; name: string; kind: Kind; from_day: string; to_day: string; half: number; reason?: string }, by = '') {
-  const { deliver } = await import('./push.ts')
+  const { alertManagers, alertPerson } = await import('./alerts.ts')
   const tag = `leave-${l.person_id.slice(-10)}-${l.from_day}`
-  if (what === 'request') {
-    const notice = { title: `Leave request · ${l.name}`, body: `${LEAVE_KINDS[l.kind]} · ${spanOf(l)}${l.reason ? ` · ${l.reason.slice(0, 80)}` : ''}`, url: '#/studio?tab=leave', tag }
-    const fullIds = await fullAccessIds(env)
-    fullIds.delete(l.person_id)
-    const { toOwners } = await import('./owner.ts')
-    await Promise.all([
-      toOwners(env, notice).catch(() => null),
-      fullIds.size ? deliver(env, 'staff-sub:', (st) => (fullIds.has((st as { person?: string }).person ?? '') ? [notice] : [])).catch(() => null) : null,
-    ])
-    return
-  }
-  const notice = {
-    title: what === 'approved' ? 'Leave approved ✓' : 'Leave declined',
-    body: `${LEAVE_KINDS[l.kind]} · ${spanOf(l)}${by ? ` · by ${by}` : ''}`,
-    url: '#/studio?tab=leave',
+  const when = `${LEAVE_KINDS[l.kind]} · ${spanOf(l)}`
+  if (what === 'request')
+    return alertManagers(env, {
+      title: `Leave request · ${l.name}`,
+      body: `${when}${l.reason ? ` · ${l.reason.slice(0, 80)}` : ''}`,
+      lines: [`${l.name} asked for leave.`, when, ...(l.reason ? [`Reason: ${l.reason}`] : []), 'Approve or decline it in R&M Newsroom → Leave.'],
+      path: '#/studio?tab=leave',
+      tag,
+      except: l.person_id,
+    })
+  const ok = what === 'approved'
+  return alertPerson(env, l.person_id, {
+    title: ok ? 'Leave approved ✓' : 'Leave declined',
+    body: `${when}${by ? ` · by ${by}` : ''}`,
+    lines: [`Your leave was ${ok ? 'approved' : 'declined'}${by ? ` by ${by}` : ''}.`, when],
+    path: '#/studio?tab=leave',
     tag,
-  }
-  await deliver(env, 'staff-sub:', (st) => ((st as { person?: string }).person === l.person_id ? [notice] : [])).catch(() => null)
+  })
 }
 
 export async function myLeaves(env: Env, who: Who) {

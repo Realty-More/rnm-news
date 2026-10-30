@@ -9491,3 +9491,66 @@ button.mk-cover:focus-visible {
   object-fit: cover;
   display: block;
 }
+
+/* Employees → Access keys */
+.akeys {
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  display: grid;
+  gap: 12px;
+}
+.akeys h3 {
+  margin: 0 0 4px;
+  font: 700 18px var(--serif);
+}
+.akeys .meta {
+  margin: 0;
+}
+.akeys-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.akeys-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.akeys-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.akeys-text small {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+.danger-text {
+  color: #d9502e;
+}
+.akeys-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.akeys-form input {
+  flex: 1;
+  min-width: 180px;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 15px var(--sans);
+}

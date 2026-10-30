@@ -659,9 +659,12 @@ interface Editor {
   created: string
   lastUsed?: string
   admin?: boolean
+  kind?: 'access'
 }
 export function TeamTab() {
-  const res = useAsync('studio:team', (s) => studio<{ editors: Editor[] }>('team', undefined, s))
+  const raw = useAsync('studio:team', (s) => studio<{ editors: Editor[] }>('team', undefined, s))
+  // Full access keys are listed in Employees → Access keys, not here.
+  const res = { ...raw, data: raw.data ? { editors: raw.data.editors.filter((e) => e.kind !== 'access') } : raw.data }
   const accts = useAsync(hasFullAccess() ? 'studio:accounts' : null, (s) => studio<{ accounts: { phone: string; name: string; status: string; role: string }[] }>('accounts', undefined, s))
   const [mergeTo, setMergeTo] = useState<Record<string, string>>({})
   const [newLogin, setNewLogin] = useState<{ name: string; phone: string; password: string } | null>(null)

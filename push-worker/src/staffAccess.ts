@@ -168,7 +168,7 @@ export async function grantAccess(env: Env, who: Who, body: unknown) {
     await env.SUBS.put('team:settings', JSON.stringify({ ...s, people }))
   }
   const before = await accessOf(env, r.id)
-  await env.DB.prepare('INSERT INTO staff_links (reader_id, role, by_name, granted_at) VALUES (?, ?, ?, ?) ON CONFLICT(reader_id) DO UPDATE SET role = excluded.role')
+  await env.DB.prepare('INSERT INTO staff_links (reader_id, role, by_name, granted_at) VALUES (?, ?, ?, ?) ON CONFLICT(reader_id) DO UPDATE SET role = excluded.role, person_id = NULL')
     .bind(r.id, role, who.name.slice(0, 60), now)
     .run()
   if (title)
@@ -211,15 +211,23 @@ export async function readerForStaff(env: Env, phone: string): Promise<{ token: 
   const { newSession, publicMe } = await import('./reader.ts')
   let rid = (await env.DB.prepare('SELECT reader_id FROM staff_links WHERE person_id = ? ORDER BY reader_id LIMIT 1').bind(pid).first<{ reader_id: number }>())?.reader_id
   if (!rid) {
-    const same = await env.DB.prepare('SELECT r.id, l.person_id, l.reader_id AS linked FROM readers r LEFT JOIN staff_links l ON l.reader_id = r.id WHERE r.phone = ?').bind(phone).first<{ id: number; person_id: string | null; linked: number | null }>()
+    const same = await env.DB.prepare('SELECT r.id, r.email, r.google_sub, l.reader_id AS linked FROM readers r LEFT JOIN staff_links l ON l.reader_id = r.id WHERE r.phone = ?')
+      .bind(phone)
+      .first<{ id: number; email: string | null; google_sub: string | null; linked: number | null }>()
     if (same?.linked) return null
-    if (same) {
+    // Phone numbers on app accounts are not verified, so an account with this number is taken over only
+    // when nobody else can get into it (no other email, no Google). Its password and resets are cleared.
+    const safe = same && !same.google_sub && (!same.email || same.email === a.email)
+    if (same && safe) {
       rid = same.id
-      await env.DB.batch([env.DB.prepare("UPDATE readers SET salt = '', hash = '' WHERE id = ?").bind(rid), env.DB.prepare('DELETE FROM reader_sessions WHERE reader_id = ?').bind(rid)])
+      await env.DB.batch([
+        env.DB.prepare("UPDATE readers SET salt = '', hash = '', reset_hash = NULL, reset_expires = NULL WHERE id = ?").bind(rid),
+        env.DB.prepare('DELETE FROM reader_sessions WHERE reader_id = ?').bind(rid),
+      ])
     } else {
-      // Their team email too, unless another app account already uses it.
+      // A new app account: their number (unless an unsafe account holds it) and team email (unless taken).
       const email = a.email && !(await env.DB.prepare('SELECT id FROM readers WHERE email = ?').bind(a.email).first()) ? a.email : null
-      const ins = await env.DB.prepare('INSERT INTO readers (email, phone, name, created_at) VALUES (?, ?, ?, ?)').bind(email, phone, a.name, new Date().toISOString()).run()
+      const ins = await env.DB.prepare('INSERT INTO readers (email, phone, name, created_at) VALUES (?, ?, ?, ?)').bind(email, same ? null : phone, a.name, new Date().toISOString()).run()
       rid = Number(ins.meta.last_row_id)
     }
     await env.DB.prepare("INSERT INTO staff_links (reader_id, role, by_name, granted_at, person_id) VALUES (?, ?, 'Team login', ?, ?) ON CONFLICT(reader_id) DO UPDATE SET person_id = excluded.person_id")
@@ -231,12 +239,22 @@ export async function readerForStaff(env: Env, phone: string): Promise<{ token: 
   return { token: await newSession(env, rid), me: publicMe(r, await accessOf(env, rid)) }
 }
 
+/** Refuses changes to the owner's own app account (unless by the owner) and to your own link. */
+async function guardLink(env: Env, who: Who, readerId: number, selfMsg: string) {
+  const l = await env.DB.prepare("SELECT l.person_id, a.role AS team_role FROM staff_links l LEFT JOIN accounts a ON 'ph:' || a.phone = l.person_id WHERE l.reader_id = ?")
+    .bind(readerId)
+    .first<{ person_id: string | null; team_role: string | null }>()
+  if (l?.team_role === 'owner' && who.role !== 'owner') throw new Error('The owner’s own account can’t be changed here.')
+  const target = l?.person_id ?? linkId(readerId)
+  if ((who.id && who.id === target) || (who.phone && target === `ph:${who.phone}`)) throw new Error(selfMsg)
+}
+
 /** Takes Newsroom access away. The account itself stays (they keep reading and saving stories). */
 export async function revokeAccess(env: Env, who: Who, body: unknown) {
   mustBeFull(who)
   const readerId = Number((body as { readerId?: unknown })?.readerId)
   if (!Number.isInteger(readerId) || readerId < 1) throw new Error('Pick the account first.')
-  if (who.id === linkId(readerId)) throw new Error('You can’t take away your own access.')
+  await guardLink(env, who, readerId, 'You can’t take away your own access.')
   const out = await env.DB.prepare('DELETE FROM staff_links WHERE reader_id = ?').bind(readerId).run()
   if (!out.meta.changes) throw new Error('This account has no Newsroom access.')
   return { ok: true }
@@ -247,6 +265,7 @@ export async function signOutLinked(env: Env, who: Who, body: unknown) {
   mustBeFull(who)
   const readerId = Number((body as { readerId?: unknown })?.readerId)
   if (!Number.isInteger(readerId) || !(await accessOf(env, readerId))) throw new Error('This account has no Newsroom access.')
+  await guardLink(env, who, readerId, 'Use Log out on your own device instead.')
   await env.DB.prepare('DELETE FROM reader_sessions WHERE reader_id = ?').bind(readerId).run()
   return { ok: true }
 }

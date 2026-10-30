@@ -128,7 +128,7 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
   // Business numbers, traffic, notifications and site settings are for the owner (Palash Roy) only.
   if (!full(who) && OWNER_ONLY.has(pathname) && !(req.method === 'GET' && pathname === '/editor/site')) return ownerOnly()
   // Check-in, daily report and report reminders are for team members; the owner is not tracked as staff.
-  if (who.role === 'owner' && TEAM_ONLY.has(pathname)) return json({ error: 'Attendance and daily reports are for team members.' }, 403, headers)
+  if ((who.role === 'owner' || who.accessKey) && TEAM_ONLY.has(pathname)) return json({ error: 'Attendance and daily reports are for team members.' }, 403, headers)
   // Ad sales (advertisers, deal values, payments) and the newsletter are for the owner and full-access staff only.
   if ((pathname.startsWith('/editor/ads') || pathname.startsWith('/editor/newsletter')) && !full(who)) return ownerOnly()
   // The media kit (rate cards and share links to advertisers): owner and full-access staff, not other employees.
@@ -263,7 +263,8 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       case '/editor/team': {
         if (!full(who)) return ownerOnly()
         const name = String((body as { name?: unknown }).name ?? '')
-        return json(await createEditor(env, name), 200, headers)
+        // kind "access": a Full access key (opens every Newsroom section; not a team member).
+        return json(await createEditor(env, name, (body as { kind?: unknown }).kind === 'access'), 200, { ...headers, 'Cache-Control': 'no-store' })
       }
       case '/editor/me/checkin':
         return json(await checkIn(env, who, body), 200, headers)
@@ -394,6 +395,11 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
       }
       case '/editor/team/settings':
         return full(who) ? json(await saveTeamSettings(env, body), 200, headers) : ownerOnly()
+      case '/editor/team/attendance-reset': {
+        if (!full(who)) return ownerOnly()
+        const { resetAttendance } = await import('./team.ts')
+        return json(await resetAttendance(env, body), 200, headers)
+      }
       case '/editor/team/remind-now':
         return full(who) ? json({ result: await reportReminders(env, true) }, 200, headers) : ownerOnly()
       case '/editor/team/revoke': {

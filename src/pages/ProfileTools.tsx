@@ -505,54 +505,6 @@ function useEmailAdd(onSaved: () => void) {
   return { email, setEmail, pw, setPw, code, setCode, step, setStep, busy, send, verify, error, setError }
 }
 
-/**
- * My day: a card for team members whose login has no email yet (needed for "Forgot password?" codes
- * and task / leave emails). Hidden once an email is added.
- */
-export function EmailNudge() {
-  const res = useAsync('studio:me-email', (s) => studio<{ email: string; canChange: boolean }>('me/email', undefined, s))
-  const f = useEmailAdd(() => res.reload())
-  if (!res.data?.canChange || res.data.email) return null
-  return (
-    <form
-      className="email-nudge"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void (f.step === 'form' ? f.send() : f.verify())
-      }}
-    >
-      <div>
-        <b>{f.step === 'form' ? 'Add your email' : 'Enter the code'}</b>
-        <small>{f.step === 'form' ? 'So you can reset your password yourself and get task and leave updates by email.' : `We sent a 6-digit code to ${f.email}. It works for 15 minutes.`}</small>
-      </div>
-      {f.step === 'form' ? (
-        <>
-          <input type="email" value={f.email} onChange={(e) => f.setEmail(e.target.value)} placeholder="you@gmail.com" autoComplete="email" required aria-label="Your email" />
-          <input type="password" value={f.pw} onChange={(e) => f.setPw(e.target.value)} placeholder="Your Newsroom password" autoComplete="current-password" required aria-label="Your Newsroom password" />
-          <button className="btn small" disabled={f.busy}>
-            {f.busy ? 'Sending…' : 'Send code'}
-          </button>
-        </>
-      ) : (
-        <>
-          <input value={f.code} onChange={(e) => f.setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" required aria-label="Code from your email" />
-          <button type="button" className="btn ghost small" onClick={() => f.setStep('form')}>
-            Change email
-          </button>
-          <button className="btn small" disabled={f.busy || f.code.length !== 6}>
-            {f.busy ? 'Checking…' : 'Verify and save'}
-          </button>
-        </>
-      )}
-      {f.error && (
-        <p className="email-nudge-err" role="alert">
-          {f.error}
-        </p>
-      )}
-    </form>
-  )
-}
-
 /** The email on my team login: sign in with it, and get a reset code if I forget my password. */
 function LoginEmail() {
   const res = useAsync('studio:me-email', (s) => studio<{ email: string; canChange: boolean }>('me/email', undefined, s))

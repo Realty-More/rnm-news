@@ -45,19 +45,72 @@ export async function myEmail(env: Env, who: Who) {
   return { email: r?.email ?? '', canChange: true }
 }
 
-/** Adds, changes or removes the email on my team login (current password needed). */
+interface EmailCode {
+  email: string
+  hash: string
+  expires: number
+  tries: number
+}
+const EMAIL_CODE_MIN = 15
+
+/**
+ * Adds, changes or removes the email on my team login, the way big apps do it:
+ *   1. { email, password }        → checks the password, sends a 6-digit code to the new email;
+ *   2. { email, code }            → the code from that email saves it.
+ *   Removing: { email: '', password }.
+ * The owner / full access can also set it directly from Employees (accounts/email).
+ */
 export async function setMyEmail(env: Env, who: Who, body: unknown) {
   if (!who.phone) throw new Error('Log in with your mobile number to add an email.')
-  const b = (body ?? {}) as { email?: unknown; password?: unknown }
+  const b = (body ?? {}) as { email?: unknown; password?: unknown; code?: unknown }
   const a = await env.DB.prepare('SELECT * FROM accounts WHERE phone = ?').bind(who.phone).first<StaffRow>()
   if (!a) throw new Error('Account not found.')
-  if (typeof b.password !== 'string' || !(await checkPassword(env, b.password, a))) throw new Error('Your password is not right.')
+  const kvKey = `email-verify:${who.phone}`
   const raw = String(b.email ?? '').trim()
   const email = raw ? normEmail(raw) : null
   if (raw && !email) throw new Error('Enter a valid email address.')
-  if (email && email !== a.email && (await env.DB.prepare('SELECT phone FROM accounts WHERE email = ?').bind(email).first())) throw new Error('This email is already used by another team login.')
-  await env.DB.prepare('UPDATE accounts SET email = ? WHERE phone = ?').bind(email, who.phone).run()
-  return { ok: true, email: email ?? '' }
+
+  // Step 2: the code from the new email.
+  if (b.code !== undefined) {
+    const rec = await env.SUBS.get<EmailCode>(kvKey, 'json')
+    const code = String(b.code ?? '').replace(/\D/g, '')
+    if (!rec || rec.expires < Date.now() || rec.tries >= 5 || rec.email !== email) throw new Error('This code has expired. Ask for a new one.')
+    if (!sameKey(await sha256hex(`email:${who.phone}:${rec.email}:${code}`), rec.hash)) {
+      await env.SUBS.put(kvKey, JSON.stringify({ ...rec, tries: rec.tries + 1 }), { expirationTtl: EMAIL_CODE_MIN * 60 })
+      throw new Error('That code is not right.')
+    }
+    if (await env.DB.prepare('SELECT phone FROM accounts WHERE email = ? AND phone != ?').bind(rec.email, who.phone).first()) throw new Error('This email is already used by another team login.')
+    await env.DB.prepare('UPDATE accounts SET email = ? WHERE phone = ?').bind(rec.email, who.phone).run()
+    await env.SUBS.delete(kvKey)
+    return { ok: true, email: rec.email }
+  }
+
+  // Step 1: the password, then a code to the new email (or remove the email).
+  const pwKey = `emailpw:${who.phone}`
+  if ((await fails(env, pwKey)) >= 5) throw new Error('Too many wrong tries. Please try again in an hour.')
+  if (typeof b.password !== 'string' || !(await checkPassword(env, b.password, a))) {
+    await addFail(env, pwKey)
+    throw new Error('Your password is not right. Forgot it? Ask Palash sir to add your email from Employees.')
+  }
+  if (!email) {
+    await env.DB.prepare('UPDATE accounts SET email = NULL WHERE phone = ?').bind(who.phone).run()
+    return { ok: true, email: '' }
+  }
+  if (email === a.email) return { ok: true, email }
+  if (await env.DB.prepare('SELECT phone FROM accounts WHERE email = ? AND phone != ?').bind(email, who.phone).first()) throw new Error('This email is already used by another team login.')
+  if (!env.BREVO_API_KEY) throw new Error('Email sending isn’t connected yet. Ask Palash sir to add your email from Employees.')
+  const sendKey = `emailcode:${who.phone}`
+  if ((await fails(env, sendKey)) >= 5) throw new Error('Too many codes asked for. Please try again in an hour.')
+  await addFail(env, sendKey)
+  const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0')
+  const rec: EmailCode = { email, hash: await sha256hex(`email:${who.phone}:${email}:${code}`), expires: Date.now() + EMAIL_CODE_MIN * 60000, tries: 0 }
+  await env.SUBS.put(kvKey, JSON.stringify(rec), { expirationTtl: EMAIL_CODE_MIN * 60 })
+  const { sendRaw } = await import('./newsletter.ts')
+  const name = a.name.replace(/[<>&"]/g, '')
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#141416"><p style="font:700 12px Arial;letter-spacing:2px;color:#A87412;text-transform:uppercase">R&amp;M Newsroom</p><h1 style="font:400 26px Georgia,serif;margin:8px 0 12px">Confirm your email</h1><p>Hi ${name}, enter this code in R&amp;M Newsroom to add this email to your team login:</p><p style="font:700 34px/1 'Courier New',monospace;letter-spacing:8px;background:#F7F6F2;border-radius:8px;padding:16px;text-align:center">${code}</p><p style="color:#6B6B70;font-size:13px">It works for ${EMAIL_CODE_MIN} minutes. If you did not ask for this, ignore this email.</p></div>`
+  const r = await sendRaw(env, { to: email, subject: `${code} is your R&M Newsroom email code`, html, text: `Your R&M Newsroom email code: ${code}\nIt works for ${EMAIL_CODE_MIN} minutes.`, tag: 'email-verify' }).catch(() => 'error')
+  if (r !== 'ok') throw new Error('The code email could not be sent. Please try again, or ask Palash sir to add your email from Employees.')
+  return { ok: true, sent: true, email }
 }
 
 /** Sends a reset code to the team login's email. `matched` tells the app to use the team reset. */

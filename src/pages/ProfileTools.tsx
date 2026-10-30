@@ -458,44 +458,89 @@ function OwnerKey() {
 }
 
 /**
- * My day: a card for team members whose login has no email yet (needed for "Forgot password?" codes
- * and task / leave emails). Hidden once an email is added.
+ * Adding or changing my login email, the way big apps do it: email + password, then the 6-digit code
+ * sent to that email. `step` is 'form' first and 'code' once the code is sent.
  */
-export function EmailNudge() {
-  const res = useAsync('studio:me-email', (s) => studio<{ email: string; canChange: boolean }>('me/email', undefined, s))
+function useEmailAdd(onSaved: () => void) {
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
+  const [code, setCode] = useState('')
+  const [step, setStep] = useState<'form' | 'code'>('form')
   const [busy, setBusy] = useState(false)
-  if (!res.data?.canChange || res.data.email) return null
-  const save = async () => {
+  const send = async () => {
     setBusy(true)
     try {
-      await studioPost('me/email', { email, password: pw })
-      toast('Email saved. You can now sign in with it and reset your password yourself.')
-      res.reload()
+      const r = await studioPost<{ sent?: boolean; email: string }>('me/email', { email, password: pw })
+      if (r.sent) {
+        setStep('code')
+        toast(`A 6-digit code is on its way to ${r.email}`)
+      } else {
+        toast(r.email ? 'Email saved.' : 'Email removed')
+        onSaved()
+      }
     } catch (e) {
       toast((e as Error).message)
     } finally {
       setBusy(false)
     }
   }
+  const verify = async () => {
+    setBusy(true)
+    try {
+      await studioPost('me/email', { email, code })
+      toast('Email added. You can now sign in with it and reset your password yourself.')
+      setStep('form')
+      setPw('')
+      setCode('')
+      onSaved()
+    } catch (e) {
+      toast((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return { email, setEmail, pw, setPw, code, setCode, step, setStep, busy, send, verify }
+}
+
+/**
+ * My day: a card for team members whose login has no email yet (needed for "Forgot password?" codes
+ * and task / leave emails). Hidden once an email is added.
+ */
+export function EmailNudge() {
+  const res = useAsync('studio:me-email', (s) => studio<{ email: string; canChange: boolean }>('me/email', undefined, s))
+  const f = useEmailAdd(() => res.reload())
+  if (!res.data?.canChange || res.data.email) return null
   return (
     <form
       className="email-nudge"
       onSubmit={(e) => {
         e.preventDefault()
-        void save()
+        void (f.step === 'form' ? f.send() : f.verify())
       }}
     >
       <div>
-        <b>Add your email</b>
-        <small>So you can reset your password yourself and get task and leave updates by email.</small>
+        <b>{f.step === 'form' ? 'Add your email' : 'Enter the code'}</b>
+        <small>{f.step === 'form' ? 'So you can reset your password yourself and get task and leave updates by email.' : `We sent a 6-digit code to ${f.email}. It works for 15 minutes.`}</small>
       </div>
-      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@gmail.com" autoComplete="email" required aria-label="Your email" />
-      <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Your password" autoComplete="current-password" required aria-label="Your password" />
-      <button className="btn small" disabled={busy || !email.includes('@') || !pw}>
-        {busy ? 'Saving…' : 'Save email'}
-      </button>
+      {f.step === 'form' ? (
+        <>
+          <input type="email" value={f.email} onChange={(e) => f.setEmail(e.target.value)} placeholder="you@gmail.com" autoComplete="email" required aria-label="Your email" />
+          <input type="password" value={f.pw} onChange={(e) => f.setPw(e.target.value)} placeholder="Your password" autoComplete="current-password" required aria-label="Your password" />
+          <button className="btn small" disabled={f.busy || !f.email.includes('@') || !f.pw}>
+            {f.busy ? 'Sending…' : 'Send code'}
+          </button>
+        </>
+      ) : (
+        <>
+          <input value={f.code} onChange={(e) => f.setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" inputMode="numeric" autoComplete="one-time-code" required aria-label="Code from your email" />
+          <button type="button" className="btn ghost small" onClick={() => f.setStep('form')}>
+            Change email
+          </button>
+          <button className="btn small" disabled={f.busy || f.code.length !== 6}>
+            {f.busy ? 'Checking…' : 'Verify and save'}
+          </button>
+        </>
+      )}
     </form>
   )
 }
@@ -504,23 +549,21 @@ export function EmailNudge() {
 function LoginEmail() {
   const res = useAsync('studio:me-email', (s) => studio<{ email: string; canChange: boolean }>('me/email', undefined, s))
   const [open, setOpen] = useState(false)
-  const [email, setEmail] = useState('')
-  const [pw, setPw] = useState('')
-  const [busy, setBusy] = useState(false)
+  const f = useEmailAdd(() => {
+    setOpen(false)
+    res.reload()
+  })
   if (!res.data?.canChange) return null
   const current = res.data.email
-  const save = async (value: string) => {
-    setBusy(true)
+  const remove = async () => {
+    f.setEmail('')
     try {
-      await studioPost('me/email', { email: value, password: pw })
-      toast(value ? 'Email saved. You can now sign in with it too.' : 'Email removed')
+      await studioPost('me/email', { email: '', password: f.pw })
+      toast('Email removed')
       setOpen(false)
-      setPw('')
       res.reload()
     } catch (e) {
       toast((e as Error).message)
-    } finally {
-      setBusy(false)
     }
   }
   return (
@@ -539,27 +582,46 @@ function LoginEmail() {
           className="profile-email-form"
           onSubmit={(e) => {
             e.preventDefault()
-            void save(email)
+            void (f.step === 'form' ? f.send() : f.verify())
           }}
         >
-          <label>
-            Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={current || 'you@example.com'} autoComplete="email" required />
-          </label>
-          <label>
-            Your password <small>(to confirm it’s you)</small>
-            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" required />
-          </label>
-          <div className="action-row">
-            <button className="btn small" disabled={busy}>
-              {busy ? 'Saving…' : 'Save email'}
-            </button>
-            {current && (
-              <button type="button" className="btn ghost small" disabled={busy || !pw} onClick={() => void save('')}>
-                Remove email
-              </button>
-            )}
-          </div>
+          {f.step === 'form' ? (
+            <>
+              <label>
+                Email
+                <input type="email" value={f.email} onChange={(e) => f.setEmail(e.target.value)} placeholder={current || 'you@example.com'} autoComplete="email" required />
+              </label>
+              <label>
+                Your password <small>(to confirm it’s you)</small>
+                <input type="password" value={f.pw} onChange={(e) => f.setPw(e.target.value)} autoComplete="current-password" required />
+              </label>
+              <div className="action-row">
+                <button className="btn small" disabled={f.busy}>
+                  {f.busy ? 'Sending…' : 'Send code'}
+                </button>
+                {current && (
+                  <button type="button" className="btn ghost small" disabled={f.busy || !f.pw} onClick={() => void remove()}>
+                    Remove email
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <label>
+                Code from {f.email} <small>(works for 15 minutes)</small>
+                <input value={f.code} onChange={(e) => f.setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" required />
+              </label>
+              <div className="action-row">
+                <button className="btn small" disabled={f.busy || f.code.length !== 6}>
+                  {f.busy ? 'Checking…' : 'Verify and save'}
+                </button>
+                <button type="button" className="btn ghost small" onClick={() => f.setStep('form')}>
+                  Change email
+                </button>
+              </div>
+            </>
+          )}
         </form>
       )}
     </div>

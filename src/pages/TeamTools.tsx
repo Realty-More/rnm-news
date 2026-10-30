@@ -1,6 +1,6 @@
 // Team attendance and daily work reports in the Content Studio.
 // Employees: "My day" (check in/out, daily report). Owner: "Team today" and monthly "Attendance" with CSV export.
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
@@ -11,6 +11,9 @@ import { getSpot, mapLink } from '../lib/location.ts'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
 import { AddEmployeeDialog, Dialog, RowMenu } from './EmployeesTools.tsx'
 import { buzz, confetti, firstToday } from '../lib/confetti.ts'
+
+// The map (Leaflet + OpenStreetMap) loads only when someone opens it.
+const FieldMap = lazy(() => import('./FieldMap.tsx'))
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
 import { MyTasksPanel } from './WorkTools.tsx'
@@ -568,7 +571,7 @@ export function MyDayTab() {
 /* ---------- owner: Team today ---------- */
 interface TeamDay {
   day: string
-  settings: { startTime: string; endTime?: string; graceMin: number; reminderTime: string; weekOff?: number[] }
+  settings: { startTime: string; endTime?: string; graceMin: number; reminderTime: string; weekOff?: number[]; offices?: Office[] }
   summary: { total: number; present: number; late: number; reports: number; onLeave?: number }
   people: {
     id: string
@@ -659,6 +662,9 @@ export function TeamTodayTab() {
   const present = d?.summary.present ?? 0
   const total = d?.summary.total ?? 0
   const due = rows.filter((r) => !r.p.leave)
+  const [mapOpen, setMapOpen] = useState(false)
+  const located = rows.filter((r) => r.p.inPlace || r.p.outPlace)
+  const unlocated = rows.filter((r) => r.p.checkIn && !r.p.inPlace)
   const allIn = isToday && due.length > 0 && due.every((r) => r.p.checkIn) && count.late === 0
   const allReports = isToday && due.length > 0 && due.every((r) => r.p.checkIn && r.p.report)
   // Celebrate once a day on this device: the whole team in on time, then every report in.
@@ -751,6 +757,47 @@ export function TeamTodayTab() {
             </div>
           </div>
 
+          {(located.length > 0 || (d?.settings.offices ?? []).length > 0) && (
+            <section className={`fm-panel ${mapOpen ? 'open' : ''}`}>
+              <div className="fm-head">
+                <div>
+                  <b>Where the team checked in</b>
+                  <small>
+                    {located.length} of {present} shared a location
+                    {located.some((r) => r.p.inPlace && !r.p.inPlace.office && r.p.inPlace.meters != null) ? ` · ${located.filter((r) => r.p.inPlace && !r.p.inPlace.office && r.p.inPlace.meters != null).length} away from office` : ''}
+                  </small>
+                </div>
+                <button className={`btn small ${mapOpen ? 'ghost' : ''}`} onClick={() => setMapOpen((o) => !o)} aria-expanded={mapOpen}>
+                  {mapOpen ? 'Hide map' : '🗺 Show map'}
+                </button>
+              </div>
+              {mapOpen && (
+                <>
+                  <Suspense fallback={<div className="fm-map fm-loading">Loading map…</div>}>
+                    <FieldMap
+                      people={located.map((r) => ({ id: r.p.id, name: r.p.name, photo: r.p.photo ?? undefined, checkIn: r.p.checkIn, checkOut: r.p.checkOut, late: r.p.late, mode: r.p.mode, inPlace: r.p.inPlace, outPlace: r.p.outPlace }))}
+                      offices={d?.settings.offices ?? []}
+                    />
+                  </Suspense>
+                  <div className="fm-legend">
+                    <span>
+                      <i className="ok" /> On time
+                    </span>
+                    <span>
+                      <i className="late" /> Late
+                    </span>
+                    <span>
+                      <i className="out" /> Check-out
+                    </span>
+                    <span>
+                      <i className="office" /> Office area
+                    </span>
+                  </div>
+                  {unlocated.length > 0 && <p className="meta fm-none">No location shared: {unlocated.map((r) => r.p.name.split(' ')[0]).join(', ')}</p>}
+                </>
+              )}
+            </section>
+          )}
           {(allIn || allReports) && (
             <div className="tm-cele" role="status">
               <span aria-hidden="true">{allReports ? '🏆' : '🎉'}</span>

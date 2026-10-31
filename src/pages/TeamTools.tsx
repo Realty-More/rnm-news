@@ -7,7 +7,7 @@ import { toast } from '../components/Toast.tsx'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { studio, studioPost } from '../lib/owner.ts'
-import { deviceKind, getSpot, lastSpotProblem, locationPermission, mapLink, type SpotProblem } from '../lib/location.ts'
+import { deviceKind, getSpot, lastSpotProblem, locationPermission, mapLink, type Spot, type SpotProblem } from '../lib/location.ts'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
 import { AddEmployeeDialog, Dialog, RowMenu } from './EmployeesTools.tsx'
 import { buzz, confetti, firstToday } from '../lib/confetti.ts'
@@ -149,7 +149,7 @@ function ShiftBar({ from, to, start, end, inAt, outAt, now, grace = 0, hours = t
 }
 
 /** Location is blocked or off: why, the exact steps for this phone, and "Try again". */
-function LocationHelp({ problem, required, onFixed }: { problem: SpotProblem; required: boolean; onFixed: () => void }) {
+function LocationHelp({ problem, required, onFixed, onClose, then }: { problem: SpotProblem; required: boolean; onFixed: (spot: Spot) => void; onClose: () => void; then?: 'check in' | 'check out' }) {
   const [busy, setBusy] = useState(false)
   const [still, setStill] = useState<SpotProblem | null>(null)
   const kind = deviceKind()
@@ -165,10 +165,8 @@ function LocationHelp({ problem, required, onFixed }: { problem: SpotProblem; re
     setBusy(true)
     const p = await getSpot(15000)
     setBusy(false)
-    if (p) {
-      toast('Location is on. You can check in now.')
-      onFixed()
-    } else setStill(lastSpotProblem ?? 'denied')
+    if (p) onFixed(p)
+    else setStill(lastSpotProblem ?? 'denied')
   }
   return (
     <div className="loc-help" role="alert">
@@ -195,13 +193,14 @@ function LocationHelp({ problem, required, onFixed }: { problem: SpotProblem; re
       )}
       <div className="action-row">
         <button className="btn small" disabled={busy} onClick={() => void retry()}>
-          {busy ? 'Checking…' : 'Try again'}
+          {busy ? 'Checking…' : then ? `Try again & ${then}` : 'Try again'}
         </button>
-        <button className="btn ghost small" onClick={onFixed}>
+        <button className="btn ghost small" onClick={onClose}>
           Close
         </button>
       </div>
       {still && <p className="loc-help-still">Still not allowed. Please follow the steps above, then try again.</p>}
+      {then && !still && <p className="loc-help-note">Once location is allowed, you’ll be {then === 'check in' ? 'checked in' : 'checked out'} automatically.</p>}
     </div>
   )
 }
@@ -282,6 +281,9 @@ export function MyDayTab() {
   const hist = useAsync('studio:myhistory', (s) => studio<{ days: { day: string; checkIn: string | null; checkOut: string | null; late: boolean; minutes: number; report: string | null }[] }>('me/history', undefined, s))
   const [mode, setMode] = useState('office')
   const [locHelp, setLocHelp] = useState<SpotProblem | null>(null)
+  const [pending, setPending] = useState<{ path: 'me/checkin' | 'me/checkout'; body: Record<string, unknown> } | null>(null)
+  const pendingRef = useRef(pending)
+  pendingRef.current = pending
   // Location blocked earlier on this phone: say so before they try to check in.
   useEffect(() => {
     void locationPermission().then((p) => p === 'denied' && setLocHelp('denied'))
@@ -303,6 +305,24 @@ export function MyDayTab() {
     return () => clearInterval(t)
   }, [])
 
+  /** Location works now: finish the check-in / check-out that was waiting for it. */
+  const finishPending = (spot: Spot) => {
+    const p = pendingRef.current
+    setLocHelp(null)
+    setPending(null)
+    if (!p) return toast('Location is on')
+    void act(p.path, { ...p.body, loc: spot }, p.path === 'me/checkin' ? 'Location on, checked in' : 'Location on, checked out')
+  }
+  // Came back from the phone's settings: if location works now, finish what was waiting.
+  useEffect(() => {
+    const on = async () => {
+      if (document.visibilityState !== 'visible' || !pendingRef.current) return
+      const spot = await getSpot(10000)
+      if (spot && pendingRef.current) finishPending(spot)
+    }
+    document.addEventListener('visibilitychange', on)
+    return () => document.removeEventListener('visibilitychange', on)
+  }, [])
   const act = async (path: string, body: unknown, done: string) => {
     setBusy(true)
     try {
@@ -365,7 +385,16 @@ export function MyDayTab() {
 
   return (
     <>
-      {locHelp && (!a?.check_in || !a.check_out) && <LocationHelp problem={locHelp} required={!!d.settings.requireLocation} onFixed={() => setLocHelp(null)} />}
+      {locHelp && (!a?.check_in || !a.check_out) && <LocationHelp
+          problem={locHelp}
+          required={!!d.settings.requireLocation}
+          then={pending ? (pending.path === 'me/checkin' ? 'check in' : 'check out') : undefined}
+          onFixed={finishPending}
+          onClose={() => {
+            setLocHelp(null)
+            setPending(null)
+          }}
+        />}
       {a?.check_in && !a.check_out && now !== null && left <= 20 && (
         <div className={`md-nudge ${d.report ? 'ok' : left <= 0 ? 'late' : ''}`} role="status">
           <span className="md-nudge-ico" aria-hidden="true">
@@ -433,7 +462,10 @@ export function MyDayTab() {
                 setBusy(true)
                 const loc = await getSpot()
                 setBusy(false)
-                if (!loc && d.settings.requireLocation) return setLocHelp(lastSpotProblem ?? 'denied')
+                if (!loc && d.settings.requireLocation) {
+                  setPending({ path: 'me/checkin', body: { mode, note } })
+                  return setLocHelp(lastSpotProblem ?? 'denied')
+                }
                 void act('me/checkin', { mode, note, loc }, loc ? 'Checked in' : 'Checked in (location not shared)')
               }}
             >
@@ -484,7 +516,10 @@ export function MyDayTab() {
                   setBusy(true)
                   const loc = await getSpot()
                   setBusy(false)
-                  if (!loc && d.settings.requireLocation) return setLocHelp(lastSpotProblem ?? 'denied')
+                  if (!loc && d.settings.requireLocation) {
+                    setPending({ path: 'me/checkout', body: {} })
+                    return setLocHelp(lastSpotProblem ?? 'denied')
+                  }
                   void act('me/checkout', { loc }, d.report ? 'Checked out. Have a good evening!' : 'Checked out. Please add your report.')
                 }}
               >

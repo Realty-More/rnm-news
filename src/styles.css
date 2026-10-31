@@ -10637,3 +10637,114 @@ button.mk-cover:focus-visible {
   color: var(--ink-2);
   font-size: 13px;
 }
+
+/* Team today → Office location → Choose on map */
+.op {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.op-search {
+  display: flex;
+  gap: 8px;
+}
+.op-search input,
+.op-foot input {
+  flex: 1;
+  min-width: 0;
+}
+.op-err {
+  margin: 0;
+  color: #e5533d;
+  font-size: 13px;
+}
+.op-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line, rgb(127 127 127 / 0.25));
+  border-radius: 10px;
+  max-height: 200px;
+  overflow: auto;
+}
+.op-hits li + li {
+  border-top: 1px solid var(--line, rgb(127 127 127 / 0.2));
+}
+.op-hits button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.op-hits button:hover {
+  background: rgb(127 127 127 / 0.1);
+}
+.op-hits small {
+  display: block;
+  opacity: 0.7;
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+.op-mapwrap {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.op-map {
+  height: min(52vh, 380px);
+  min-height: 240px;
+}
+.op-pin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 500;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.op-pin span {
+  font-size: 22px;
+  background: #fff;
+  border: 2px solid #f2711c;
+  border-radius: 50% 50% 50% 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  transform: rotate(-45deg);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.3);
+}
+.op-pin em {
+  font-style: normal;
+  line-height: 1;
+  transform: rotate(45deg);
+}
+.op-pin i {
+  width: 8px;
+  height: 8px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: #f2711c;
+  box-shadow: 0 0 0 3px rgb(242 113 28 / 0.25);
+}
+.op-help {
+  margin: 0;
+  font-size: 12.5px;
+  opacity: 0.75;
+}
+.op-foot {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.op-check {
+  font-size: 13px;
+}

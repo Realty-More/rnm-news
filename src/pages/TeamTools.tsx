@@ -14,6 +14,7 @@ import { buzz, confetti, firstToday } from '../lib/confetti.ts'
 
 // The map (Leaflet + OpenStreetMap) loads only when someone opens it.
 const FieldMap = lazy(() => import('./FieldMap.tsx'))
+const OfficePicker = lazy(() => import('./OfficePicker.tsx'))
 import { ensureSubscription } from '../lib/push.ts'
 import { Panel } from './StudioTools.tsx'
 import { MyTasksPanel } from './WorkTools.tsx'
@@ -998,6 +999,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 /** Owner / full access: office default hours, each person's own hours, and which notifications go out. */
 function TeamSettingsPanel() {
+  const [picker, setPicker] = useState(false)
   const res = useAsync('studio:team-settings', (s) => studio<{ settings: FullSettings }>('team/settings', undefined, s))
   const staff = useAsync('studio:people', (s) => studio<{ people: { id: string; name: string }[] }>('people', undefined, s))
   const [f, setF] = useState<FullSettings | null>(null)
@@ -1126,7 +1128,7 @@ function TeamSettingsPanel() {
       </Panel>
 
       <Panel title="Office location (check-in place)" note="Team check-ins show “At office” within this distance, or how far away they were. Location is read only at check-in and check-out.">
-        {(f.offices ?? []).length === 0 && <p className="empty">No office set yet. Stand in the office and tap “Add this place as office”.</p>}
+        {(f.offices ?? []).length === 0 && <p className="empty">No office set yet. Choose it on the map, or stand in the office and tap “Add this place as office”.</p>}
         <ul className="att-offices">
           {(f.offices ?? []).map((o, i) => (
             <li key={`${o.name}-${i}`}>
@@ -1156,6 +1158,9 @@ function TeamSettingsPanel() {
           ))}
         </ul>
         <div className="action-row">
+          <button className="btn small" disabled={(f.offices ?? []).length >= 5} onClick={() => setPicker(true)}>
+            🗺️ Choose on map
+          </button>
           <button
             className="btn ghost small"
             disabled={(f.offices ?? []).length >= 5 || busy}
@@ -1172,6 +1177,21 @@ function TeamSettingsPanel() {
             📍 Add this place as office
           </button>
         </div>
+        {picker && (
+          <Dialog title="Choose the office on the map" onClose={() => setPicker(false)}>
+            <Suspense fallback={<SkeletonList count={2} />}>
+              <OfficePicker
+                start={(f.offices ?? [])[0] ?? null}
+                radius={150}
+                onPick={(o) => {
+                  setF({ ...f, offices: [...(f.offices ?? []), { name: o.name, lat: o.lat, lng: o.lng, radius: 150 }] })
+                  setPicker(false)
+                  toast('Office added. Check the name and radius, then tap Save.')
+                }}
+              />
+            </Suspense>
+          </Dialog>
+        )}
         <label className="set-row toggle att-toggle">
           <span>
             Location needed to check in and out

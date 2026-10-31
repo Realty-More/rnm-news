@@ -7,7 +7,7 @@ import { toast } from '../components/Toast.tsx'
 import { formatDate } from '../lib/format.ts'
 import { useAsync } from '../lib/hooks.ts'
 import { studio, studioPost } from '../lib/owner.ts'
-import { getSpot, mapLink } from '../lib/location.ts'
+import { deviceKind, getSpot, lastSpotProblem, locationPermission, mapLink, type SpotProblem } from '../lib/location.ts'
 import { PersonAvatar } from '../components/PersonAvatar.tsx'
 import { AddEmployeeDialog, Dialog, RowMenu } from './EmployeesTools.tsx'
 import { buzz, confetti, firstToday } from '../lib/confetti.ts'
@@ -148,6 +148,64 @@ function ShiftBar({ from, to, start, end, inAt, outAt, now, grace = 0, hours = t
   )
 }
 
+/** Location is blocked or off: why, the exact steps for this phone, and "Try again". */
+function LocationHelp({ problem, required, onFixed }: { problem: SpotProblem; required: boolean; onFixed: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [still, setStill] = useState<SpotProblem | null>(null)
+  const kind = deviceKind()
+  const blocked = (still ?? problem) === 'denied'
+  const steps: Record<ReturnType<typeof deviceKind>, string[]> = {
+    'android-app': ['Open your phone’s Settings → Apps → Realtynmore.', 'Tap Permissions → Location.', 'Choose “Allow only while using the app”.', 'Come back here and tap “Try again”.'],
+    'android-installed': ['Press and hold the Realtynmore icon on your home screen → App info (ⓘ).', 'Tap Permissions → Location → Allow.', 'Come back here and tap “Try again”.'],
+    'android-browser': ['Tap the icon to the left of the web address (⚙ or 🔒) at the top.', 'Tap Permissions → Location → Allow.', 'Reload the page, then tap “Try again”.'],
+    iphone: ['Open Settings → Privacy & Security → Location Services → turn it on.', 'Scroll to Safari Websites → choose “While Using the App”.', 'In Safari tap “aA” → Website Settings → Location → Allow, then “Try again”.'],
+    computer: ['Click the icon to the left of the web address at the top of the browser.', 'Set Location to “Allow”.', 'Reload the page, then click “Try again”.'],
+  }
+  const retry = async () => {
+    setBusy(true)
+    const p = await getSpot(15000)
+    setBusy(false)
+    if (p) {
+      toast('Location is on. You can check in now.')
+      onFixed()
+    } else setStill(lastSpotProblem ?? 'denied')
+  }
+  return (
+    <div className="loc-help" role="alert">
+      <div className="loc-help-head">
+        <span aria-hidden="true">📍</span>
+        <div>
+          <b>{blocked ? 'Location is blocked for this app' : (still ?? problem) === 'timeout' ? 'Your location took too long' : 'Your phone’s location is off'}</b>
+          <small>
+            {blocked
+              ? 'It was turned off earlier, so the app can’t ask again. Turn it back on in your phone settings:'
+              : (still ?? problem) === 'timeout'
+                ? 'Go near a window or outside for a moment, then try again.'
+                : 'Turn on Location (GPS) from the quick settings at the top of your phone, then try again.'}
+            {required ? ' Location is needed to check in.' : ''}
+          </small>
+        </div>
+      </div>
+      {blocked && (
+        <ol className="loc-help-steps">
+          {steps[kind].map((s) => (
+            <li key={s}>{s}</li>
+          ))}
+        </ol>
+      )}
+      <div className="action-row">
+        <button className="btn small" disabled={busy} onClick={() => void retry()}>
+          {busy ? 'Checking…' : 'Try again'}
+        </button>
+        <button className="btn ghost small" onClick={onFixed}>
+          Close
+        </button>
+      </div>
+      {still && <p className="loc-help-still">Still not allowed. Please follow the steps above, then try again.</p>}
+    </div>
+  )
+}
+
 /** Small line icons for the My day tiles (24 px grid). */
 const MD_ICON: Record<string, string> = {
   in: 'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3',
@@ -223,6 +281,11 @@ export function MyDayTab() {
   const res = useAsync('studio:myday', (s) => studio<Today>('me/today', undefined, s))
   const hist = useAsync('studio:myhistory', (s) => studio<{ days: { day: string; checkIn: string | null; checkOut: string | null; late: boolean; minutes: number; report: string | null }[] }>('me/history', undefined, s))
   const [mode, setMode] = useState('office')
+  const [locHelp, setLocHelp] = useState<SpotProblem | null>(null)
+  // Location blocked earlier on this phone: say so before they try to check in.
+  useEffect(() => {
+    void locationPermission().then((p) => p === 'denied' && setLocHelp('denied'))
+  }, [])
   const [dayDone, setDayDone] = useState<{ minutes: number; inAt: string; outAt: string; report: boolean; full: boolean } | null>(null)
   const shiftLenRef = useRef(480)
   const [note, setNote] = useState('')
@@ -302,6 +365,7 @@ export function MyDayTab() {
 
   return (
     <>
+      {locHelp && (!a?.check_in || !a.check_out) && <LocationHelp problem={locHelp} required={!!d.settings.requireLocation} onFixed={() => setLocHelp(null)} />}
       {a?.check_in && !a.check_out && now !== null && left <= 20 && (
         <div className={`md-nudge ${d.report ? 'ok' : left <= 0 ? 'late' : ''}`} role="status">
           <span className="md-nudge-ico" aria-hidden="true">
@@ -369,7 +433,7 @@ export function MyDayTab() {
                 setBusy(true)
                 const loc = await getSpot()
                 setBusy(false)
-                if (!loc && d.settings.requireLocation) return toast('Please allow location for this app, then check in again.')
+                if (!loc && d.settings.requireLocation) return setLocHelp(lastSpotProblem ?? 'denied')
                 void act('me/checkin', { mode, note, loc }, loc ? 'Checked in' : 'Checked in (location not shared)')
               }}
             >
@@ -420,7 +484,7 @@ export function MyDayTab() {
                   setBusy(true)
                   const loc = await getSpot()
                   setBusy(false)
-                  if (!loc && d.settings.requireLocation) return toast('Please allow location for this app, then check out again.')
+                  if (!loc && d.settings.requireLocation) return setLocHelp(lastSpotProblem ?? 'denied')
                   void act('me/checkout', { loc }, d.report ? 'Checked out. Have a good evening!' : 'Checked out. Please add your report.')
                 }}
               >

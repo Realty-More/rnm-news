@@ -10583,3 +10583,51 @@ button.mk-cover:focus-visible {
     animation: none;
   }
 }
+
+/* My day: location blocked / off help */
+.loc-help {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid rgb(217 80 46 / 0.45);
+  background: linear-gradient(110deg, rgb(217 80 46 / 0.12), rgb(251 165 25 / 0.06));
+  animation: md-tile-in 0.4s ease both;
+}
+.loc-help-head {
+  display: flex;
+  gap: 12px;
+}
+.loc-help-head > span {
+  font-size: 26px;
+  line-height: 1.1;
+}
+.loc-help-head div {
+  display: grid;
+  gap: 3px;
+}
+.loc-help-head b {
+  font-size: 15px;
+}
+.loc-help-head small {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.loc-help-steps {
+  margin: 10px 0 12px;
+  padding: 10px 12px 10px 30px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.loc-help-steps li::marker {
+  color: #d9502e;
+  font-weight: 700;
+}
+.loc-help-still {
+  margin: 8px 0 0;
+  color: #c2412a;
+  font-size: 13px;
+  font-weight: 600;
+}

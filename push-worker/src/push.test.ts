@@ -695,6 +695,14 @@ describe('check-in location', () => {
     expect(placeOf({ lat: 28.5355, lng: 77.393, acc: 20 }, [office])?.label).toBe('195 m from Noida Office')
     expect(placeOf({ lat: 28.5, lng: 77.3, acc: 10 }, [])?.label).toBe('Location shared')
     expect(placeOf(null, [office])).toBeNull()
+    // A rough network area right on the office never says "At Noida Office".
+    expect(placeOf({ lat: 28.5356, lng: 77.3911, acc: 5000 }, [office])).toMatchObject({ office: null, meters: null, label: 'Rough area only' })
+  })
+  it('turns the connection area into a rough spot', async () => {
+    const { roughSpot } = await import('./team.ts')
+    expect(roughSpot({ latitude: '28.5355', longitude: '77.3910', city: 'Noida' })).toEqual({ lat: 28.5355, lng: 77.391, acc: 5000 })
+    expect(roughSpot({})).toBeNull()
+    expect(roughSpot(undefined)).toBeNull()
   })
   it('keeps at most 5 valid offices', async () => {
     const { cleanOffices } = await import('./team.ts')

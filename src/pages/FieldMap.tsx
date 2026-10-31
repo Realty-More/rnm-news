@@ -77,7 +77,7 @@ export default function FieldMap({ people, offices }: { people: MapPerson[]; off
     for (const p of people) {
       const pin = (pl: Place, kind: 'in' | 'out') => {
         const gmaps = `https://www.google.com/maps?q=${pl.lat},${pl.lng}`
-        const popup = `<div class="fm-pop"><b>${esc(p.name)}</b><span>${kind === 'in' ? `In ${time(p.checkIn)}${p.late ? ' · <em class="late">Late</em>' : ' · <em>On time</em>'}` : `Out ${time(p.checkOut)}`}</span><span>${esc(where(pl))}${pl.acc && pl.acc < 9999 ? ` · ±${Math.round(pl.acc)} m` : ''}</span>${kind === 'in' && p.mode ? `<span>${esc(MODE[p.mode] ?? p.mode)}</span>` : ''}<a href="${gmaps}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a></div>`
+        const popup = `<div class="fm-pop"><b>${esc(p.name)}</b><span>${kind === 'in' ? `In ${time(p.checkIn)}${p.late ? ' · <em class="late">Late</em>' : ' · <em>On time</em>'}` : `Out ${time(p.checkOut)}`}</span><span>${esc(where(pl))}${pl.acc && pl.acc < 9999 ? (pl.acc >= 1000 ? ` · ±${Math.round(pl.acc / 1000)} km` : ` · ±${Math.round(pl.acc)} m`) : ''}</span>${kind === 'in' && p.mode ? `<span>${esc(MODE[p.mode] ?? p.mode)}</span>` : ''}<a href="${gmaps}" target="_blank" rel="noopener noreferrer">Open in Google Maps ↗</a></div>`
         L.marker([pl.lat, pl.lng], { icon: personIcon(p, kind), zIndexOffset: kind === 'in' ? 500 : 0 }).bindPopup(popup).addTo(layer)
         points.push([pl.lat, pl.lng])
       }

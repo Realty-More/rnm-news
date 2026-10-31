@@ -85,9 +85,24 @@ export function cleanSpot(v: unknown): Spot | null {
   return { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, acc: a }
 }
 
+/** Accuracy given to a rough, network-based position (no GPS from the phone). */
+export const ROUGH_M = 5000
+
+/**
+ * A rough area from the phone's internet connection (Cloudflare's request.cf), for apps that can't
+ * share GPS, such as the Android app 1.0, which has no location permission.
+ */
+export function roughSpot(cf: unknown): Spot | null {
+  const c = (cf ?? {}) as { latitude?: unknown; longitude?: unknown }
+  const s = cleanSpot({ lat: Number(c.latitude), lng: Number(c.longitude), acc: ROUGH_M })
+  return s ? { ...s, acc: ROUGH_M } : null
+}
+
 /** Where a check-in happened relative to the offices (pure, for tests). */
 export function placeOf(spot: Spot | null, offices: Office[]): Place | null {
   if (!spot) return null
+  // A rough area can be kilometres off, so it never counts as "at the office" or gives a distance.
+  if (spot.acc >= ROUGH_M) return { ...spot, office: null, meters: null, label: 'Rough area only' }
   if (!offices.length) return { ...spot, office: null, meters: null, label: 'Location shared' }
   let best = offices[0]
   let d = distanceM(spot, best)
@@ -261,10 +276,10 @@ export async function myToday(env: Env, who: Who) {
   return { day, name: who.name, attendance: att, report: rep, settings: mine, place, late: isLate(att?.check_in ?? null, mine), minutes: workedMinutes(att?.check_in ?? null, att?.check_out ?? null) }
 }
 
-export async function checkIn(env: Env, who: Who, body: unknown) {
+export async function checkIn(env: Env, who: Who, body: unknown, cf?: unknown) {
   const b = (body ?? {}) as { mode?: unknown; note?: unknown; loc?: unknown }
   const mode: Mode = MODES.includes(b.mode as Mode) ? (b.mode as Mode) : 'office'
-  const spot = cleanSpot(b.loc)
+  const spot = cleanSpot(b.loc) ?? roughSpot(cf)
   if (!spot && (await teamSettings(env)).requireLocation) throw new Error('Turn on location for this app to check in.')
   const note = typeof b.note === 'string' ? b.note.trim().slice(0, 140) : ''
   const now = new Date().toISOString()
@@ -280,8 +295,8 @@ export async function checkIn(env: Env, who: Who, body: unknown) {
   return today
 }
 
-export async function checkOut(env: Env, who: Who, body: unknown = {}) {
-  const spot = cleanSpot((body as { loc?: unknown } | null)?.loc)
+export async function checkOut(env: Env, who: Who, body: unknown = {}, cf?: unknown) {
+  const spot = cleanSpot((body as { loc?: unknown } | null)?.loc) ?? roughSpot(cf)
   if (!spot && (await teamSettings(env)).requireLocation) throw new Error('Turn on location for this app to check out.')
   const r = await env.DB.prepare('UPDATE attendance SET check_out = ?1, out_lat = ?4, out_lng = ?5, out_acc = ?6 WHERE person_id = ?2 AND day = ?3 AND check_in IS NOT NULL')
     .bind(new Date().toISOString(), personId(who), istDay(), spot?.lat ?? null, spot?.lng ?? null, spot?.acc ?? null)

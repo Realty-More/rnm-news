@@ -279,9 +279,9 @@ async function studio(req: Request, url: URL, env: Env, ctx: ExecutionContext, h
         return json(await createEditor(env, name, (body as { kind?: unknown }).kind === 'access'), 200, { ...headers, 'Cache-Control': 'no-store' })
       }
       case '/editor/me/checkin':
-        return json(await checkIn(env, who, body), 200, headers)
+        return json(await checkIn(env, who, body, req.cf), 200, headers)
       case '/editor/me/checkout':
-        return json(await checkOut(env, who, body), 200, headers)
+        return json(await checkOut(env, who, body, req.cf), 200, headers)
       case '/editor/me/report':
         return json(await submitReport(env, who, body), 200, headers)
       case '/editor/me/device':

@@ -31,11 +31,13 @@ export interface Spot {
   acc: number
 }
 
-/** Current position, or null if location is off, refused or too slow. */
-export function getSpot(timeoutMs = 12000): Promise<Spot | null> {
-  if (!('geolocation' in navigator)) return Promise.resolve(null)
+/** One try at the phone's position with the given options. */
+function readOnce(opts: PositionOptions, waitMs: number): Promise<Spot | null> {
   return new Promise((resolve) => {
-    const done = setTimeout(() => resolve(null), timeoutMs + 1000)
+    const done = setTimeout(() => {
+      lastSpotProblem = 'timeout'
+      resolve(null)
+    }, waitMs + 1000)
     navigator.geolocation.getCurrentPosition(
       (p) => {
         clearTimeout(done)
@@ -47,9 +49,20 @@ export function getSpot(timeoutMs = 12000): Promise<Spot | null> {
         lastSpotProblem = e.code === 1 ? 'denied' : e.code === 3 ? 'timeout' : 'unavailable'
         resolve(null)
       },
-      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 60000 },
+      { ...opts, timeout: waitMs },
     )
   })
+}
+
+/**
+ * Current position, or null if location is off, refused or too slow. GPS first; if GPS doesn't
+ * answer (common indoors), a quick second try from Wi-Fi and mobile towers (usually 20-100 m).
+ */
+export async function getSpot(timeoutMs = 12000): Promise<Spot | null> {
+  if (!('geolocation' in navigator)) return null
+  const gps = await readOnce({ enableHighAccuracy: true, maximumAge: 60000 }, timeoutMs)
+  if (gps || lastSpotProblem === 'denied') return gps
+  return readOnce({ enableHighAccuracy: false, maximumAge: 60000 }, 8000)
 }
 
 export const mapLink = (p: { lat: number; lng: number }) => `https://www.google.com/maps?q=${p.lat},${p.lng}`

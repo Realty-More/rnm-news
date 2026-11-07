@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { simplerAddresses, spotFromText } from '../lib/places.ts'
 
 interface Hit {
   name: string
@@ -14,28 +15,59 @@ interface Hit {
 
 const NOIDA: [number, number] = [28.5355, 77.391]
 
-/** Address search on OpenStreetMap: Nominatim (India only), with Photon as a backup. Both free. */
-async function searchPlaces(q: string): Promise<Hit[]> {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=in&accept-language=en&q=${encodeURIComponent(q)}`
-    const r = await fetch(url, { headers: { Accept: 'application/json' } })
-    if (!r.ok) throw new Error(String(r.status))
-    const rows = (await r.json()) as { lat: string; lon: string; name?: string; display_name: string }[]
-    return rows.map((x) => ({ name: x.name || x.display_name.split(',')[0], full: x.display_name, lat: Number(x.lat), lng: Number(x.lon) }))
-  } catch {
-    // Backup: Photon, biased towards Noida and limited to India.
-    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=8&lang=en&lat=${NOIDA[0]}&lon=${NOIDA[1]}`)
-    if (!r.ok) throw new Error('Search is busy. Try again in a moment, or move the map yourself.')
-    const d = (await r.json()) as { features: { geometry: { coordinates: [number, number] }; properties: Record<string, string | undefined> }[] }
-    return d.features
-      .filter((f) => f.properties.countrycode === 'IN')
-      .slice(0, 6)
-      .map((f) => {
-        const p = f.properties
-        const full = [p.name, p.street, p.district, p.city, p.state, p.postcode].filter(Boolean).join(', ')
-        return { name: p.name || p.street || full.split(',')[0], full, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }
-      })
+async function nominatim(q: string): Promise<Hit[]> {
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=in&accept-language=en&viewbox=76.8,28.95,77.75,28.3&bounded=0&q=${encodeURIComponent(q)}`
+  const r = await fetch(url, { headers: { Accept: 'application/json' } })
+  if (!r.ok) throw new Error(String(r.status))
+  const rows = (await r.json()) as { lat: string; lon: string; name?: string; display_name: string }[]
+  return rows.map((x) => ({ name: x.name || x.display_name.split(',')[0], full: x.display_name, lat: Number(x.lat), lng: Number(x.lon) }))
+}
+
+/** Backup search: Photon, biased towards Noida and limited to India. */
+async function photon(q: string): Promise<Hit[]> {
+  const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=10&lang=en&lat=${NOIDA[0]}&lon=${NOIDA[1]}`)
+  if (!r.ok) throw new Error(String(r.status))
+  const d = (await r.json()) as { features: { geometry: { coordinates: [number, number] }; properties: Record<string, string | undefined> }[] }
+  return d.features
+    .filter((f) => f.properties.countrycode === 'IN')
+    .slice(0, 6)
+    .map((f) => {
+      const p = f.properties
+      const full = [p.name, p.street, p.district, p.city, p.state, p.postcode].filter(Boolean).join(', ')
+      return { name: p.name || p.street || full.split(',')[0], full, lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] }
+    })
+}
+
+/** When the search names a sector ("Sector 3"), keep only results in that sector, not "Sector 31". */
+function sameSector(q: string, hits: Hit[]): Hit[] {
+  const m = q.match(/\bsec(?:tor)?[-\s.]*(\d{1,3}[a-z]?)\b/i)
+  if (!m) return hits
+  const re = new RegExp(String.raw`\bsec(?:tor)?[-\s.]*${m[1]}\b`, 'i')
+  return hits.filter((h) => re.test(`${h.name}, ${h.full}`))
+}
+
+/**
+ * Address search on OpenStreetMap (both services free). Tries the address as typed, then shorter
+ * versions of it; each with Nominatim first and Photon as the backup. `rough` is true when only a
+ * shorter version matched, so the result is the area, not the building.
+ */
+async function searchPlaces(q: string): Promise<{ hits: Hit[]; rough: boolean }> {
+  let failed = 0
+  let tried = 0
+  const tries = simplerAddresses(q)
+  for (const [i, t] of tries.entries()) {
+    for (const find of [nominatim, photon]) {
+      tried++
+      try {
+        const hits = sameSector(t, await find(t))
+        if (hits.length) return { hits, rough: i > 0 }
+      } catch {
+        failed++
+      }
+    }
   }
+  if (failed === tried) throw new Error('Search is busy. Try again in a moment, or move the map yourself.')
+  return { hits: [], rough: false }
 }
 
 export default function OfficePicker({ start, radius, onPick }: { start?: { lat: number; lng: number } | null; radius: number; onPick: (p: { lat: number; lng: number; name: string }) => void }) {
@@ -47,6 +79,7 @@ export default function OfficePicker({ start, radius, onPick }: { start?: { lat:
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
   const [name, setName] = useState('')
 
   useEffect(() => {
@@ -77,12 +110,23 @@ export default function OfficePicker({ start, radius, onPick }: { start?: { lat:
   const search = async (e: FormEvent) => {
     e.preventDefault()
     if (q.trim().length < 3) return setErr('Type at least 3 letters of the address.')
-    setBusy(true)
     setErr('')
+    setNote('')
+    // A pasted Google Maps link or "lat, lng": go straight there.
+    const spot = spotFromText(q)
+    if (spot) {
+      map.current?.setView([spot.lat, spot.lng], 18)
+      setHits(null)
+      return setNote('Pin moved to that spot. Check it sits on the office building, then add it.')
+    }
+    if (/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(q))
+      return setErr('Short Google Maps links can’t be opened here. In Google Maps, press and hold the office pin, copy the numbers shown (like 28.583181, 77.318678) and paste them here.')
+    setBusy(true)
     try {
       const r = await searchPlaces(q.trim())
-      setHits(r)
-      if (!r.length) setErr('Nothing found. Try a shorter address, like “Sector 63 Noida”, then move the map.')
+      setHits(r.hits)
+      if (!r.hits.length) setErr('Nothing found. Try a shorter address, like “Sector 3 Noida”, or paste the office’s Google Maps link or numbers.')
+      else if (r.rough) setNote('The exact building isn’t on this map, so this shows the area. Pick a result, then move the map until the pin sits on the office.')
     } catch (x) {
       setErr(x instanceof Error ? x.message : 'Search failed.')
     } finally {
@@ -99,12 +143,13 @@ export default function OfficePicker({ start, radius, onPick }: { start?: { lat:
   return (
     <div className="op">
       <form className="op-search" onSubmit={search}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search address, e.g. Sector 63 Noida" aria-label="Search address" enterKeyHint="search" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Address, Google Maps link, or 28.58, 77.31" aria-label="Search address, or paste a Google Maps link" enterKeyHint="search" />
         <button className="btn small" disabled={busy}>
           {busy ? 'Searching…' : 'Search'}
         </button>
       </form>
       {err && <p className="op-err">{err}</p>}
+      {note && !err && <p className="op-note">{note}</p>}
       {hits && hits.length > 0 && (
         <ul className="op-hits">
           {hits.map((h, i) => (

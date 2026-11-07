@@ -1021,11 +1021,11 @@ function TeamSettingsPanel() {
       }
       return { ...cur, people }
     })
-  const save = async () => {
+  const save = async (next: FullSettings = f, done = 'Office timings saved') => {
     setBusy(true)
     try {
-      await studioPost('team/settings', f)
-      toast('Office timings saved')
+      await studioPost('team/settings', next)
+      toast(done)
       res.reload()
     } catch (e) {
       toast((e as Error).message)
@@ -1170,8 +1170,10 @@ function TeamSettingsPanel() {
               setBusy(false)
               if (!p) return toast('Could not get this phone’s location. Allow location and try again.')
               if (p.acc > 200) toast(`Location is rough (about ${Math.round(p.acc)} m). Try again near a window for better accuracy.`)
-              setF({ ...f, offices: [...(f.offices ?? []), { name: (f.offices ?? []).length ? `Office ${(f.offices ?? []).length + 1}` : 'Office', lat: p.lat, lng: p.lng, radius: 150 }] })
-              toast('Office added. Rename it if you like, then Save.')
+              // Saved straight away, so the office isn't lost if nobody taps the Save button below.
+              const next = { ...f, offices: [...(f.offices ?? []), { name: (f.offices ?? []).length ? `Office ${(f.offices ?? []).length + 1}` : 'Office', lat: p.lat, lng: p.lng, radius: 150 }] }
+              setF(next)
+              void save(next, 'Office added and saved')
             }}
           >
             📍 Add this place as office
@@ -1184,9 +1186,11 @@ function TeamSettingsPanel() {
                 start={(f.offices ?? [])[0] ?? null}
                 radius={150}
                 onPick={(o) => {
-                  setF({ ...f, offices: [...(f.offices ?? []), { name: o.name, lat: o.lat, lng: o.lng, radius: 150 }] })
+                  // Saved straight away, so the office isn't lost if nobody taps the Save button below.
+                  const next = { ...f, offices: [...(f.offices ?? []), { name: o.name, lat: o.lat, lng: o.lng, radius: 150 }] }
+                  setF(next)
                   setPicker(false)
-                  toast('Office added. Check the name and radius, then tap Save.')
+                  void save(next, 'Office added and saved')
                 }}
               />
             </Suspense>
@@ -1243,7 +1247,7 @@ function TeamSettingsPanel() {
       </Panel>
 
       <div className="action-row att-save">
-        <button className="btn" disabled={busy} onClick={save}>
+        <button className="btn" disabled={busy} onClick={() => void save()}>
           {busy ? 'Saving…' : 'Save timings and notifications'}
         </button>
         <button

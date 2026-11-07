@@ -2,6 +2,7 @@
 // One address book for the quarterly print issue: who gets it, and whether each copy was sent,
 // delivered or came back. Prints address labels and exports the list for the courier.
 import { useMemo, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from '../components/Icon.tsx'
 import { ErrorState, SkeletonList } from '../components/States.tsx'
 import { toast } from '../components/Toast.tsx'
@@ -408,7 +409,8 @@ function ContactForm({ contact, canRemove, onClose, onSaved }: { contact: Contac
       toast((err as Error).message)
     }
   }
-  return (
+  // Drawn on the page body, so it opens on screen and not at the bottom of the long contact list.
+  return createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
       <form className="sheet mag-form" onSubmit={save} onClick={(e) => e.stopPropagation()} aria-label="Contact">
         <div className="sheet-head">
@@ -439,6 +441,7 @@ function ContactForm({ contact, canRemove, onClose, onSaved }: { contact: Contac
           )}
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   )
 }
